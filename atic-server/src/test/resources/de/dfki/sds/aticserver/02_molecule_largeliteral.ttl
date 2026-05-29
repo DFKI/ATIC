@@ -1,0 +1,14 @@
+
+@prefix ex: <http://example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+ex:document
+    ex:content """
+The German Research Center for Artificial Intelligence (German: Deutsches Forschungszentrum für Künstliche Intelligenz; DFKI) was founded in 1988 as a non-profit public-private partnership. It has research facilities in Kaiserslautern, Saarbrücken, Bremen, Oldenburg, and Osnabrück, as well as laboratories in Berlin, Darmstadt, and Lübeck, and a branch office in Trier. In the field of innovative commercial software technology using artificial intelligence, DFKI is the leading research center in Germany.
+
+Based on application-oriented basic research, DFKI develops product functions, prototypes, and patentable solutions in the field of information and communication technology. Research and development projects are conducted in 27 research departments, ten competence centers, and eight living labs. Funding is received from government agencies like the European Union, the Federal Ministry of Research, Technology and Space (BMFTR), the Federal Ministry for Economic Affairs and Energy (BMWK), the German Federal States, and the German Research Foundation (DFG), as well as from cooperation with industrial partners. Twice a year, a committee of internationally renowned experts (Scientific Advisory Board) audits the progress and results of state-funded projects.
+
+The company is headquartered in Kaiserslautern. The management consists of the two executive directors, Prof. Antonio Krüger (CEO) and Helmut Ditzer (CFO), and the site managers of Bremen, Kaiserslautern, Lower Saxony (Oldenburg/Osnabrück), and Saarbrücken. 
+""" .

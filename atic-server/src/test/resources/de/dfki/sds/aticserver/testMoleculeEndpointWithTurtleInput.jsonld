@@ -1,0 +1,59 @@
+{
+    "uri": "http://example.org/person1",
+    "label": "Alice Label",
+    "comment": "An example FOAF person",
+    "type": {
+        "uri": "http://xmlns.com/foaf/0.1/Person",
+        "label": "Person",
+        "comment": "A human being",
+        "typeUri": "http://www.w3.org/2000/01/rdf-schema#Class"
+    },
+    "types": [{
+        "uri": "http://xmlns.com/foaf/0.1/Human",
+        "label": "Human",
+        "comment": "A human",
+        "typeUri": "http://www.w3.org/2000/01/rdf-schema#Class"
+    }],
+    "name": [
+        "Alice",
+        "Alicia"
+    ],
+    "nick": ["ali"],
+    "moreSPL": false,
+    "homepage": [{"uri": "http://example.org/alice"}],
+    "knows": [{
+        "uri": "http://example.org/person2",
+        "label": "Bob",
+        "typeUri": "http://xmlns.com/foaf/0.1/Person"
+    }],
+    "mbox": [{"uri": "mailto:alice@example.org"}],
+    "moreSPO": false,
+    "@reverse": {"mentions": [{
+        "uri": "http://example.org/document1",
+        "label": "An important document"
+    }]},
+    "moreOPS": false,
+    "@context": {
+        "uri": "@id",
+        "label": "http://www.w3.org/2000/01/rdf-schema#label",
+        "comment": "http://www.w3.org/2000/01/rdf-schema#comment",
+        "type": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+        "typeUri": "@type",
+        "types": {
+            "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            "@container": "@set"
+        },
+        "name": "http://xmlns.com/foaf/0.1/name",
+        "nick": {
+            "@type": "http://www.w3.org/2001/XMLSchema#string",
+            "@id": "http://xmlns.com/foaf/0.1/nick"
+        },
+        "moreSPL": "urn:atic:moreSPL",
+        "mbox": "http://xmlns.com/foaf/0.1/mbox",
+        "homepage": "http://xmlns.com/foaf/0.1/homepage",
+        "knows": "http://xmlns.com/foaf/0.1/knows",
+        "moreSPO": "urn:atic:moreSPO",
+        "mentions": "http://example.org/mentions",
+        "moreOPS": "urn:atic:moreOPS"
+    }
+}

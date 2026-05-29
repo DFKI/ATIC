@@ -1,0 +1,33 @@
+{
+    "uri": "http://example.org/s",
+    "booleanValue": [true],
+    "byteValue": [42],
+    "doubleValue": [5.4],
+    "intValue": [5],
+    "longValue": [12334434556],
+    "moreSPL": false,
+    "@context": {
+        "uri": "@id",
+        "intValue": {
+            "@type": "http://www.w3.org/2001/XMLSchema#int",
+            "@id": "http://example.org/intValue"
+        },
+        "booleanValue": {
+            "@type": "http://www.w3.org/2001/XMLSchema#boolean",
+            "@id": "http://example.org/booleanValue"
+        },
+        "doubleValue": {
+            "@type": "http://www.w3.org/2001/XMLSchema#double",
+            "@id": "http://example.org/doubleValue"
+        },
+        "byteValue": {
+            "@type": "http://www.w3.org/2001/XMLSchema#byte",
+            "@id": "http://example.org/byteValue"
+        },
+        "longValue": {
+            "@type": "http://www.w3.org/2001/XMLSchema#long",
+            "@id": "http://example.org/longValue"
+        },
+        "moreSPL": "urn:atic:moreSPL"
+    }
+}

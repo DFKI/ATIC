@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Person Demo | Atic</title>
+    </head>
+    <body>
+        <div class="container mt-4" id="app">
+
+            <div class="row align-items-center">
+                <div class="col d-flex align-items-center m-2">
+                    <h3 class="mb-0 d-flex align-items-center me-2">
+                        <i class="fa fa-users me-2"></i> Person Demo
+                    </h3>
+                    <div v-if="loading" class="spinner-border text-primary" role="status" style="width: 1.5rem; height: 1.5rem;"
+                         @click="loading = false">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="col-auto ms-auto me-2" v-if="user">
+                    <span class="me-2" :title="user.username">
+                        <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                    </span>
+                    <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <!-- CREATE PERSON -->
+            <div class="card mb-4">
+                <div class="card-header">Create Person</div>
+
+                <div class="card-body">
+
+                    <div class="input-group mb-2">
+                        <input class="form-control"
+                               placeholder="Name"
+                               v-model="newPersonName">
+
+                        <button class="btn btn-primary"
+                                @click="postPerson">
+                            Create
+                        </button>
+                    </div>
+
+                    <!-- checkbox -->
+                    <div class="form-check mb-2">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="useGraph"
+                               v-model="useCustomGraph"
+                               @change="graphChanged()">
+
+                        <label class="form-check-label" for="useGraph">
+                            Use custom graph
+                        </label>
+                    </div>
+
+                    <!-- graph input appears only if checkbox is enabled -->
+                    <div v-if="useCustomGraph">
+                        <input class="form-control"
+                               placeholder="Graph URI"
+                               v-model="graphUri"
+                               @change="graphChanged()">
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- PERSON LIST -->
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>URI</th>
+                        <th>Name</th>
+                        <th style="width:180px;">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <tr v-for="person in personCollection.items" :key="person['@id']">
+                        <td style="font-size:12px;">
+                            <button class="btn btn-sm btn-info me-1"
+                                    @click="openShareModal(person['@id'], person.name)"
+                                    title="Share">
+                                <i class="fa fa-share-alt"></i>
+                            </button>
+
+                            {{ person['@id'] }}
+                        </td>
+
+                        <td>
+
+
+                            <span v-if="!person.editMode">{{ person.name }}</span>
+
+                            <input
+                                v-if="person.editMode"
+                                class="form-control"
+                                v-model="person.name"
+                                >
+                        </td>
+
+                        <td>
+
+                            <button v-if="!person.editMode"
+                                    class="btn btn-sm btn-secondary me-1"
+                                    @click="editPerson(person)">
+                                Edit
+                            </button>
+
+                            <button v-if="person.editMode"
+                                    class="btn btn-sm btn-success me-1"
+                                    @click="putInstance(person)">
+                                Save
+                            </button>
+
+                            <button v-if="person.editMode"
+                                    class="btn btn-sm btn-warning me-1"
+                                    @click="cancelEdit(person)">
+                                Cancel
+                            </button>
+
+                            <button
+                                class="btn btn-sm btn-danger"
+                                @click="deleteInstance(person)">
+                                Delete
+                            </button>
+
+
+
+                        </td>
+
+                    </tr>
+                </tbody>
+            </table>
+
+            <br/>
+            <h4>JSON</h4>
+            <textarea class="form-control" rows="20" readonly="1" :value="JSON.stringify(personCollection, null, 2)" style="font-family: monospace; font-size: 12px"></textarea>
+
+
+            <div class="modal" id="shareModal" tabindex="-1" ref="share_modal">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+
+                        <div class="modal-header">
+                            <h5 class="modal-title">Share {{shareResourceLabel}}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <div class="modal-body">
+
+                            <div v-if="shareModalMode === 'share'">
+
+                                <div class="mb-3">
+                                    <label class="form-label">Add a name or group</label>
+                                    <input type="text"
+                                           class="form-control"
+                                           v-model="shareSearchQuery"
+                                           @input="searchPrincipal"
+                                           placeholder="Add a name or group">
+                                </div>
+
+                                <!-- principal search results -->
+                                <ul class="list-group mb-3" v-if="principalSearchResults">
+                                    <li class="list-group-item"
+                                        v-for="principal in principalSearchResults.principals"
+                                        :key="principal.id"
+                                        style="cursor: pointer"
+                                        @click="addSharePrincipal(principal)">
+
+                                        <i v-if="principal.type === 'user'" class="fa fa-user me-2"></i>
+                                        <i v-else-if="principal.type === 'group'" class="fa fa-users me-2"></i>
+                                        {{ principal.label }}
+                                    </li>
+                                </ul>
+
+                                <!-- selected principals/tags -->
+                                <div class="mb-3">
+                                    <span class="badge bg-secondary me-1"
+                                          v-for="(p, idx) in sharePrincipals"
+                                          :key="idx">
+                                        <i v-if="p.type === 'user'" class="fa fa-user me-2"></i>
+                                        <i v-else-if="p.type === 'group'" class="fa fa-users me-2"></i>
+                                        {{ p.label }}
+                                        <button type="button"
+                                                class="btn-close btn-close-white btn-sm"
+                                                @click="removeSharePrincipal(idx)"></button>
+                                    </span>
+                                </div>
+
+                                <!-- Permissions dropdown -->
+                                <div class="mb-3">
+                                    <label class="form-label">Permission</label>
+                                    <select class="form-select"
+                                            v-model="sharePermission">
+                                        <option value="READ">Can view</option>
+                                        <option value="REFER">Can refer to</option>
+                                        <option value="EDIT">Can edit</option>
+                                        <option value="ADMIN">Can administer (and delete)</option>
+                                    </select>
+                                </div>
+
+                                <!-- Nachricht text -->
+                                <div class="mb-3">
+                                    <textarea class="form-control"
+                                              v-model="shareMessage" placeholder="Add a message"></textarea>
+                                </div>
+
+                                <button class="btn btn-sm btn-secondary text-nowrap"
+                                        @click="openManageAccess">
+                                    <i class="fa fa-lock me-1"></i>
+                                    Manage access
+                                </button>
+
+                            </div>
+                            <div v-else>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <h6 class="mb-0">
+                                        <button class="btn btn-sm btn-outline-secondary me-2"
+                                                @click="backToShare">
+                                            <i class="fa fa-arrow-left"></i>
+                                        </button>
+                                    </h6>
+
+                                </div>
+
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Principal</th>
+                                            <th>Permission</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        <tr v-for="entry in shareAccessList" :key="entry.id || entry.principalShareUri">
+                                            <td>
+                                                 <i v-if="entry.type === 'user'"
+                                                    class="fa fa-user me-2"></i>
+
+                                                 <i v-else-if="entry.type === 'group'"
+                                                    class="fa fa-users me-2"></i>
+                                                {{ entry.principalName }}
+                                            </td>
+                                            <td>{{ entry.permission }}</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-danger"
+                                                        @click="deleteShare(entry)">
+                                                    Unshare
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary"
+                                    data-bs-dismiss="modal">Cancel</button>
+                            <button v-if="shareModalMode === 'share'" class="btn btn-primary"
+                                    @click="postShare">Send</button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+
+
+            <div class="modal" id="errorModal" tabindex="-1" ref="error_modal">
+                <div class="modal-dialog  modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title fs-5">Error</h1>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="alert alert-danger" role="alert">
+                                    <span style="white-space: pre-wrap; word-break: break-word;">
+                                        {{ error }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+
+        <div class="row">
+            <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                &nbsp;
+
+                &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+            </div>
+        </div>
+
+
+        <script>
+/*
+ //axios settings
+ let basePath = window.location.pathname;
+ if (basePath.endsWith('/')) {
+ basePath = basePath.slice(0, -1);
+ }
+ // remove last segment if it ends with .html
+ basePath = basePath.replace(/\/[^/]+\.html$/, '');
+ if (basePath === '') {
+ basePath = '/';
+ }
+ axios.defaults.baseURL = basePath;
+ console.log("axios baseURL is " + basePath);
+ */
+
+const {createApp} = Vue;
+createApp({
+
+    data() {
+        return {
+            personCollection: {
+                items: [],
+                totalItems: 0
+            },
+            newPersonName: "",
+            // graph selection
+            useCustomGraph: false,
+            graphUri: "",
+            
+            loading: false,
+            error: null,
+
+            //share
+            shareResourceUri: null,
+            shareResourceLabel: null,
+            shareSearchQuery: "",
+            principalSearchResults: [],
+            sharePrincipals: [],
+            shareMessage: "",
+            sharePermission: "READ",
+            shareModalMode: "share",
+            shareAccessList: []
+        };
+    },
+    created() {
+        axios.interceptors.response.use(
+                response => response,
+                error => {
+                    const errorMsg = error.response?.data || error.message || "Unknown error";
+                    this.open_error_modal(errorMsg);
+                    return Promise.reject(error);
+                }
+        );
+        /*
+        axios.interceptors.request.use(config => {
+            const token = sessionStorage.getItem("access_token");
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
+            return config;
+        });
+        */
+        this.loadState();
+        this.getAuthMe();
+        this.getPersons();
+        
+    },
+    methods: {
+
+        //share
+
+        openShareModal(uri, label) {
+            this.shareResourceUri = uri;
+            this.shareResourceLabel = label;
+            this.shareSearchQuery = "";
+            this.principalSearchResults = null;
+            this.sharePrincipals = [];
+            this.shareMessage = "";
+            this.sharePermission = "READ";
+            this.shareModalMode = "share";
+            const modalInstance = new bootstrap.Modal(this.$refs.share_modal);
+            modalInstance.show();
+        },
+        closeShareModal() {
+            const modalEl = this.$refs.share_modal;
+            const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        },
+        searchPrincipal() {
+            if (!this.shareSearchQuery) {
+                this.principalSearchResults = null;
+                return;
+            }
+            axios.get("/principal", {
+                params: {query: this.shareSearchQuery}
+            }).then(resp => {
+                this.principalSearchResults = resp.data;
+            });
+        },
+        addSharePrincipal(principal) {
+            // only add if not already in list
+            if (!this.sharePrincipals.find(u => u.id === principal.id)) {
+                this.sharePrincipals.push(principal);
+            }
+            this.principalSearchResults = null;
+            this.shareSearchQuery = "";
+        },
+        removeSharePrincipal(index) {
+            this.sharePrincipals.splice(index, 1);
+        },
+        postShare() {
+            const payload = {
+                resources: [this.shareResourceUri],
+                groups: this.sharePrincipals.map(p => p.shareUri),
+                message: this.shareMessage,
+                permission: this.sharePermission
+            };
+            axios.post("/resource/share", payload)
+                    .then(() => {
+                        this.closeShareModal();
+                    });
+        },
+        deleteShare(entry) {
+            const payload = {
+                resources: [this.shareResourceUri],
+                groups: [entry.principalShareUri]
+            };
+
+            axios.delete("/resource/share", {
+                    data: payload
+                })
+                .then(() => {
+                    //update
+                    this.getResourceAccess();
+                });
+        },
+        getResourceAccess() {
+           axios.get("/resource/access", {
+                params: {
+                    uri: [this.shareResourceUri]
+                }
+            }).then(res => {
+                this.shareAccessList = res.data[this.shareResourceUri];
+            }).catch(err => {
+                console.error(err);
+            });
+        },
+        openManageAccess() {
+            this.shareModalMode = "manage";
+            this.getResourceAccess();
+        },
+        backToShare() {
+            this.shareModalMode = "share";
+        },
+
+        /* -------------------------
+         GET collection
+         ------------------------- */
+
+        getPersons() {
+            let url = "/api/person";
+            if (this.useCustomGraph && this.graphUri) {
+              const encoded = encodeURIComponent(this.graphUri);
+              url += "?graph=" + encoded;
+            }
+            
+            axios.get(url).then(response => {
+
+                const data = response.data;
+                // store full collection
+                this.personCollection = data;
+                // normalize items so v-for always works
+                if (!this.personCollection.items) {
+                    this.personCollection.items = [];
+                } else if (!Array.isArray(this.personCollection.items)) {
+                    this.personCollection.items = [this.personCollection.items];
+                }
+
+            });
+        },
+
+        /* -------------------------
+         POST
+         ------------------------- */
+
+        postPerson() {
+
+            if (!this.newPersonName)
+                return;
+            const payload = {
+                "@context": {
+                    name: "http://xmlns.com/foaf/0.1/name",
+                    Person: "http://xmlns.com/foaf/0.1/Person"
+                },
+                "@type": "Person",
+                name: this.newPersonName
+            };
+            
+            let url = "/api/person";
+            if (this.useCustomGraph && this.graphUri) {
+              const encoded = encodeURIComponent(this.graphUri);
+              url += "?graph=" + encoded;
+            }
+            
+            axios.post(url, payload, {
+                headers: {"Content-Type": "application/ld+json"}
+            })
+                    .then(() => {
+
+                        this.newPersonName = "";
+                        this.getPersons();
+                    });
+        },
+        /* -------------------------
+         EDIT MODE
+         ------------------------- */
+
+        editPerson(person) {
+
+            person.originalName = person.name;
+            person.editMode = true;
+        },
+        cancelEdit(person) {
+
+            person.name = person.originalName;
+            person.editMode = false;
+        },
+        /* -------------------------
+         PUT
+         ------------------------- */
+
+        putInstance(person) {
+
+            const payload = {
+                "@context": {
+                    name: "http://xmlns.com/foaf/0.1/name",
+                    Person: "http://xmlns.com/foaf/0.1/Person"
+                },
+                "@id": person['@id'],
+                "@type": "Person",
+                name: person.name
+            };
+            
+            let url = "/api/person/" + encodeURIComponent(person['@id']);
+            if (this.useCustomGraph && this.graphUri) {
+              const encoded = encodeURIComponent(this.graphUri);
+              url += "?graph=" + encoded;
+            }
+            
+            axios.put(
+                    url,
+                    payload,
+                    {headers: {"Content-Type": "application/ld+json"}}
+            )
+                    .then(() => {
+
+                        person.editMode = false;
+                        this.getPersons();
+                    });
+        },
+        /* -------------------------
+         DELETE
+         ------------------------- */
+
+        deleteInstance(person) {
+
+            if (!confirm("Delete person?"))
+                return;
+            
+            let url = "/api/person/" + encodeURIComponent(person['@id']);
+            if (this.useCustomGraph && this.graphUri) {
+              const encoded = encodeURIComponent(this.graphUri);
+              url += "?graph=" + encoded;
+            }
+            
+            axios.delete(url)
+                    .then(() => {
+
+                        this.getPersons();
+                    });
+        },
+
+        getAuthMe() {
+            axios.get('/auth/me').then(response => {
+                this.user = response.data;
+            });
+        },
+
+        postLogout() {
+            axios.post('/auth/logout').then(response => {
+                window.location.href = response.data.redirect;
+            });
+        },
+        
+        
+
+        /* -------------------------
+         UI
+         ------------------------- */
+
+        graphChanged() {
+            this.getPersons();
+        },
+
+        open_error_modal(msg) {
+            this.error = msg;
+            this.loading = false;
+            const modalInstance = new window.bootstrap.Modal(this.$refs.error_modal);
+            modalInstance.show();
+        },
+        
+        saveState() {
+            localStorage.setItem(
+                    "atic-person-demo-state",
+                    JSON.stringify({
+                        useCustomGraph: this.useCustomGraph,
+                        graphUri: this.graphUri
+                    })
+            );
+        },
+
+        loadState() {
+
+            const raw = localStorage.getItem(
+                    "atic-person-demo-state"
+                    );
+
+            if (raw) {
+                const state = JSON.parse(raw);
+                this.useCustomGraph = state.useCustomGraph || false;
+                this.graphUri = state.graphUri || "";
+            }
+        }
+
+    },
+    
+    watch: {
+        useCustomGraph: {
+            handler() {
+                this.saveState();
+            }
+        },
+        graphUri: {
+            handler() {
+                this.saveState();
+            }
+        }
+    }
+}).mount("#app");
+        </script>
+    </body>
+</html>

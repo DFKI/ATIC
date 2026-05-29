@@ -1,0 +1,10 @@
+{
+    "uri": "http://example.org/person1",
+    "knows": [{"uri": "http://example.org/person2"}],
+    "moreSPO": false,
+    "@context": {
+        "uri": "@id",
+        "knows": "http://xmlns.com/foaf/0.1/knows",
+        "moreSPO": "urn:atic:moreSPO"
+    }
+}

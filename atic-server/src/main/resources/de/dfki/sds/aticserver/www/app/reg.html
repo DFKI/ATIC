@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Register | ATIC</title>
+    </head>
+    <body>
+        <div class="container text-center" id="app">
+
+            <div class="row d-flex justify-content-center">
+
+                <div class="col-lg-6">
+                    <h1 class="m-4">
+                        <img src="img/atic-server.png" style="height: 60px">
+                        Registration in ATIC
+                    </h1>
+
+                    <form @submit.prevent="register">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">First Name</label>
+                            <input type="text" class="form-control" v-model="firstname" required />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Last Name</label>
+                            <input type="text" class="form-control" v-model="lastname" required />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Email</label>
+                            <input type="email" class="form-control" v-model="email" required />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Username</label>
+                            <input type="text" class="form-control" v-model="username" required />
+                        </div>
+
+                        <br/>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg" :disabled="loading">
+                                Register
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Success -->
+                    <div v-if="generatedPassword" class="alert alert-success mt-4">
+                        <strong>Registration successful!</strong><br/>
+                        Your generated password:<br/>
+                        <code style="color: black;">{{ generatedPassword }}</code><br/>
+                        <br/>
+                        <a href="login.html">Login</a>
+                    </div>
+
+                    <!-- Error -->
+                    <div v-if="error_msg" class="text-danger text-center mt-3">
+                        {{ error_msg }}
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                &nbsp;
+                &copy; 2026 <a href="https://www.dfki.de/" target="_blank">
+                    <img src="img/dfki_Logo_digital_black.png" style="height: 12px;">
+                </a>
+            </div>
+        </div>
+
+        <script>
+// axios base path handling
+let basePath = window.location.pathname;
+if (basePath.endsWith('/')) {
+    basePath = basePath.slice(0, -1);
+}
+basePath = basePath.replace(/\/[^/]+\.html$/, '');
+if (basePath === '') {
+    basePath = '/';
+}
+axios.defaults.baseURL = basePath;
+
+const {createApp} = Vue;
+
+createApp({
+    data() {
+        return {
+            loading: false,
+            firstname: "",
+            lastname: "",
+            email: "",
+            username: "",
+            generatedPassword: "",
+            error_msg: ""
+        };
+    },
+    methods: {
+        register() {
+            this.loading = true;
+            this.error_msg = "";
+            this.generatedPassword = "";
+
+            const formData = new FormData();
+            formData.append('firstname', this.firstname);
+            formData.append('lastname', this.lastname);
+            formData.append('email', this.email);
+            formData.append('username', this.username);
+
+            axios.post('../auth/register', formData)
+                    .then(response => {
+                        this.loading = false;
+
+                        if (response.data.success) {
+                            this.generatedPassword = response.data.generatedPassword;
+                        } else {
+                            this.error_msg = response.data.error || "Registration failed";
+                        }
+                    })
+                    .catch((error) => {
+                        this.loading = false;
+
+                        if (error.response) {
+                            // Server responded with status != 2xx
+                            this.error_msg = error.response.data?.error || "Registration failed";
+                        } else if (error.request) {
+                            // Request sent but no response (network issue)
+                            this.error_msg = "No response from server";
+                        } else {
+                            // Something else (setup error)
+                            this.error_msg = error.message;
+                        }
+                    });
+        }
+    }
+}).mount('#app');
+        </script>
+    </body>
+</html>

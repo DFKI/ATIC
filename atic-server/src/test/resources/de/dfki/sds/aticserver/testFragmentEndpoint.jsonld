@@ -1,0 +1,28 @@
+{
+    "uri": "http://example.org/person1",
+    "label": "Alice Label",
+    "comment": "An example FOAF person",
+    "type": {
+        "uri": "http://xmlns.com/foaf/0.1/Person",
+        "label": "Person",
+        "comment": "A human being",
+        "typeUri": "http://www.w3.org/2000/01/rdf-schema#Class"
+    },
+    "types": [{
+        "uri": "http://xmlns.com/foaf/0.1/Human",
+        "label": "Human",
+        "comment": "A human",
+        "typeUri": "http://www.w3.org/2000/01/rdf-schema#Class"
+    }],
+    "@context": {
+        "uri": "@id",
+        "label": "http://www.w3.org/2000/01/rdf-schema#label",
+        "comment": "http://www.w3.org/2000/01/rdf-schema#comment",
+        "type": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+        "typeUri": "@type",
+        "types": {
+            "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            "@container": "@set"
+        }
+    }
+}

@@ -1,0 +1,23 @@
+{
+    "uri": "http://example.org/s",
+    "str": [
+        {
+            "@value": "de",
+            "@language": "de"
+        },
+        {
+            "@value": "en",
+            "@language": "en"
+        },
+        "str"
+    ],
+    "moreSPL": false,
+    "@context": {
+        "uri": "@id",
+        "str": {
+            "@type": "http://www.w3.org/2001/XMLSchema#string",
+            "@id": "http://example.org/str"
+        },
+        "moreSPL": "urn:atic:moreSPL"
+    }
+}

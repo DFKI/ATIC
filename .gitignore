@@ -1,0 +1,14 @@
+.project
+.classpath
+.settings
+nb-configuration.xml
+atic-server-home
+passwords.json.generated
+dependency-reduced-pom.xml
+nbactions.xml
+/atic-api/target/
+/atic-sqlite/target/
+/rdfpatch-sqlite/target/
+/atic-server/target/
+/atic-sqlite-tdb2tests/target/
+/atic-sqlite-jmh/target/

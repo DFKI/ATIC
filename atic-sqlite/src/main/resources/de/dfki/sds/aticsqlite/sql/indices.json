@@ -1,0 +1,34 @@
+[
+    {
+        "name": "idx_resource",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_resource ON resource_uri(uri, id);"
+    },
+    {
+        "name": "idx_property",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_property ON property(uri, id);"
+    },
+    {
+        "name": "idx_gspo",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_gspl ON splg(g, s, p, lex);"
+    },
+    {
+        "name": "idx_gpos",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_gpls ON splg(g, p, lex, s);"
+    },
+    {
+        "name": "idx_gosp",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_glsp ON splg(g, lex, s, p);"
+    },
+    {
+        "name": "idx_g_spo",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_gspo ON spog(g, s, p, o);"
+    },
+    {
+        "name": "idx_g_pos",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_gpos ON spog(g, p, o, s);"
+    },
+    {
+        "name": "idx_g_osp",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_gosp ON spog(g, o, s, p);"
+    }
+]

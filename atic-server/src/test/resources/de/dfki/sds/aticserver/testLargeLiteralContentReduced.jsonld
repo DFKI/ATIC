@@ -1,0 +1,13 @@
+{
+    "uri": "http://example.org/document",
+    "content": ["\nThe German Research Center for Artificial Intelligence (German: Deutsches Forschungszentrum für ..."],
+    "moreSPL": false,
+    "@context": {
+        "uri": "@id",
+        "content": {
+            "@type": "http://www.w3.org/2001/XMLSchema#string",
+            "@id": "http://example.org/content"
+        },
+        "moreSPL": "urn:atic:moreSPL"
+    }
+}

@@ -1,0 +1,224 @@
+[
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "de.dfki.sds.aticsqlitejmh.AticTdbComparisonBsbmQueryMix.mixInOneReadTransaction",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/usr/lib/jvm/java-17-openjdk/bin/java",
+        "jvmArgs" : [
+        ],
+        "jdkVersion" : "17.0.18",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "17.0.18+8",
+        "warmupIterations" : 1,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "size" : "200",
+            "storeType" : "ATIC"
+        },
+        "primaryMetric" : {
+            "score" : 0.4817228800333333,
+            "scoreError" : 0.07569842754212455,
+            "scoreConfidence" : [
+                0.4060244524912088,
+                0.5574213075754578
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.45145334033333334,
+                "50.0" : 0.4813919113333333,
+                "90.0" : 0.5038001695,
+                "95.0" : 0.5038001695,
+                "99.0" : 0.5038001695,
+                "99.9" : 0.5038001695,
+                "99.99" : 0.5038001695,
+                "99.999" : 0.5038001695,
+                "99.9999" : 0.5038001695,
+                "100.0" : 0.5038001695
+            },
+            "scoreUnit" : "s/op",
+            "rawData" : [
+                [
+                    0.45145334033333334,
+                    0.4813919113333333,
+                    0.49325651766666667,
+                    0.47871246133333334,
+                    0.5038001695
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "de.dfki.sds.aticsqlitejmh.AticTdbComparisonBsbmQueryMix.mixInOneReadTransaction",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/usr/lib/jvm/java-17-openjdk/bin/java",
+        "jvmArgs" : [
+        ],
+        "jdkVersion" : "17.0.18",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "17.0.18+8",
+        "warmupIterations" : 1,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "size" : "200",
+            "storeType" : "TDB2"
+        },
+        "primaryMetric" : {
+            "score" : 0.052233895916065164,
+            "scoreError" : 0.0069683537909119775,
+            "scoreConfidence" : [
+                0.045265542125153185,
+                0.05920224970697714
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.05006734176190476,
+                "50.0" : 0.05172677185,
+                "90.0" : 0.054530275263157894,
+                "95.0" : 0.054530275263157894,
+                "99.0" : 0.054530275263157894,
+                "99.9" : 0.054530275263157894,
+                "99.99" : 0.054530275263157894,
+                "99.999" : 0.054530275263157894,
+                "99.9999" : 0.054530275263157894,
+                "100.0" : 0.054530275263157894
+            },
+            "scoreUnit" : "s/op",
+            "rawData" : [
+                [
+                    0.054530275263157894,
+                    0.053606564105263155,
+                    0.0512385266,
+                    0.05006734176190476,
+                    0.05172677185
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "de.dfki.sds.aticsqlitejmh.AticTdbComparisonBsbmQueryMix.mixInOneReadTransaction",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/usr/lib/jvm/java-17-openjdk/bin/java",
+        "jvmArgs" : [
+        ],
+        "jdkVersion" : "17.0.18",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "17.0.18+8",
+        "warmupIterations" : 1,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "size" : "2000",
+            "storeType" : "ATIC"
+        },
+        "primaryMetric" : {
+            "score" : 2.3793470782,
+            "scoreError" : 1.423752792195064,
+            "scoreConfidence" : [
+                0.955594286004936,
+                3.803099870395064
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.960317965,
+                "50.0" : 2.374497726,
+                "90.0" : 2.933875,
+                "95.0" : 2.933875,
+                "99.0" : 2.933875,
+                "99.9" : 2.933875,
+                "99.99" : 2.933875,
+                "99.999" : 2.933875,
+                "99.9999" : 2.933875,
+                "100.0" : 2.933875
+            },
+            "scoreUnit" : "s/op",
+            "rawData" : [
+                [
+                    2.147892935,
+                    2.933875,
+                    1.960317965,
+                    2.374497726,
+                    2.480151765
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "de.dfki.sds.aticsqlitejmh.AticTdbComparisonBsbmQueryMix.mixInOneReadTransaction",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/usr/lib/jvm/java-17-openjdk/bin/java",
+        "jvmArgs" : [
+        ],
+        "jdkVersion" : "17.0.18",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "17.0.18+8",
+        "warmupIterations" : 1,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "size" : "2000",
+            "storeType" : "TDB2"
+        },
+        "primaryMetric" : {
+            "score" : 0.21578059792000004,
+            "scoreError" : 0.044610202710416554,
+            "scoreConfidence" : [
+                0.1711703952095835,
+                0.2603908006304166
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.2019482854,
+                "50.0" : 0.2154647932,
+                "90.0" : 0.2337929772,
+                "95.0" : 0.2337929772,
+                "99.0" : 0.2337929772,
+                "99.9" : 0.2337929772,
+                "99.99" : 0.2337929772,
+                "99.999" : 0.2337929772,
+                "99.9999" : 0.2337929772,
+                "100.0" : 0.2337929772
+            },
+            "scoreUnit" : "s/op",
+            "rawData" : [
+                [
+                    0.216448091,
+                    0.2154647932,
+                    0.2112488428,
+                    0.2337929772,
+                    0.2019482854
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    }
+]
+
+

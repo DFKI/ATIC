@@ -1,0 +1,46 @@
+@prefix ex: <http://example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# -------------------------
+# CLASS DEFINITION
+# -------------------------
+foaf:Person
+    a rdfs:Class ;
+    rdfs:label "Person"@en ;
+    rdfs:label "Person (DE)"@de ;
+    rdfs:comment "A human being"@en ;
+    rdfs:comment "Ein Mensch"@de .
+
+foaf:Human
+    a rdfs:Class ;
+    rdfs:label "Human"@en ;
+    rdfs:label "Mensch"@de ;
+    rdfs:comment "A human"@en ;
+    rdfs:comment "Ein Mensch"@de .
+
+# -------------------------
+# INSTANCE DATA
+# -------------------------
+ex:person1
+    a foaf:Person, foaf:Human ;
+    foaf:name "Alice"@en ;
+    foaf:name "Alicia"@de ;
+    foaf:nick "ali" ;
+    rdfs:label "Alice without lang" ;
+    rdfs:label "Alice Label"@en ;
+    rdfs:label "Alice Deutsches Label"@de ;
+    rdfs:label "アリス"@ja ;
+    rdfs:comment "An example FOAF person"@en ;
+    foaf:mbox <mailto:alice@example.org> ;
+    foaf:homepage <http://example.org/alice> ;
+    foaf:knows ex:person2 .
+
+ex:person2
+    a foaf:Person ;
+    foaf:name "Bob"@en .
+
+ex:document1
+    ex:mentions ex:person1 ;
+    rdfs:label "An important document" .

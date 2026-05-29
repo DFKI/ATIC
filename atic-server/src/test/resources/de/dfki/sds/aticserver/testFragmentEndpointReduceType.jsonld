@@ -1,0 +1,18 @@
+{
+    "uri": "http://example.org/person1",
+    "label": "Alice Label",
+    "comment": "An example FOAF person",
+    "typeUri": "http://xmlns.com/foaf/0.1/Person",
+    "typeUris": ["http://xmlns.com/foaf/0.1/Human"],
+    "@context": {
+        "uri": "@id",
+        "label": "http://www.w3.org/2000/01/rdf-schema#label",
+        "comment": "http://www.w3.org/2000/01/rdf-schema#comment",
+        "typeUri": "@type",
+        "typeUris": {
+            "@type": "@id",
+            "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            "@container": "@set"
+        }
+    }
+}

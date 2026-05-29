@@ -1,0 +1,16 @@
+{
+    "uri": "http://example.org/s",
+    "p": [{
+        "@value": "5",
+        "@type": "http://example.org/int"
+    }],
+    "moreSPL": false,
+    "@context": {
+        "uri": "@id",
+        "p": {
+            "@type": "http://example.org/int",
+            "@id": "http://example.org/p"
+        },
+        "moreSPL": "urn:atic:moreSPL"
+    }
+}

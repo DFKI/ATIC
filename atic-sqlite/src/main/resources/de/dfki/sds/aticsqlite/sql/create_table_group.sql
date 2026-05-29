@@ -1,0 +1,9 @@
+
+CREATE TABLE IF NOT EXISTS "group" (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    groupname TEXT NOT NULL UNIQUE,
+    uri TEXT NOT NULL UNIQUE,
+    user_id INTEGER,
+
+    FOREIGN KEY (user_id) REFERENCES user(id)
+);

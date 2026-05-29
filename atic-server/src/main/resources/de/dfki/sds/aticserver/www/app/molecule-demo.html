@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Molecule Demo | Atic</title>
+    </head>
+    <body>
+        <div class="container mt-4" id="app">
+
+            <div class="row align-items-center">
+                <div class="col d-flex align-items-center m-2">
+                    <h3 class="mb-0 d-flex align-items-center me-2">
+                        <i class="fa fa-diagram me-2"></i> Molecule Demo
+                    </h3>
+                    <div v-if="loading" class="spinner-border text-primary" role="status" style="width: 1.5rem; height: 1.5rem;"
+                         @click="loading = false">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="col-auto ms-auto me-2" v-if="user">
+                    <span class="me-2" :title="user.username">
+                        <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                    </span>
+                    <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-stretch gap-3">
+
+                <!-- LEFT -->
+                <div class="card p-3 w-100">
+
+                    <div class="d-flex flex-wrap align-items-end gap-2">
+
+                        <!-- Endpoint -->
+                        <div>
+                            <label class="form-label">Endpoint</label>
+                            <select class="form-select" v-model="endpoint">
+                                <option value="resource">/resource</option>
+                                <option value="fragment">/fragment</option>
+                                <option value="molecule">/molecule</option>
+                            </select>
+                        </div>
+
+
+
+                        <!-- URI -->
+                        <div style="min-width: 300px; width: 100%">
+                            <label class="form-label">URI</label>
+
+                            <div class="d-flex align-items-center">
+                                <button class="btn btn-sm btn-info flex-shrink-0 me-2"
+                                        @click="openShareModal(uri, uri)"
+                                        title="Share">
+                                    <i class="fa fa-share-alt"></i>
+                                </button>
+
+                                <input class="form-control"
+                                       v-model="uri"
+                                       placeholder="Enter URI">
+                            </div>
+                        </div>
+
+                        <div class="w-100"></div>
+
+                        <!-- Params -->
+                        <label class="form-label">Params</label>
+                        <div class="w-100"></div>
+                        <div v-for="(param, index) in params"
+                             :key="index"
+                             class="d-flex gap-1 align-items-stretch"
+                             :class="{ 'opacity-50': param.ignored }">
+
+                            <div class="d-flex flex-column justify-content-end">
+                                <input list="paramKeys"
+                                       class="form-control"
+                                       v-model="param.key"
+                                       placeholder="key"
+                                       style="max-width: 150px">
+                            </div>
+
+                            <div class="d-flex align-items-center justify-content-center px-1 text-muted"
+                                 style="min-width: 20px;">
+                                =
+                            </div>
+
+                            <div class="d-flex flex-column justify-content-end flex-grow-1">
+                                <input class="form-control"
+                                       v-model="param.value"
+                                       placeholder="value">
+                            </div>
+
+                            <!-- Ignore toggle button -->
+                            <button class="btn btn-secondary btn-sm"
+                                    @click="ignoreParam(index)"
+                                    :title="param.ignored ? 'Unignore parameter' : 'Ignore parameter'">
+
+                                <i :class="param.ignored ? 'fa fa-eye-slash' : 'fa fa-eye'"></i>
+                            </button>
+
+                            <!-- Remove button -->
+                            <button class="btn btn-danger btn-sm"
+                                    @click="removeParam(index)">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+
+                        <!-- Add param -->
+                        <div>
+                            <button class="btn btn-secondary"
+                                    @click="addParam">
+                                <i class="fa fa-plus"></i>
+                            </button>
+                        </div>
+
+                        <div class="w-100"></div>
+
+                        <!-- Send -->
+                        <div>
+                            <button class="btn btn-primary"
+                                    @click="fetchData">
+                                <i class="fa fa-play"></i> Send
+                            </button>
+                        </div>
+
+                    </div>
+
+                    <!-- datalist for autocomplete -->
+                    <datalist id="paramKeys">
+                        <option value="uri-key">
+                        <option value="label-key">
+                        <option value="comment-key">
+                        <option value="icon-key">
+                        <option value="type-key">
+
+                        <option value="indent">
+                        <option value="locale">
+
+                        <option value="spo-page">
+                        <option value="spo-page-size">
+                        <option value="ops-page">
+                        <option value="ops-page-size">
+                        <option value="spl-page">
+                        <option value="spl-page-size">
+
+                        <option value="expand-type">
+                        <option value="single-type">
+                        <option value="single-value">
+                        <option value="unwrap-single">
+
+                        <option value="lang">
+                        <option value="datatype">
+                        <option value="native-value">
+
+                        <option value="include">
+                        <option value="exclude">
+                        <option value="expand">
+                        <option value="reduce">
+
+                        <option value="graph">
+                        <option value="max-width">
+                    </datalist>
+
+                </div>
+
+                <!-- RIGHT -->
+                <div class="card p-3 w-100 d-flex"
+                     style="overflow: hidden; height: 300px; resize: vertical">
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">
+                            API Documentation
+                            <a href="/molecule" target="_blank" class="ms-1"><i class="fa fa-external-link-alt"></i></a>  
+                        </h5>
+                    </div>
+
+                    <!-- SCROLL AREA -->
+                    <div style="overflow:auto; flex:1;">
+                        <ul class="list-group">
+                            <li class="list-group-item"
+                                v-for="p in docParams"
+                                :key="p.name">
+
+                                <div class="fw-bold">
+                                    {{ p.name }}
+                                    <span v-if="p.default !== undefined"
+                                          class="text-muted">
+                                        = {{ p.default }}
+                                    </span>
+                                </div>
+
+                                <div class="small text-muted">
+                                    {{ p.description }}
+                                </div>
+
+                            </li>
+                        </ul>
+                    </div>
+
+                </div>
+            </div>
+
+
+            <!--div class="d-flex align-items-center justify-content-between mb-1 mt-2">
+                <h4 class="mb-0">Request</h4>
+
+                <button class="btn btn-sm btn-outline-secondary"
+                        @click="copyCurl"
+                        :disabled="!curlCommand">
+                    <i class="fa fa-copy"></i> Copy
+                </button>
+            </div>
+
+            <code style="display:block; white-space: pre-wrap;">
+                {{ curlCommand }}
+            </code -->
+
+            <br/>
+            <h4>Output</h4>
+            <textarea class="form-control" rows="40" readonly="1" :value="JSON.stringify(data, null, 2)" style="font-family: monospace; font-size: 12px"></textarea>
+            <br/>
+            <br/>
+
+
+            <div class="modal" id="shareModal" tabindex="-1" ref="share_modal">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+
+                        <div class="modal-header">
+                            <h5 class="modal-title">Share {{shareResourceLabel}}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <div class="modal-body">
+
+                            <div v-if="shareModalMode === 'share'">
+
+                                <div class="mb-3">
+                                    <label class="form-label">Add a name or group</label>
+                                    <input type="text"
+                                           class="form-control"
+                                           v-model="shareSearchQuery"
+                                           @input="searchPrincipal"
+                                           placeholder="Add a name or group">
+                                </div>
+
+                                <!-- principal search results -->
+                                <ul class="list-group mb-3" v-if="principalSearchResults">
+                                    <li class="list-group-item"
+                                        v-for="principal in principalSearchResults.principals"
+                                        :key="principal.id"
+                                        style="cursor: pointer"
+                                        @click="addSharePrincipal(principal)">
+
+                                        <i v-if="principal.type === 'user'" class="fa fa-user me-2"></i>
+                                        <i v-else-if="principal.type === 'group'" class="fa fa-users me-2"></i>
+                                        {{ principal.label }}
+                                    </li>
+                                </ul>
+
+                                <!-- selected principals/tags -->
+                                <div class="mb-3">
+                                    <span class="badge bg-secondary me-1"
+                                          v-for="(p, idx) in sharePrincipals"
+                                          :key="idx">
+                                        <i v-if="p.type === 'user'" class="fa fa-user me-2"></i>
+                                        <i v-else-if="p.type === 'group'" class="fa fa-users me-2"></i>
+                                        {{ p.label }}
+                                        <button type="button"
+                                                class="btn-close btn-close-white btn-sm"
+                                                @click="removeSharePrincipal(idx)"></button>
+                                    </span>
+                                </div>
+
+                                <!-- Permissions dropdown -->
+                                <div class="mb-3">
+                                    <label class="form-label">Permission</label>
+                                    <select class="form-select"
+                                            v-model="sharePermission">
+                                        <option value="READ">Can view</option>
+                                        <option value="REFER">Can refer to</option>
+                                        <option value="EDIT">Can edit</option>
+                                        <option value="ADMIN">Can administer (and delete)</option>
+                                    </select>
+                                </div>
+
+                                <!-- Nachricht text -->
+                                <div class="mb-3">
+                                    <textarea class="form-control"
+                                              v-model="shareMessage" placeholder="Add a message"></textarea>
+                                </div>
+
+                                <button class="btn btn-sm btn-secondary text-nowrap"
+                                        @click="openManageAccess">
+                                    <i class="fa fa-lock me-1"></i>
+                                    Manage access
+                                </button>
+
+                            </div>
+                            <div v-else>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <h6 class="mb-0">
+                                        <button class="btn btn-sm btn-outline-secondary me-2"
+                                                @click="backToShare">
+                                            <i class="fa fa-arrow-left"></i>
+                                        </button>
+                                    </h6>
+
+                                </div>
+
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Principal</th>
+                                            <th>Permission</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        <tr v-for="entry in shareAccessList" :key="entry.id || entry.principalShareUri">
+                                            <td>
+                                                <i v-if="entry.type === 'user'"
+                                                   class="fa fa-user me-2"></i>
+
+                                                <i v-else-if="entry.type === 'group'"
+                                                   class="fa fa-users me-2"></i>
+                                                {{ entry.principalName }}
+                                            </td>
+                                            <td>{{ entry.permission }}</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-danger"
+                                                        @click="deleteShare(entry)">
+                                                    Unshare
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary"
+                                    data-bs-dismiss="modal">Cancel</button>
+                            <button v-if="shareModalMode === 'share'" class="btn btn-primary"
+                                    @click="postShare">Send</button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="modal" id="errorModal" tabindex="-1" ref="error_modal">
+                <div class="modal-dialog  modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title fs-5">Error</h1>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="alert alert-danger" role="alert">
+                                    <span style="white-space: pre-wrap; word-break: break-word;">
+                                        {{ error }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                &nbsp;
+
+                &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+            </div>
+        </div>
+
+
+        <script>
+const {createApp} = Vue;
+createApp({
+
+    data() {
+        return {
+            data: null,
+            endpoint: "molecule",
+            uri: "",
+            params: [
+            ],
+            authToken: "<token>",
+            docParams: [],
+            loading: false,
+            error: null,
+
+            //share
+            shareResourceUri: null,
+            shareResourceLabel: null,
+            shareSearchQuery: "",
+            principalSearchResults: [],
+            sharePrincipals: [],
+            shareMessage: "",
+            sharePermission: "READ",
+            shareModalMode: "share",
+            shareAccessList: []
+        };
+    },
+    created() {
+        axios.interceptors.response.use(
+                response => response,
+                error => {
+                    const errorMsg = error.response?.data || error.message || "Unknown error";
+                    this.open_error_modal(errorMsg);
+                    return Promise.reject(error);
+                }
+        );
+        this.getAuthMe();
+        this.loadConfig();
+        this.loadDoc();
+    },
+    methods: {
+
+        addParam() {
+            this.params.push({key: "", value: ""});
+        },
+        removeParam(index) {
+            this.params.splice(index, 1);
+        },
+        ignoreParam(index) {
+            this.params[index].ignored = !this.params[index].ignored;
+        },
+        fetchData() {
+            if (!this.uri) {
+                this.open_error_modal("URI is required");
+                return;
+            }
+
+            this.loading = true;
+            const base = `/${this.endpoint}/${encodeURIComponent(this.uri)}`;
+            const parts = [];
+            this.params.forEach(p => {
+                if (!p.key || p.ignored)
+                    return;
+                const key = encodeURIComponent(p.key);
+                // ✅ boolean flag (no value)
+                if (p.value === null || p.value === undefined || p.value === "") {
+                    parts.push(key);
+                } else {
+                    const value = encodeURIComponent(p.value);
+                    parts.push(`${key}=${value}`);
+                }
+            });
+            const url = parts.length ? `${base}?${parts.join("&")}` : base;
+            axios.get(url)
+                    .then(resp => {
+                        this.data = resp.data;
+                    })
+                    .finally(() => {
+                        this.loading = false;
+                    });
+        },
+
+        //share
+
+        openShareModal(uri, label) {
+            this.shareResourceUri = uri;
+            this.shareResourceLabel = label;
+            this.shareSearchQuery = "";
+            this.principalSearchResults = null;
+            this.sharePrincipals = [];
+            this.shareMessage = "";
+            this.sharePermission = "READ";
+            this.shareModalMode = "share";
+            const modalInstance = new bootstrap.Modal(this.$refs.share_modal);
+            modalInstance.show();
+        },
+        closeShareModal() {
+            const modalEl = this.$refs.share_modal;
+            const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        },
+        searchPrincipal() {
+            if (!this.shareSearchQuery) {
+                this.principalSearchResults = null;
+                return;
+            }
+            axios.get("/principal", {
+                params: {query: this.shareSearchQuery}
+            }).then(resp => {
+                this.principalSearchResults = resp.data;
+            });
+        },
+        addSharePrincipal(principal) {
+            // only add if not already in list
+            if (!this.sharePrincipals.find(u => u.id === principal.id)) {
+                this.sharePrincipals.push(principal);
+            }
+            this.principalSearchResults = null;
+            this.shareSearchQuery = "";
+        },
+        removeSharePrincipal(index) {
+            this.sharePrincipals.splice(index, 1);
+        },
+        postShare() {
+            const payload = {
+                resources: [this.shareResourceUri],
+                groups: this.sharePrincipals.map(p => p.shareUri),
+                message: this.shareMessage,
+                permission: this.sharePermission
+            };
+            axios.post("/resource/share", payload)
+                    .then(() => {
+                        this.closeShareModal();
+                    });
+        },
+        deleteShare(entry) {
+            const payload = {
+                resources: [this.shareResourceUri],
+                groups: [entry.principalShareUri]
+            };
+
+            axios.delete("/resource/share", {
+                data: payload
+            })
+                    .then(() => {
+                        //update
+                        this.getResourceAccess();
+                    });
+        },
+        getResourceAccess() {
+            axios.get("/resource/access", {
+                params: {
+                    uri: [this.shareResourceUri]
+                }
+            }).then(res => {
+                this.shareAccessList = res.data[this.shareResourceUri];
+            }).catch(err => {
+                console.error(err);
+            });
+        },
+        openManageAccess() {
+            this.shareModalMode = "manage";
+            this.getResourceAccess();
+        },
+        backToShare() {
+            this.shareModalMode = "share";
+        },
+
+        getAuthMe() {
+            axios.get('/auth/me').then(response => {
+                this.user = response.data;
+            });
+        },
+        postLogout() {
+            axios.post('/auth/logout').then(response => {
+                window.location.href = response.data.redirect;
+            });
+        },
+        loadConfig() {
+            try {
+                const raw = localStorage.getItem("atic_molecule_demo_config");
+                if (!raw)
+                    return;
+                const saved = JSON.parse(raw);
+                if (saved.endpoint)
+                    this.endpoint = saved.endpoint;
+                if (saved.uri)
+                    this.uri = saved.uri;
+                if (Array.isArray(saved.params) && saved.params.length > 0) {
+                    this.params = saved.params;
+                }
+            } catch (e) {
+                console.warn("Failed to load config", e);
+            }
+        },
+        saveConfig() {
+            try {
+                const payload = {
+                    endpoint: this.endpoint,
+                    uri: this.uri,
+                    params: this.params
+                };
+                localStorage.setItem("atic_molecule_demo_config", JSON.stringify(payload));
+            } catch (e) {
+                console.warn("Failed to save config", e);
+            }
+        },
+        open_error_modal(msg) {
+            this.error = msg;
+            this.loading = false;
+            const modalInstance = new window.bootstrap.Modal(this.$refs.error_modal);
+            modalInstance.show();
+        },
+
+        copyCurl() {
+            if (!this.curlCommand)
+                return;
+
+            navigator.clipboard.writeText(this.curlCommand)
+                    .then(() => {
+                        // optional: simple feedback
+                        this.loading = false;
+                    })
+                    .catch(err => {
+                        this.open_error_modal("Failed to copy curl command");
+                    });
+        },
+
+        loadDoc() {
+            axios.get("/molecule")
+                    .then(resp => {
+                        this.docParams = resp.data.parameters || [];
+                    })
+                    .catch(err => {
+                        this.open_error_modal(err?.message || "Failed to load documentation");
+                    });
+        }
+    },
+    watch: {
+        endpoint: {
+            handler() {
+                this.saveConfig();
+            }
+        },
+        uri: {
+            handler() {
+                this.saveConfig();
+            }
+        },
+        params: {
+            handler() {
+                this.saveConfig();
+            },
+            deep: true
+        }
+    },
+    computed: {
+        requestUrl() {
+            if (!this.uri)
+                return "";
+
+            const base = `/${this.endpoint}/${encodeURIComponent(this.uri)}`;
+            const parts = [];
+
+            this.params.forEach(p => {
+                if (!p.key || p.ignored)
+                    return;
+
+                const key = encodeURIComponent(p.key);
+
+                // ✅ boolean flag (no value)
+                if (p.value === null || p.value === undefined || p.value === "") {
+                    parts.push(key);
+                } else {
+                    const value = encodeURIComponent(p.value);
+                    parts.push(`${key}=${value}`);
+                }
+            });
+
+            return parts.length ? `${base}?${parts.join("&")}` : base;
+        },
+
+        curlCommand() {
+            if (!this.requestUrl)
+                return "";
+
+            const url = `${window.location.origin}${this.requestUrl}`;
+
+            if (this.authToken && this.authToken.trim() !== "") {
+                return `curl -X GET "${url}" \\
+  -H "Authorization: Bearer ${this.authToken}"`;
+            }
+
+            return `curl -X GET "${url}"`;
+        }
+    }
+}).mount("#app");
+        </script>
+    </body>
+</html>

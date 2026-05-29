@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="/app/css/bootstrap.min.css" rel="stylesheet" />
+        <link href="/app/css/all.min.css" rel="stylesheet" />
+        <link href="/app/css/yasgui.min.css" rel="stylesheet" />
+        <!-- link href="/app/css/yasgui-extra.css" rel="stylesheet" / -->
+
+        <script src="/app/js/bootstrap.bundle.min.js" ></script>
+        <!-- script src="/app/js/yasgui.min.js" ></script -->
+        <script src="/app/js/vue.global.prod.js" ></script>
+        <script src="/app/js/axios.min.js"></script>
+        <script src="/app/js/yasgui.min.js" ></script>
+
+        <link rel="shortcut icon" href="/app/favicon.ico">
+
+        <title>SPARQL | {{instanceName}}</title>
+    </head>
+    <body  style="margin-left: 60px; margin-right: 60px;"> <!-- class="container-fluid" -->
+
+        <div id="app">
+            <div class="row align-items-center">
+                <div class="col d-flex align-items-center m-2">
+                    <h3 class="mb-0 d-flex align-items-center me-2">
+                        <img src="/app/img/atic-server.png" class="me-1" style="width: 32px; height: 32px">
+                        SPARQL on {{instanceName}}
+                    </h3>
+                </div>
+
+                <div class="col-auto ms-auto me-2" v-if="user">
+                    <span class="me-2" :title="user.username">
+                        <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                    </span>
+                    <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <div class="row mb-1">
+                <div class="col">
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+
+                        <div>
+                            <button
+                                class="btn btn-sm btn-outline-secondary"
+                                @click="prefixesExpanded = !prefixesExpanded"
+                                >
+                                <i
+                                    class="fa"
+                                    :class="prefixesExpanded ? 'fa-compress' : 'fa-expand'"
+                                    ></i>
+                            </button>
+                            <span class="ms-2">Prefixes <span v-if="!prefixesExpanded">({{ prefixCount }})</span></span>
+                        </div>
+                    </div>
+                    <textarea
+                        v-if="prefixesExpanded"
+                        class="form-control font-monospace"
+                        style="font-size: 12px"
+                        :rows="prefixRows"
+                        v-model="prefixes"
+                        ></textarea>
+                </div>
+            </div>
+
+            <div class="row mb-2">
+                <div class="col">
+
+                    <ul class="nav nav-tabs">
+
+                        <li
+                            class="nav-item d-flex align-items-center"
+                            v-for="(query, index) in queries"
+                            :key="query.id"
+                            >
+
+                            <a
+                                href="#"
+                                class="nav-link"
+                                :class="{active: activeQueryIndex === index}"
+                                @click.prevent="activeQueryIndex = index"
+                                >
+
+                                <template v-if="editingTabIndex === index">
+                                    <input
+                                        type="text"
+                                        class="form-control form-control-sm"
+                                        v-model="query.name"
+                                        @blur="editingTabIndex = null"
+                                        @keyup.enter="$event.target.blur()"
+                                        autofocus
+                                        >
+                                </template>
+
+                                <template v-else>
+                                    <span @dblclick="editingTabIndex = index">
+                                        {{ query.name }}
+                                    </span>
+                                </template>
+
+                                <button
+                                    class="btn btn-sm btn-link text-danger ms-2"
+                                    @click.stop="handleRemoveClick(index)"
+                                    v-if="queries.length > 1"
+                                    >
+                                    <span v-if="deleteConfirmIndex === index">
+                                        Confirm <i class="fa fa-times"></i>
+                                    </span>
+                                    <i v-else class="fa fa-times"></i>
+                                </button>
+
+                            </a>
+                        </li>
+
+                        <li class="nav-item">
+                            <button
+                                class="btn btn-sm btn-link mt-1"
+                                @click="addQuery"
+                                >
+                                <i class="fa fa-plus"></i>
+                            </button>
+                        </li>
+
+                    </ul>
+
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">Endpoint</label>
+
+                    <input
+                        class="form-control"
+                        list="endpointOptions"
+                        v-model="activeEndpoint"
+                        >
+
+                    <datalist id="endpointOptions">
+                        <option value="/sparql"></option>
+                        <option value="/update"></option>
+                    </datalist>
+
+                </div>
+
+                <!--div class="col-md-8 d-flex align-items-end">
+                    <button
+                        class="btn btn-primary"
+                        @click="sendQuery"
+                        >
+                        Execute
+                    </button>
+                </div -->
+            </div>
+
+            <div class="row mb-3">
+                <div class="col">
+                    <label class="form-label">
+                        SPARQL Query
+                        <button
+                            class="btn btn-primary btn-sm ms-2"
+                            @click="sendQuery"
+                            >
+                            <i class="fa fa-cog"></i> Execute
+                        </button>
+                    </label>
+
+                    <textarea
+                        v-if="activeQuery"
+                        class="form-control font-monospace"
+                        style="font-size: 12px"
+                        rows="10"
+                        v-model="activeQuery.content"
+                        ></textarea>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col">
+
+                    <ul class="nav nav-tabs mb-3">
+
+                        <li class="nav-item">
+                            <a
+                                href="#"
+                                class="nav-link"
+                                :class="{active: activeResultTab === 'table'}"
+                                @click.prevent="activeResultTab = 'table'"
+                                >
+                                Table
+                            </a>
+                        </li>
+
+                        <li class="nav-item">
+                            <a
+                                href="#"
+                                class="nav-link"
+                                :class="{active: activeResultTab === 'raw'}"
+                                @click.prevent="activeResultTab = 'raw'"
+                                >
+                                Raw
+                            </a>
+                        </li>
+
+                        <li class="nav-item">
+                            <a
+                                href="#"
+                                class="nav-link"
+                                :class="{active: activeResultTab === 'error'}"
+                                @click.prevent="activeResultTab = 'error'"
+                                >
+                                Error
+                            </a>
+                        </li>
+
+                    </ul>
+
+                    <div v-if="activeResultTab === 'raw'">
+
+                        <textarea
+                            class="form-control font-monospace"
+                            style="font-size: 12px"
+                            rows="30"
+                            readonly
+                            :value="rawResult"
+                            ></textarea>
+
+                    </div>
+
+                    <div v-if="activeResultTab === 'error'">
+
+                        <div
+                            class="alert alert-danger"
+                            v-if="error"
+                            >
+                            <strong>HTTP {{ error.status }}</strong><br>
+                            {{ error.message }}
+                        </div>
+
+                    </div>
+
+                    <div v-if="activeResultTab === 'table'" style="font-size: 12px">
+                        <div v-if="tableData && tableData.results">
+
+                            <table class="table table-sm table-bordered font-monospace">
+
+                                <thead>
+                                    <tr>
+                                        <th v-for="v in tableData.head.vars" :key="v">
+                                            {{ v }}
+                                        </th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    <tr v-for="(row, rowIndex) in tableData.results.bindings" :key="rowIndex">
+
+                                        <td v-for="v in tableData.head.vars" :key="v">
+
+                                            <span v-if="row[v]">
+                                                <span v-if="row[v].type === 'uri'">
+                                                    <a href="#" @click.prevent="onUriClick(row[v].value)">
+                                                        {{ curie(row[v].value) }}
+                                                    </a>
+                                                    <button class="btn btn-sm btn-link text-secondary p-0 ms-1 float-end"
+                                                            @click="copy('<' + row[v].value + '>')">
+                                                        <i class="fa fa-copy"></i>
+                                                    </button>
+                                                </span>
+
+                                                <span v-else-if="row[v].type === 'bnode'">
+                                                    _:{{ row[v].value }}
+                                                </span>
+
+                                                <span v-else-if="row[v].type === 'literal'">
+                                                    <literal-cell
+                                                        :value="row[v].value"
+                                                        :datatype="row[v].datatype"
+                                                        :lang="row[v]['xml:lang']"
+                                                        :prefix-map="prefixMap"
+                                                        @copy="copy"
+                                                        />
+                                                </span>
+
+                                                <span v-else-if="row[v].type === 'triple'">
+
+                                                    <table class="table table-sm table-bordered mb-0 ms-2">
+                                                        <tr>
+                                                            <td>&lt;&lt;</td>
+
+                                                            <!-- SUBJECT -->
+                                                            <td>
+                                                                <span v-if="row[v].value.subject.type === 'uri'">
+                                                                    <a href="#" @click.prevent="onUriClick(row[v].value.subject.value)">
+                                                                        {{ curie(row[v].value.subject.value) }}
+                                                                    </a>
+                                                                    <button class="btn btn-sm btn-link text-secondary p-0 ms-1 float-end"
+                                                                            @click="copy('<' + row[v].value.subject.value + '>')">
+                                                                        <i class="fa fa-copy"></i>
+                                                                    </button>
+                                                                </span>
+
+                                                                <span v-else-if="row[v].value.subject.type === 'bnode'">
+                                                                    _:{{ row[v].value.subject.value }}
+                                                                </span>
+
+                                                                <span v-else-if="row[v].value.subject.type === 'literal'">
+                                                                    <literal-cell
+                                                                        :value="row[v].value.subject.value"
+                                                                        :datatype="row[v].value.subject.datatype"
+                                                                        :lang="row[v].value.subject['xml:lang']"
+                                                                        :prefix-map="prefixMap"
+                                                                        @copy="copy"
+                                                                        />
+                                                                </span>
+                                                            </td>
+
+                                                            <!-- PREDICATE (URI only usually, but kept consistent) -->
+                                                            <td>
+                                                                <span v-if="row[v].value.predicate.type === 'uri'">
+                                                                    <a href="#" @click.prevent="onUriClick(row[v].value.predicate.value)">
+                                                                        {{ curie(row[v].value.predicate.value) }}
+                                                                    </a>
+                                                                    <button class="btn btn-sm btn-link text-secondary p-0 ms-1 float-end"
+                                                                            @click="copy('<' + row[v].value.predicate.value + '>')">
+                                                                        <i class="fa fa-copy"></i>
+                                                                    </button>
+                                                                </span>
+
+                                                                <span v-else-if="row[v].value.predicate.type === 'bnode'">
+                                                                    _:{{ row[v].value.predicate.value }}
+                                                                </span>
+
+                                                                <span v-else-if="row[v].value.predicate.type === 'literal'">
+                                                                    <literal-cell
+                                                                        :value="row[v].value.predicate.value"
+                                                                        :datatype="row[v].value.predicate.datatype"
+                                                                        :lang="row[v].value.predicate['xml:lang']"
+                                                                        :prefix-map="prefixMap"
+                                                                        @copy="copy"
+                                                                        />
+                                                                </span>
+                                                            </td>
+
+                                                            <!-- OBJECT -->
+                                                            <td>
+                                                                <span v-if="row[v].value.object.type === 'uri'">
+                                                                    <a href="#" @click.prevent="onUriClick(row[v].value.object.value)">
+                                                                        {{ curie(row[v].value.object.value) }}
+                                                                    </a>
+                                                                    <button class="btn btn-sm btn-link text-secondary p-0 ms-1 float-end"
+                                                                            @click="copy('<' + row[v].value.object.value + '>')">
+                                                                        <i class="fa fa-copy"></i>
+                                                                    </button>
+                                                                </span>
+
+                                                                <span v-else-if="row[v].value.object.type === 'bnode'">
+                                                                    _:{{ row[v].value.object.value }}
+                                                                </span>
+
+                                                                <span v-else-if="row[v].value.object.type === 'literal'">
+                                                                    <literal-cell
+                                                                        :value="row[v].value.object.value"
+                                                                        :datatype="row[v].value.object.datatype"
+                                                                        :lang="row[v].value.object['xml:lang']"
+                                                                        :prefix-map="prefixMap"
+                                                                        @copy="copy"
+                                                                        />
+                                                                </span>
+                                                            </td>
+
+                                                            <td>&gt;&gt;</td>
+                                                        </tr>
+                                                    </table>
+
+                                                </span>
+
+                                            </span>
+
+                                        </td>
+
+                                    </tr>
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                        <div v-else class="alert alert-secondary">
+                            No data
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+
+        <script>
+const {createApp} = Vue;
+
+var app = createApp({
+
+    data() {
+        return {
+            user: null,
+
+            prefixes: `{{defaultPrefixes}}
+`,
+            prefixesExpanded: false,
+
+            queries: [],
+
+            activeQueryIndex: 0,
+
+            editingTabIndex: null,
+            
+            prefixMap: {}, 
+
+            activeResultTab: "table",
+
+            rawResult: "",
+            tableData: null,
+
+            error: null,
+
+            nextQueryNumber: 1,
+
+            deleteConfirmIndex: null,
+
+            defaultQuery: `{{defaultQuery}}
+`,
+
+            defaultPrefixes: `{{defaultPrefixes}}
+`
+        };
+    },
+
+    computed: {
+        activeQuery() {
+            return this.queries[this.activeQueryIndex] || null;
+        },
+        prefixCount() {
+            return this.prefixes
+                    .split("\n")
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .length;
+        },
+        prefixRows() {
+            const lines = this.prefixes.split("\n").length;
+            return Math.max(6, lines);
+        },
+        activeEndpoint: {
+
+            get() {
+                return this.activeQuery?.endpoint || "/sparql";
+            },
+
+            set(value) {
+
+                if (this.activeQuery) {
+                    this.activeQuery.endpoint = value;
+                }
+            }
+        }
+    },
+
+    mounted() {
+        this.getAuthMe();
+        this.loadState();
+    },
+
+    watch: {
+        prefixes: {
+            handler() {
+                this.saveState();
+                this.buildPrefixMap();
+            }
+        },
+
+        queries: {
+            handler() {
+                this.saveState();
+            },
+            deep: true
+        },
+
+        activeQueryIndex: {
+            handler() {
+                this.saveState();
+            }
+        },
+
+    },
+
+    methods: {
+        addQuery() {
+
+            this.queries.push({
+                id: Date.now(),
+                name: `Query ${this.nextQueryNumber}`,
+                content: this.defaultQuery,
+                endpoint: "/sparql"
+            });
+
+            this.nextQueryNumber++;
+
+            this.activeQueryIndex = this.queries.length - 1;
+        },
+
+        removeQuery(index) {
+
+            this.queries.splice(index, 1);
+
+            console.log(this.queries.length);
+
+            if (this.queries.length === 0) {
+                this.addQuery();
+                return;
+            }
+
+            if (this.queries.length === 1) {
+                this.activeQueryIndex = 0;
+                return;
+            }
+
+            // if the removed tab was active,
+            // focus the previous existing tab
+            if (this.activeQueryIndex === index) {
+
+                this.activeQueryIndex =
+                        Math.min(index, this.queries.length - 1);
+
+                return;
+            }
+
+            // if a tab before the active one was removed,
+            // shift active index left
+            if (this.activeQueryIndex > index) {
+                this.activeQueryIndex--;
+            }
+        },
+
+        handleRemoveClick(index) {
+
+            // second click confirms delete
+            if (this.deleteConfirmIndex === index) {
+                this.removeQuery(index);
+                this.deleteConfirmIndex = null;
+                return;
+            }
+
+            // first click activates confirm state
+            this.deleteConfirmIndex = index;
+
+            // optional auto-reset safety (recommended)
+            setTimeout(() => {
+                if (this.deleteConfirmIndex === index) {
+                    this.deleteConfirmIndex = null;
+                }
+            }, 3000);
+        },
+
+        normalizeEndpoint(endpoint) {
+
+            if (
+                    endpoint.startsWith("http://") ||
+                    endpoint.startsWith("https://")
+                    ) {
+                return endpoint;
+            }
+
+            return `${window.location.origin}${endpoint}`;
+        },
+
+        buildPrefixMap() {
+
+            this.prefixMap = {};
+
+            const lines = this.prefixes.split("\n");
+
+            for (const line of lines) {
+
+                const match = line.match(/PREFIX\s+(\w+):\s+<([^>]+)>/i);
+                if (match) {
+                    this.prefixMap[match[1]] = match[2];
+                }
+            }
+        },
+
+        async sendQuery() {
+
+            this.error = null;
+            this.rawResult = null;
+            this.tableData = null;
+
+            const queryText =
+                    this.prefixes + "\n\n" + this.activeQuery.content;
+
+            const endpoint = this.normalizeEndpoint(this.activeEndpoint);
+
+            const isUpdateEndpoint = endpoint.endsWith("/update");
+
+            try {
+
+                const response = await axios.post(
+                        endpoint,
+                        new URLSearchParams({
+                            [isUpdateEndpoint ? "update" : "query"]: queryText
+                        }),
+                        {
+                            headers: {
+                                "Content-Type":
+                                        "application/x-www-form-urlencoded",
+
+                                "Accept":
+                                        "application/sparql-results+json"
+                            },
+
+                            responseType: "text",
+
+                            validateStatus(status) {
+                                return status >= 200 && status < 300;
+                            }
+                        }
+                );
+
+                if (response.status === 204) {
+                    this.rawResult = "HTTP 204 No Content: Update executed successfully";
+
+                } else {
+
+                    this.rawResult = response.data;
+                    this.tableData = JSON.parse(this.rawResult)
+                }
+
+                if(isUpdateEndpoint) {
+                    this.activeResultTab = "raw";
+                } else {
+                    this.activeResultTab = "table";
+                }
+
+            } catch (error) {
+
+                let status = 0;
+                let message = "Unknown error";
+
+                if (error.response) {
+                    status = error.response.status;
+                    message = error.response.data || error.message;
+                } else {
+                    message = error.message;
+                }
+
+                this.error = {
+                    status,
+                    message
+                };
+
+                this.activeResultTab = "error";
+            }
+        },
+
+        saveState() {
+
+            localStorage.setItem(
+                    "atic-sparql-client-state",
+                    JSON.stringify({
+                        prefixes: this.prefixes,
+                        endpoint: this.endpoint,
+                        queries: this.queries,
+                        activeQueryIndex: this.activeQueryIndex,
+                        nextQueryNumber: this.nextQueryNumber
+                    })
+                    );
+        },
+
+        loadState() {
+
+            const raw = localStorage.getItem(
+                    "atic-sparql-client-state"
+                    );
+
+            if (raw) {
+
+                const state = JSON.parse(raw);
+
+                this.prefixes = state.prefixes || this.defaultPrefixes;
+                this.endpoint = state.endpoint || "/sparql";
+                this.queries = state.queries || [];
+                this.activeQueryIndex =
+                        state.activeQueryIndex || 0;
+                this.nextQueryNumber = state.nextQueryNumber || 1;
+            }
+
+            if (this.queries.length === 0) {
+
+                this.queries = [
+                    {
+                        id: Date.now(),
+                        name: `Query ${this.nextQueryNumber}`,
+                        content: this.defaultQuery,
+                        endpoint: "/sparql"
+                    }
+                ];
+
+                this.nextQueryNumber++;
+            }
+
+            if (this.activeQueryIndex >= this.queries.length) {
+                this.activeQueryIndex = this.queries.length - 1;
+            }
+        },
+
+        copy(text) {
+            navigator.clipboard.writeText(text);
+        },
+
+        onUriClick(uri) {
+            console.log("URI clicked:", uri);
+
+            if (uri.startsWith("http")) {
+                window.open(uri, "_blank");
+                return;
+            }
+
+            // your existing internal URI handling...
+        },
+
+        curie(uri) {
+            if (!this.prefixMap)
+                this.buildPrefixMap();
+
+            for (const [prefix, ns] of Object.entries(this.prefixMap)) {
+                if (uri.startsWith(ns)) {
+                    return uri.replace(ns, prefix + ":");
+                }
+            }
+            return uri;
+        },
+
+        formatNode(node) {
+
+            if (!node)
+                return "";
+
+            if (node.type === "uri") {
+                return this.curie(node.value);
+            }
+
+            if (node.type === "bnode") {
+                return "_:" + node.value;
+            }
+
+            if (node.type === "literal") {
+                return node.value;
+            }
+
+            return JSON.stringify(node);
+        },
+
+        getAuthMe() {
+            axios.get('/auth/me').then(response => {
+                this.user = response.data;
+            });
+        },
+
+        postLogout() {
+            axios.post('/auth/logout').then(response => {
+                window.location.href = response.data.redirect;
+            });
+        }
+    },
+
+    components: {
+        LiteralCell: {
+            props: ["value", "datatype", "lang", "prefixMap"],
+
+            data() {
+                return {
+                    expanded: false,
+                    threshold: 80
+                };
+            },
+
+            computed: {
+                display() {
+                    if (this.expanded)
+                        return this.value;
+
+                    return this.value.length > this.threshold
+                            ? this.value.substring(0, this.threshold) + "..."
+                            : this.value;
+                },
+
+                datatypeDisplay() {
+                    //console.log(this.datatype);
+                    //console.log(this.prefixMap);
+                    if (!this.datatype || !this.prefixMap)
+                        return this.datatype;
+
+                    for (const [prefix, ns] of Object.entries(this.prefixMap)) {
+                        if (this.datatype.startsWith(ns)) {
+                            return `${prefix}:${this.datatype.substring(ns.length)}`;
+                        }
+                    }
+
+                    return this.datatype;
+                }
+            },
+
+            template: `
+            <span>
+                <span @click="expanded = !expanded">
+                    {{ display }}
+                </span>
+
+                <sup v-if="datatype" style="font-size:10px">
+                    {{ datatypeDisplay }}
+                </sup>
+
+                <sub v-if="lang" style="font-size:10px">
+                    {{ lang }}
+                </sub>
+
+                <button class="btn btn-sm btn-link text-secondary float-end p-0 ms-1"
+                        @click="$emit('copy', value)">
+                    <i class="fa fa-copy"></i>
+                </button>
+            </span>
+        `
+        }
+    }
+
+}).mount("#app");
+        </script>
+
+    </body>
+</html>
+
+

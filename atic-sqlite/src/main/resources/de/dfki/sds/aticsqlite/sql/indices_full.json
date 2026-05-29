@@ -1,0 +1,142 @@
+[
+    {
+        "name": "idx_resource_id_uri",
+        "sql": "CREATE INDEX idx_resource_id_uri ON resource(id, uri);"
+    },
+    {
+        "name": "idx_property_id_uri",
+        "sql": "CREATE INDEX idx_property_id_uri ON property(id, uri);"
+    },
+    {
+        "name": "idx_spog_s",
+        "sql": "CREATE INDEX idx_spog_s ON spog(s);"
+    },
+    {
+        "name": "idx_spog_p",
+        "sql": "CREATE INDEX idx_spog_p ON spog(p);"
+    },
+    {
+        "name": "idx_spog_o",
+        "sql": "CREATE INDEX idx_spog_o ON spog(o);"
+    },
+    {
+        "name": "idx_splg_s",
+        "sql": "CREATE INDEX idx_splg_s ON splg(s);"
+    },
+    {
+        "name": "idx_splg_p",
+        "sql": "CREATE INDEX idx_splg_p ON splg(p);"
+    },
+    {
+        "name": "idx_gspo",
+        "sql": "CREATE INDEX idx_gspo ON splg(g, s, p, lex, lang, dt);"
+    },
+    {
+        "name": "idx_gsop",
+        "sql": "CREATE INDEX idx_gsop ON splg(g, s, lex, p, lang, dt);"
+    },
+    {
+        "name": "idx_gpso",
+        "sql": "CREATE INDEX idx_gpso ON splg(g, p, s, lex, lang, dt);"
+    },
+    {
+        "name": "idx_gpos",
+        "sql": "CREATE INDEX idx_gpos ON splg(g, p, lex, s, lang, dt);"
+    },
+    {
+        "name": "idx_gosp",
+        "sql": "CREATE INDEX idx_gosp ON splg(g, lex, s, p, lang, dt);"
+    },
+    {
+        "name": "idx_gops",
+        "sql": "CREATE INDEX idx_gops ON splg(g, lex, p, s, lang, dt);"
+    },
+    {
+        "name": "idx_spog",
+        "sql": "CREATE INDEX idx_spog ON splg(s, p, g, lex, lang, dt);"
+    },
+    {
+        "name": "idx_sgpo",
+        "sql": "CREATE INDEX idx_sgpo ON splg(s, g, p, lex, lang, dt);"
+    },
+    {
+        "name": "idx_psog",
+        "sql": "CREATE INDEX idx_psog ON splg(p, s, g, lex, lang, dt);"
+    },
+    {
+        "name": "idx_pgso",
+        "sql": "CREATE INDEX idx_pgso ON splg(p, g, s, lex, lang, dt);"
+    },
+    {
+        "name": "idx_ospg",
+        "sql": "CREATE INDEX idx_ospg ON splg(lex, s, p, g, lang, dt);"
+    },
+    {
+        "name": "idx_opsg",
+        "sql": "CREATE INDEX idx_opsg ON splg(lex, p, s, g, lang, dt);"
+    },
+    {
+        "name": "idx_g_spo",
+        "sql": "CREATE INDEX idx_g_spo ON spog(g, s, p, o);"
+    },
+    {
+        "name": "idx_g_sop",
+        "sql": "CREATE INDEX idx_g_sop ON spog(g, s, o, p);"
+    },
+    {
+        "name": "idx_g_pso",
+        "sql": "CREATE INDEX idx_g_pso ON spog(g, p, s, o);"
+    },
+    {
+        "name": "idx_g_pos",
+        "sql": "CREATE INDEX idx_g_pos ON spog(g, p, o, s);"
+    },
+    {
+        "name": "idx_g_osp",
+        "sql": "CREATE INDEX idx_g_osp ON spog(g, o, s, p);"
+    },
+    {
+        "name": "idx_g_ops",
+        "sql": "CREATE INDEX idx_g_ops ON spog(g, o, p, s);"
+    },
+    {
+        "name": "idx_s_po_g",
+        "sql": "CREATE INDEX idx_s_po_g ON spog(s, p, o, g);"
+    },
+    {
+        "name": "idx_s_op_g",
+        "sql": "CREATE INDEX idx_s_op_g ON spog(s, o, p, g);"
+    },
+    {
+        "name": "idx_p_so_g",
+        "sql": "CREATE INDEX idx_p_so_g ON spog(p, s, o, g);"
+    },
+    {
+        "name": "idx_p_os_g",
+        "sql": "CREATE INDEX idx_p_os_g ON spog(p, o, s, g);"
+    },
+    {
+        "name": "idx_o_sp_g",
+        "sql": "CREATE INDEX idx_o_sp_g ON spog(o, s, p, g);"
+    },
+    {
+        "name": "idx_o_ps_g",
+        "sql": "CREATE INDEX idx_o_ps_g ON spog(o, p, s, g);"
+    },
+    {
+        "name": "idx_acl_resource_group_perm",
+        "sql": "CREATE INDEX idx_acl_resource_group_perm ON resource_acl(resource_id, group_id, permission);"
+    },
+    {
+        "name": "idx_acl_group_resource_perm",
+        "sql": "CREATE INDEX idx_acl_group_resource_perm ON resource_acl(group_id, resource_id, permission);"
+    },
+    {
+        "name": "idx_acl_resource_perm",
+        "sql": "CREATE INDEX idx_acl_resource_perm ON resource_acl(resource_id, permission);"
+    },
+    {
+        "name": "idx_acl_group_perm",
+        "sql": "CREATE INDEX idx_acl_group_perm ON resource_acl(group_id, permission);"
+    }
+]

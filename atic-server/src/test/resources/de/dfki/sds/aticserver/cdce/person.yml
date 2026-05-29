@@ -1,0 +1,134 @@
+path: /person   
+endpoints:
+
+  get:
+    sparql: |
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+      PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+      PREFIX fn: <https://comem.ai/atic/fn#>
+      PREFIX void: <http://rdfs.org/ns/void#>
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      CONSTRUCT {
+        ?collection a rdfs:Container ;
+                    void:entities ?total ;
+                    rdfs:member ?person .
+
+        ?person a foaf:Person ;
+                foaf:name ?name .
+      }
+      WHERE {
+        {
+          SELECT (COUNT(?p) AS ?total) WHERE {
+            ?p a foaf:Person .
+          }
+        }
+        
+        {
+          BIND( BNODE() AS ?collection )
+        }
+
+        OPTIONAL {
+          ?person a foaf:Person ;
+                  foaf:name ?name .
+        }
+      }
+      ORDER BY ?name
+      LIMIT ?limit
+      OFFSET ?offset
+    frame: | 
+      {
+        "@context": {
+          "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+          "foaf": "http://xmlns.com/foaf/0.1/",
+          "xsd": "http://www.w3.org/2001/XMLSchema#",
+          "name": "foaf:name",
+          "entities": "http://rdfs.org/ns/void#entities",
+          "items": {
+            "@id": "http://www.w3.org/2000/01/rdf-schema#member",
+            "@container": "@set"
+          }
+        },
+        "@type": "rdfs:Container",
+        "entities": {},
+        "items": {
+          "@embed": "@always",
+          "@default": []
+        }
+      }
+
+  getInstance:   
+    sparql: |
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+      CONSTRUCT {
+        ?uri a foaf:Person ;
+                foaf:name ?name ;
+                foaf:mbox ?mbox .
+      }
+      WHERE {
+        ?uri a foaf:Person ;
+                foaf:name ?name .
+        OPTIONAL { ?person foaf:mbox ?mbox }
+      }
+    frame: |
+      {
+        "@context": {
+          "foaf": "http://xmlns.com/foaf/0.1/",
+          "name": "foaf:name",
+          "mbox": { "@id": "foaf:mbox", "@type": "xsd:anyURI" }
+        },
+        "@type": "foaf:Person",
+        "name": {},
+        "mbox": {},
+        "@id": {}
+      }
+
+  post: 
+    sparql: |       
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+      PREFIX fn: <https://comem.ai/atic/fn#>
+      PREFIX atic: <urn:atic:>
+      INSERT {
+      
+        ?newPerson a foaf:Person ;
+                foaf:name ?name .
+                
+        GRAPH ?meta {
+            ?newPerson a atic:Location .
+        }
+      } WHERE {
+        GRAPH ?payload {
+          ?person a foaf:Person ;
+                foaf:name ?name .
+        }
+        BIND( fn:createURN() AS ?newPerson )
+      }
+
+  putInstance:
+    sparql: |       
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+      INSERT {
+        ?uri a foaf:Person ;
+                foaf:name ?name .
+                
+      } WHERE {
+        GRAPH ?payload {
+          ?uri a foaf:Person ;
+                foaf:name ?name .
+        }
+      }
+
+  deleteInstance:  
+    sparql: | 
+      DELETE {
+        ?uri ?p ?o .
+        ?s ?p2 ?uri .
+      }
+      WHERE {
+        {
+          ?uri ?p ?o .
+        }
+        UNION
+        {
+          ?s ?p2 ?uri .
+        }
+      }

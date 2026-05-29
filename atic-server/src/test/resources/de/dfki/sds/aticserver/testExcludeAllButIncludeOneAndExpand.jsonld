@@ -1,0 +1,15 @@
+{
+    "uri": "http://example.org/person1",
+    "knows": [{
+        "uri": "http://example.org/person2",
+        "@reverse": {"knows": [{"uri": "http://example.org/person1"}]},
+        "moreOPS": false
+    }],
+    "moreSPO": false,
+    "@context": {
+        "uri": "@id",
+        "knows": "http://xmlns.com/foaf/0.1/knows",
+        "moreOPS": "urn:atic:moreOPS",
+        "moreSPO": "urn:atic:moreSPO"
+    }
+}
