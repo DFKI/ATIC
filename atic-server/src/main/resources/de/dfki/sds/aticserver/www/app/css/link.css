@@ -1,0 +1,22 @@
+
+.link {
+  font-weight: 400;
+  color: #007bff;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: #0056b3;
+  text-decoration: underline;
+}
+
+.link:focus, .link.focus {
+  text-decoration: underline;
+  box-shadow: none;
+}
+
+.link:disabled, .link.disabled {
+  color: #6c757d;
+  pointer-events: none;
+}
