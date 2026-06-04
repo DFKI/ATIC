@@ -76,11 +76,24 @@
             <scope>test</scope>
         </dependency>
         
-        <!-- nextcloud -->
+        <!-- Nextcloud -->
         <dependency>
             <groupId>com.github.lookfirst</groupId>
             <artifactId>sardine</artifactId>
             <version>5.13</version>
+        </dependency>
+        
+        <!-- RML -->
+        <!--dependency>
+            <groupId>com.github.jduchateau</groupId>
+            <artifactId>burp-errors</artifactId>
+            <version>0.1.6</version>
+        </dependency -->
+        
+        <dependency>
+            <groupId>com.github.kg-construct</groupId>
+            <artifactId>BURP</artifactId>
+            <version>0.1.2</version>
         </dependency>
     </dependencies>
     
@@ -99,4 +112,13 @@
             </plugin>
         </plugins>
     </build>
+    
+    <!-- RML: burp-errors is published here -->
+    <repositories>
+        <repository>
+            <id>mschroeder-repo</id>
+            <url>https://www.dfki.uni-kl.de/~mschroeder/repo</url>
+        </repository>
+    </repositories>
+    
 </project>

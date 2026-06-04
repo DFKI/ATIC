@@ -1,5 +1,7 @@
 package de.dfki.sds.aticsqlite;
 
+import burp.model.TriplesMap;
+import burp.parse.Parse;
 import de.dfki.sds.atic.ac.Group;
 import de.dfki.sds.atic.ac.Permission;
 import de.dfki.sds.atic.ac.PermissionDeniedException;
@@ -21,6 +23,8 @@ import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,6 +59,7 @@ import org.apache.jena.sparql.function.FunctionFactory;
 import org.apache.jena.sparql.util.Context;
 import org.apache.jena.sparql.util.Symbol;
 import org.apache.jena.util.iterator.ExtendedIterator;
+import org.apache.jena.vocabulary.DCTerms;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mindrot.jbcrypt.BCrypt;
@@ -1094,7 +1099,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 if (graphId == null) {
                     throw new IllegalStateException("Graph does not exist: " + graphUri);
                 }
-                
+
                 // -----------------------------------------------
                 // 2) Validate group URIs
                 // -----------------------------------------------
@@ -1109,7 +1114,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                         throw new IllegalArgumentException("Group not found: " + grUri);
                     }
 
-                    if( groupId == ctx.getPrimaryGroupId().longValue()) {
+                    if (groupId == ctx.getPrimaryGroupId().longValue()) {
                         throw new IllegalArgumentException("You cannot unshare yourself: " + grUri);
                     }
                 }
@@ -1436,7 +1441,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                         throw new IllegalArgumentException("Group not found: " + grUri);
                     }
 
-                    if( groupId == ctx.getPrimaryGroupId().longValue()) {
+                    if (groupId == ctx.getPrimaryGroupId().longValue()) {
                         throw new IllegalArgumentException("You cannot unshare yourself: " + grUri);
                     }
                 }
@@ -2581,7 +2586,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         // ANY graph
         if (g.equals(Node.ANY)) {
-            Iterator<Node> graphIter = listGraphNodes(ctx);
+            Iterator<Node> graphIter = listGraphNodes(ctx, true);
             while (graphIter.hasNext()) {
                 Node graphNode = graphIter.next();
                 AticGraph graph = getGraph(graphNode, ctx);
@@ -2718,7 +2723,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         // ANY graph – return true as soon as any graph reports true
         if (g.equals(Node.ANY)) {
-            Iterator<Node> graphIter = listGraphNodes(ctx);
+            Iterator<Node> graphIter = listGraphNodes(ctx, true);
             while (graphIter.hasNext()) {
                 Node graphNode = graphIter.next();
                 AticGraph graph = getGraph(graphNode, ctx);   // read‑access check inside getGraph
@@ -2967,4 +2972,52 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         generator.start(univNum, startIndex, seed, names ? 1 : 0, docs, "http://example.org/", writer);
     }
+
+    public void runRML(Node rmlProjectGraph, Node rmlProjectResource, int bufferSize, InvocationContext ctx) throws IOException {
+
+        Path tempDir = Files.createTempDirectory("atic-run-rml-");
+        
+        //Path cwd = Paths.get("").toAbsolutePath();
+        //System.out.println(cwd);
+        //tempDir = cwd;
+
+        //from project description to mapping file
+        Node rmlCodeLiteral = this.calculateRead(() -> {
+            Iterator<Quad> iter = this.find(rmlProjectGraph, rmlProjectResource, DCTerms.description.asNode(), Node.ANY, ctx);
+            if (!iter.hasNext()) {
+                throw new IllegalArgumentException("No RML code found in: " + rmlProjectResource);
+            }
+            return iter.next().getObject();
+        });
+        String rmlCode = rmlCodeLiteral.getLiteralLexicalForm();
+        Path mappingFile = tempDir.resolve("mapping.ttl");
+        File f = mappingFile.toFile();
+        FileUtils.writeStringToFile(f, rmlCode, StandardCharsets.UTF_8);
+        
+        String baseIRI = mappingFile.toUri().toString();
+        
+        //parsing RML code
+        List<TriplesMap> triplesMaps;
+        try {
+            triplesMaps = Parse.parseMappingFile(mappingFile.toAbsolutePath().toString());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        if (triplesMaps.isEmpty()) {
+            throw new IllegalArgumentException("No triples map found in RML code of: " + rmlProjectResource);
+        }
+        
+        burp.Generator generator = new burp.Generator();
+        
+        SqliteAticGraph.setDefaultBufferAndBatchSize(bufferSize);
+        
+        this.executeWrite(() -> {
+            generator.generate(triplesMaps, baseIRI, quad -> {
+                //System.out.println(quad);
+                add(quad, ctx);
+            });
+        });
+        
+    }
+
 }
