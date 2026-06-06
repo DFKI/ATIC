@@ -83,6 +83,7 @@ import org.apache.jena.riot.RDFFormat;
 import org.apache.jena.riot.RDFLanguages;
 import org.apache.jena.riot.RDFParser;
 import org.apache.jena.riot.system.StreamRDF;
+import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.graph.GraphFactory;
 import org.apache.jena.system.Txn;
 import org.apache.jena.update.UpdateExecution;
@@ -233,6 +234,15 @@ public class AticServer {
             LOGGER.warning("CDCE folder not found: " + cdceFolder.getAbsolutePath());
             return;
         }
+        
+        String resourcePath = "/de/dfki/sds/aticserver/cdce/";
+        List<String> resourceNames = List.of("rml-project.yml");
+        for(String resourceName : resourceNames) {
+            LOGGER.info("Load CDCE config from resources: " + resourceName);
+            
+            ConfigDrivenCrudEndpoints cdce = new ConfigDrivenCrudEndpoints(resourcePath + resourceName);
+            cdce.register(app, config.cdceEndpointPath, getDatasetGraph());
+        }
 
         File[] files = cdceFolder.listFiles();
 
@@ -296,6 +306,8 @@ public class AticServer {
         app.get("/graph", this::getGraph);
         app.post("/graph", this::postGraph);
         app.delete("/graph/{uri}", this::deleteGraph);
+        
+        app.post("/rml/execution", this::postRmlExecution);
 
         app.post("/upload", this::postUpload);
 
@@ -575,6 +587,38 @@ public class AticServer {
         }
     }
 
+    //------------------------------------------
+    //rml
+    
+    private void postRmlExecution(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        JSONObject body = new JSONObject(ctx.body());
+        
+        //if no graph is given, we assume default graph
+        String graphNameStr = body.optString("graph", Quad.defaultGraphIRI.getURI());
+        
+        String projectStr = body.optString("project", null);
+        if (projectStr == null || projectStr.isBlank()) {
+            ctx.status(400).json(Map.of(
+                    "success", false,
+                    "error", "Missing project resource"
+            ));
+            return;
+        }
+        
+        Node rmlProjectGraph = NodeFactory.createURI(graphNameStr);
+        Node rmlProjectResource = NodeFactory.createURI(projectStr);
+        int bufferSize = body.optInt("bufferSize", 100_000);
+        
+        //never throws, will add stacktracke to rmlProjectResource
+        synchronized(this) {
+            datasetGraph.runRML(rmlProjectGraph, rmlProjectResource, bufferSize, ictx);
+        }
+        
+        //because everything is attached to rmlProjectResource in RDF graph
+        ctx.status(HttpStatus.NO_CONTENT);
+    }
+    
     //-------------------------------------------
     //share
     private void postShareGraphs(Context ctx) {

@@ -114,17 +114,13 @@ public class RMLUnitTest {
 
         //maybe specify default graph?
         //System.out.println("write:");
-        try {
-            //the project is run, all settings are on the project resources
-            dataset.runRML(
-                    NodeFactory.createURI("urn:graph:rml"),
-                    NodeFactory.createURI("urn:rml:project"),
-                    100_000,
-                    ctx
-            );
-        } catch (IOException ex) {
-            Assertions.fail(ex);
-        }
+        //the project is run, all settings are on the project resources
+        dataset.runRML(
+                NodeFactory.createURI("urn:graph:rml"),
+                NodeFactory.createURI("urn:rml:project"),
+                100_000,
+                ctx
+        );
 
         /*
         System.out.println("read:");
@@ -132,8 +128,7 @@ public class RMLUnitTest {
             Iterator<Quad> iter = dataset.find(Node.ANY, Node.ANY, Node.ANY, Node.ANY, ctx);
             iter.forEachRemaining(quad -> System.out.println(quad));
         });
-        */
-        
+         */
         dataset.executeRead(() -> {
             Node staff = NodeFactory.createURI("urn:staff:1");
 

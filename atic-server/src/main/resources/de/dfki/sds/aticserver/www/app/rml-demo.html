@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>RML Demo | Atic</title>
+    </head>
+    <body>
+        <div class="container-fluid mt-4" id="app">
+
+            <div class="row align-items-center">
+                <div class="col d-flex align-items-center m-2">
+                    <h3 class="mb-0 d-flex align-items-center me-2">
+                        <i class="fa fa-cogs me-2"></i> RML Demo
+                    </h3>
+                    <div v-if="loading" class="spinner-border text-primary" role="status" style="width: 1.5rem; height: 1.5rem;"
+                         @click="loading = false">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="col-auto ms-auto me-2" v-if="user">
+                    <span class="me-2" :title="user.username">
+                        <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                    </span>
+                    <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+
+            <div class="row">
+                <div class="col-3">
+                    <div class="input-group mb-2">
+                        <span class="input-group-text">Graph:</span>
+                        <input class="form-control"
+                               placeholder="(Default Graph)"
+                               v-model="graphUri"
+                               @change="graphChanged()">
+                    </div>
+
+                    <div class="input-group mb-2">
+                        <input class="form-control"
+                               placeholder="Project Name"
+                               v-model="newRmlProjectName">
+
+                        <button class="btn btn-primary"
+                                @click="postRmlProject">
+                            Create
+                        </button>
+                    </div>
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th class="text-end" style="width: 1%;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="rmlProject in sortedProjects">
+                                <td @click="openProject(rmlProject)" style="cursor: pointer">
+                                    <button v-if="!rmlProject.editMode" class="btn btn-sm btn-info me-1"
+                                            @click.stop="openShareModal(rmlProject['@id'], rmlProject.label)"
+                                            title="Share">
+                                        <i class="fa fa-share-alt"></i>
+                                    </button>
+
+                                    <span v-if="!rmlProject.editMode">
+                                        {{ rmlProject.label }}
+                                        <br/>
+                                        <span v-if="!rmlProject.editMode" class="text-muted" style="font-size: 10px">
+                                            {{ formatDate(rmlProject.modified['@value']) }}
+                                        </span>
+                                    </span>
+                                    <input
+                                        v-if="rmlProject.editMode"
+                                        class="form-control"
+                                        v-model="rmlProject.label"
+                                        >
+                                </td>
+
+                                <td class="text-end text-nowrap">
+                                    <button v-if="!rmlProject.editMode"
+                                            class="btn btn-sm btn-secondary me-1"
+                                            @click="editRmlProject(rmlProject)">
+                                        <i class="fa fa-edit"></i>
+                                    </button>
+
+                                    <button v-if="rmlProject.editMode"
+                                            class="btn btn-sm btn-success me-1"
+                                            @click="putInstance(rmlProject)">
+                                        <i class="fa fa-save"></i>
+                                    </button>
+
+                                    <button v-if="rmlProject.editMode"
+                                            class="btn btn-sm btn-warning me-1"
+                                            @click="cancelEdit(rmlProject)">
+                                        <i class="fa fa-times"></i>
+                                    </button>
+
+                                    <button
+                                        v-if="!rmlProject.editMode"
+                                        class="btn btn-sm btn-danger"
+                                        @click="deleteInstance(rmlProject)"
+                                        >
+                                        <i :class="rmlProject._confirmDelete ? 'fa fa-trash-alt' : 'fa fa-trash'"></i>
+                                    </button>
+                                </td>
+
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="col-9" v-if="openedProject">
+
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div>
+                            <button class="btn btn-primary"
+                                    @click="postRmlExecution()"
+                                    :disabled="executionRunning">
+
+                                <i class="fa"
+                                   :class="executionRunning ? 'fa-cog fa-spin' : 'fa-cog'"></i>
+
+                                {{ executionRunning ? 'Executing...' : 'Execute' }}
+                            </button>
+                        </div>
+
+                        <div class="flex-grow-1 text-center">
+                            <strong>{{ openedProject.label }}</strong>
+                        </div>
+
+                        <div style="min-width: 120px;" class="text-end">
+                            <span v-if="savingState === 'saving'" class="text-secondary">
+                                <i class="fa fa-spinner fa-spin"></i> Saving...
+                            </span>
+
+                            <span v-else-if="savingState === 'saved'" class="text-success">
+                                <i class="fa fa-check"></i> Saved
+                            </span>
+
+                            <span v-else-if="savingState === 'error'" class="text-danger">
+                                <i class="fa fa-exclamation-triangle"></i> Save failed
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="input-group mb-2">
+                        <span class="input-group-text">Default Graph:</span>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            placeholder="(Default Graph)"
+                            v-model="openedProject.defaultGraph"
+                            >
+
+                        <span class="input-group-text" v-if="openedProject.clearGraphs">
+                            <div class="form-check mb-0">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    id="clearGraphs"
+                                    v-model="openedProject.clearGraphs['@value']"
+                                    true-value="true"
+                                    false-value="false"
+                                    >
+                                <label
+                                    class="form-check-label ms-2"
+                                    for="clearGraphs"
+                                    >
+                                    Clear Graphs
+                                </label>
+                            </div>
+                        </span>
+                    </div>
+
+                    <textarea
+                        class="form-control"
+                        rows="30"
+                        style="font-family: monospace; font-size: 12px"
+                        placeholder="RML Code"
+                        v-model="openedProject.description">
+                    </textarea>
+
+                    <div
+                        v-if="openedProject.successful?.['@value'] === 'true'"
+                        class="alert alert-success mt-2"
+                        role="alert"
+                        >
+                        Executed successfully.
+                    </div>
+                    <div
+                        v-else-if="openedProject.successful?.['@value'] === 'false'"
+                        class="alert alert-danger mt-2"
+                        role="alert"
+                        >
+                        <strong>Execution failed</strong>
+
+                        <pre
+                            v-if="openedProject.stackTrace"
+                            class="mt-2 mb-0"
+                            >{{ openedProject.stackTrace }}</pre>
+                    </div>
+                    <div v-else 
+                         class="alert alert-secondary mt-2"
+                         role="alert">
+                        <strong>No data</strong>
+                    </div>
+
+                </div>
+
+
+
+            </div>
+
+
+
+
+
+
+            <div class="modal" id="shareModal" tabindex="-1" ref="share_modal">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+
+                        <div class="modal-header">
+                            <h5 class="modal-title">Share {{shareResourceLabel}}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <div class="modal-body">
+
+                            <div v-if="shareModalMode === 'share'">
+
+                                <div class="mb-3">
+                                    <label class="form-label">Add a name or group</label>
+                                    <input type="text"
+                                           class="form-control"
+                                           v-model="shareSearchQuery"
+                                           @input="searchPrincipal"
+                                           placeholder="Add a name or group">
+                                </div>
+
+                                <!-- principal search results -->
+                                <ul class="list-group mb-3" v-if="principalSearchResults">
+                                    <li class="list-group-item"
+                                        v-for="principal in principalSearchResults.principals"
+                                        :key="principal.id"
+                                        style="cursor: pointer"
+                                        @click="addSharePrincipal(principal)">
+
+                                        <i v-if="principal.type === 'user'" class="fa fa-user me-2"></i>
+                                        <i v-else-if="principal.type === 'group'" class="fa fa-users me-2"></i>
+                                        {{ principal.label }}
+                                    </li>
+                                </ul>
+
+                                <!-- selected principals/tags -->
+                                <div class="mb-3">
+                                    <span class="badge bg-secondary me-1"
+                                          v-for="(p, idx) in sharePrincipals"
+                                          :key="idx">
+                                        <i v-if="p.type === 'user'" class="fa fa-user me-2"></i>
+                                        <i v-else-if="p.type === 'group'" class="fa fa-users me-2"></i>
+                                        {{ p.label }}
+                                        <button type="button"
+                                                class="btn-close btn-close-white btn-sm"
+                                                @click="removeSharePrincipal(idx)"></button>
+                                    </span>
+                                </div>
+
+                                <!-- Permissions dropdown -->
+                                <div class="mb-3">
+                                    <label class="form-label">Permission</label>
+                                    <select class="form-select"
+                                            v-model="sharePermission">
+                                        <option value="READ">Can view</option>
+                                        <option value="REFER">Can refer to</option>
+                                        <option value="EDIT">Can edit</option>
+                                        <option value="ADMIN">Can administer (and delete)</option>
+                                    </select>
+                                </div>
+
+                                <!-- Nachricht text -->
+                                <div class="mb-3">
+                                    <textarea class="form-control"
+                                              v-model="shareMessage" placeholder="Add a message"></textarea>
+                                </div>
+
+                                <button class="btn btn-sm btn-secondary text-nowrap"
+                                        @click="openManageAccess">
+                                    <i class="fa fa-lock me-1"></i>
+                                    Manage access
+                                </button>
+
+                            </div>
+                            <div v-else>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <h6 class="mb-0">
+                                        <button class="btn btn-sm btn-outline-secondary me-2"
+                                                @click="backToShare">
+                                            <i class="fa fa-arrow-left"></i>
+                                        </button>
+                                    </h6>
+
+                                </div>
+
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Principal</th>
+                                            <th>Permission</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        <tr v-for="entry in shareAccessList" :key="entry.id || entry.principalShareUri">
+                                            <td>
+                                                <i v-if="entry.type === 'user'"
+                                                   class="fa fa-user me-2"></i>
+
+                                                <i v-else-if="entry.type === 'group'"
+                                                   class="fa fa-users me-2"></i>
+                                                {{ entry.principalName }}
+                                            </td>
+                                            <td>{{ entry.permission }}</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-danger"
+                                                        @click="deleteShare(entry)">
+                                                    Unshare
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary"
+                                    data-bs-dismiss="modal">Cancel</button>
+                            <button v-if="shareModalMode === 'share'" class="btn btn-primary"
+                                    @click="postShare">Send</button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal" id="errorModal" tabindex="-1" ref="error_modal">
+                <div class="modal-dialog  modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title fs-5">Error</h1>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="alert alert-danger" role="alert">
+                                    <span style="white-space: pre-wrap; word-break: break-word;">
+                                        {{ error }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="row">
+            <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                &nbsp;
+
+                &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+            </div>
+        </div>
+
+
+        <script>
+/*
+ //axios settings
+ let basePath = window.location.pathname;
+ if (basePath.endsWith('/')) {
+ basePath = basePath.slice(0, -1);
+ }
+ // remove last segment if it ends with .html
+ basePath = basePath.replace(/\/[^/]+\.html$/, '');
+ if (basePath === '') {
+ basePath = '/';
+ }
+ axios.defaults.baseURL = basePath;
+ console.log("axios baseURL is " + basePath);
+ */
+
+const defaultRmlCode = `@prefix rml: <http://w3id.org/rml/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+<#triplesMap>
+    a rml:TriplesMap ;
+
+`;
+
+
+const {createApp} = Vue;
+createApp({
+
+    data() {
+        return {
+            rmlProjectCollection: {
+                items: [],
+                totalItems: 0
+            },
+            newRmlProjectName: "",
+            // graph selection
+            graphUri: "",
+
+            openedProject: null,
+            saveTimer: null,
+            savingState: 'saved',
+            isOpeningProject: false,
+            executionRunning: false,
+
+            loading: false,
+            error: null,
+
+            //share
+            shareResourceUri: null,
+            shareResourceLabel: null,
+            shareSearchQuery: "",
+            principalSearchResults: [],
+            sharePrincipals: [],
+            shareMessage: "",
+            sharePermission: "READ",
+            shareModalMode: "share",
+            shareAccessList: []
+        };
+    },
+    created() {
+        axios.interceptors.response.use(
+                response => response,
+                error => {
+                    const errorMsg = error.response?.data || error.message || "Unknown error";
+                    this.open_error_modal(errorMsg);
+                    return Promise.reject(error);
+                }
+        );
+
+        this.loadState();
+        this.getAuthMe();
+        this.getRmlProjects();
+    },
+    methods: {
+        openProject(rmlProject) {
+            this.getRmlProject(rmlProject['@id']);
+        },
+        getRmlProject(uri) {
+            this.isOpeningProject = true;
+            let url = "/api/rml-project/" + encodeURIComponent(uri);
+            if (this.graphUri) {
+                const encoded = encodeURIComponent(this.graphUri);
+                url += "?graph=" + encoded;
+            }
+
+            axios.get(url)
+                    .then(response => {
+                        const data = response.data;
+                        this.openedProject = data;
+
+                    }).finally(() => {
+                this.$nextTick(() => {
+                    this.isOpeningProject = false;
+                });
+            });
+        },
+
+        getRmlProjects() {
+            let url = "/api/rml-project";
+            if (this.graphUri) {
+                const encoded = encodeURIComponent(this.graphUri);
+                url += "?graph=" + encoded;
+            }
+
+            axios.get(url).then(response => {
+
+                const data = response.data;
+                // store full collection
+                this.rmlProjectCollection = data;
+                // normalize items so v-for always works
+                if (!this.rmlProjectCollection.items) {
+                    this.rmlProjectCollection.items = [];
+                } else if (!Array.isArray(this.rmlProjectCollection.items)) {
+                    this.rmlProjectCollection.items = [this.rmlProjectCollection.items];
+                }
+
+            });
+        },
+        postRmlProject() {
+
+            if (!this.newRmlProjectName)
+                return;
+
+            const payload = {
+                "@context": {
+                    label: "http://www.w3.org/2000/01/rdf-schema#label",
+                    description: "http://purl.org/dc/terms/description",
+                    RmlProject: "urn:atic:ontology:RmlProject"
+                },
+                "@type": "RmlProject",
+                label: this.newRmlProjectName,
+                description: defaultRmlCode
+            };
+
+            let url = "/api/rml-project";
+            if (this.graphUri) {
+                const encoded = encodeURIComponent(this.graphUri);
+                url += "?graph=" + encoded;
+            }
+
+            axios.post(url, payload, {
+                headers: {"Content-Type": "application/ld+json"}
+            })
+                    .then(() => {
+
+                        this.newRmlProjectName = "";
+                        this.getRmlProjects();
+                    });
+        },
+        editRmlProject(rmlProject) {
+
+            rmlProject.originalName = rmlProject.label;
+            rmlProject.editMode = true;
+        },
+        cancelEdit(rmlProject) {
+
+            rmlProject.label = rmlProject.originalName;
+            rmlProject.editMode = false;
+        },
+        putInstance(rmlProject) {
+            const payload = {
+                "@context": {
+                    label: "http://www.w3.org/2000/01/rdf-schema#label",
+                    description: "http://purl.org/dc/terms/description",
+                    defaultGraph: "urn:atic:ontology:defaultGraph",
+                    clearGraphs: "urn:atic:ontology:clearGraphs",
+                    RmlProject: "urn:atic:ontology:RmlProject"
+                },
+                "@id": rmlProject['@id'],
+                "@type": "RmlProject",
+                label: rmlProject.label,
+                description: rmlProject.description,
+                defaultGraph: rmlProject.defaultGraph || "",
+                clearGraphs: rmlProject.clearGraphs || false
+            };
+
+            let url = "/api/rml-project/" + encodeURIComponent(rmlProject['@id']);
+            if (this.graphUri) {
+                const encoded = encodeURIComponent(this.graphUri);
+                url += "?graph=" + encoded;
+            }
+
+            axios.put(
+                    url,
+                    payload,
+                    {headers: {"Content-Type": "application/ld+json"}}
+            )
+                    .then(() => {
+
+                        rmlProject.editMode = false;
+                        this.getRmlProjects();
+                    });
+        },
+        deleteInstance(rmlProject) {
+
+            if (!confirm("Delete project?"))
+                return;
+
+            let url = "/api/rml-project/" + encodeURIComponent(rmlProject['@id']);
+            if (this.graphUri) {
+                const encoded = encodeURIComponent(this.graphUri);
+                url += "?graph=" + encoded;
+            }
+
+            axios.delete(url)
+                    .then(() => {
+                        this.getRmlProjects();
+                    });
+        },
+
+        //RML execution
+
+        postRmlExecution() {
+
+            if (!this.openedProject || this.executionRunning)
+                return;
+
+            const payload = {
+                project: this.openedProject['@id'],
+                bufferSize: 100_000
+            };
+
+            if (this.graphUri) {
+                payload.graph = this.graphUri;
+            }
+
+            this.executionRunning = true;
+
+            axios.post("/rml/execution", payload)
+                    .then(response => {
+                        this.getRmlProject(this.openedProject['@id']);
+                        this.$nextTick(() => {
+                            this.getRmlProjects();
+                        });
+                    })
+                    .finally(() => {
+                        this.executionRunning = false;
+                    });
+        },
+
+        //auth
+
+        getAuthMe() {
+            axios.get('/auth/me').then(response => {
+                this.user = response.data;
+            });
+        },
+
+        postLogout() {
+            axios.post('/auth/logout').then(response => {
+                window.location.href = response.data.redirect;
+            });
+        },
+
+        /* -------------------------
+         UI
+         ------------------------- */
+
+        confirmDelete(rmlProject) {
+            // first click → arm confirm state
+            if (!rmlProject._confirmDelete) {
+                rmlProject._confirmDelete = true;
+
+                // reset after 3 seconds
+                const id = rmlProject['@id'];
+
+                setTimeout(() => {
+                    // only reset if still in confirm mode (prevents race issues)
+                    if (rmlProject._confirmDelete) {
+                        rmlProject._confirmDelete = false;
+                    }
+                }, 3000);
+
+                return;
+            }
+
+            // second click → delete
+            this.deleteInstance(rmlProject);
+        },
+
+        formatDate(isoString) {
+            const date = new Date(isoString);
+
+            return new Intl.DateTimeFormat("en-GB", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit"
+            }).format(date);
+        },
+
+        graphChanged() {
+            this.getRmlProjects();
+        },
+
+        open_error_modal(msg) {
+            this.error = msg;
+            this.loading = false;
+            const modalInstance = new window.bootstrap.Modal(this.$refs.error_modal);
+            modalInstance.show();
+        },
+
+        saveState() {
+            localStorage.setItem(
+                    "atic-rml-demo-state",
+                    JSON.stringify({
+                        graphUri: this.graphUri
+                    })
+                    );
+        },
+
+        loadState() {
+
+            const raw = localStorage.getItem(
+                    "atic-rml-demo-state"
+                    );
+
+            if (raw) {
+                const state = JSON.parse(raw);
+                this.graphUri = state.graphUri || "";
+            }
+        },
+
+        //share
+
+        openShareModal(uri, label) {
+            this.shareResourceUri = uri;
+            this.shareResourceLabel = label;
+            this.shareSearchQuery = "";
+            this.principalSearchResults = null;
+            this.sharePrincipals = [];
+            this.shareMessage = "";
+            this.sharePermission = "READ";
+            this.shareModalMode = "share";
+            const modalInstance = new bootstrap.Modal(this.$refs.share_modal);
+            modalInstance.show();
+        },
+        closeShareModal() {
+            const modalEl = this.$refs.share_modal;
+            const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        },
+        searchPrincipal() {
+            if (!this.shareSearchQuery) {
+                this.principalSearchResults = null;
+                return;
+            }
+            axios.get("/principal", {
+                params: {query: this.shareSearchQuery}
+            }).then(resp => {
+                this.principalSearchResults = resp.data;
+            });
+        },
+        addSharePrincipal(principal) {
+            // only add if not already in list
+            if (!this.sharePrincipals.find(u => u.id === principal.id)) {
+                this.sharePrincipals.push(principal);
+            }
+            this.principalSearchResults = null;
+            this.shareSearchQuery = "";
+        },
+        removeSharePrincipal(index) {
+            this.sharePrincipals.splice(index, 1);
+        },
+        postShare() {
+            const payload = {
+                resources: [this.shareResourceUri],
+                groups: this.sharePrincipals.map(p => p.shareUri),
+                message: this.shareMessage,
+                permission: this.sharePermission
+            };
+            axios.post("/resource/share", payload)
+                    .then(() => {
+                        this.closeShareModal();
+                    });
+        },
+        deleteShare(entry) {
+            const payload = {
+                resources: [this.shareResourceUri],
+                groups: [entry.principalShareUri]
+            };
+
+            axios.delete("/resource/share", {
+                data: payload
+            })
+                    .then(() => {
+                        //update
+                        this.getResourceAccess();
+                    });
+        },
+        getResourceAccess() {
+            axios.get("/resource/access", {
+                params: {
+                    uri: [this.shareResourceUri]
+                }
+            }).then(res => {
+                this.shareAccessList = res.data[this.shareResourceUri];
+            }).catch(err => {
+                console.error(err);
+            });
+        },
+        openManageAccess() {
+            this.shareModalMode = "manage";
+            this.getResourceAccess();
+        },
+        backToShare() {
+            this.shareModalMode = "share";
+        },
+
+        saveProjectRemote() {
+            if (this.isOpeningProject || !this.openedProject) {
+                return;
+            }
+            
+            
+
+            clearTimeout(this.saveTimer);
+
+            this.savingState = 'saving';
+
+            this.saveTimer = setTimeout(async () => {
+                try {
+                    await this.putInstance(this.openedProject);
+                    this.savingState = 'saved';
+                } catch (e) {
+                    this.savingState = 'error';
+                }
+            }, 1000);
+        }
+    },
+
+    watch: {
+        graphUri: {
+            handler() {
+                this.saveState();
+            }
+        },
+        'openedProject.description': {
+            handler() {
+                this.saveProjectRemote();
+            }
+        },
+        'openedProject.defaultGraph': {
+            handler() {
+                this.saveProjectRemote();
+            }
+        },
+        'openedProject.clearGraphs': {
+            deep: true,
+            handler() {
+                this.saveProjectRemote();
+            }
+        }
+        /*
+         openedProject: {
+         deep: true,
+         handler(project) {
+         if (!project) {
+         return;
+         }
+         
+         this.savingState = 'saving';
+         
+         clearTimeout(this.saveTimer);
+         
+         this.saveTimer = setTimeout(async () => {
+         try {
+         await this.putInstance(project);
+         this.savingState = 'saved';
+         } catch (e) {
+         this.savingState = 'error';
+         }
+         }, 1000);
+         }
+         }
+         */
+    },
+
+    computed: {
+        sortedProjects() {
+            return [...this.rmlProjectCollection.items].sort((a, b) => {
+                return new Date(b.dcterms?.modified || 0) - new Date(a.dcterms?.modified || 0);
+            });
+        }
+    }
+}).mount("#app");
+        </script>
+    </body>
+</html>

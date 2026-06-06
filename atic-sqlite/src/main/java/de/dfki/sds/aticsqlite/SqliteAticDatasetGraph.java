@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -40,7 +41,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.jena.datatypes.xsd.XSDDatatype;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
@@ -2973,51 +2976,134 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         generator.start(univNum, startIndex, seed, names ? 1 : 0, docs, "http://example.org/", writer);
     }
 
-    public void runRML(Node rmlProjectGraph, Node rmlProjectResource, int bufferSize, InvocationContext ctx) throws IOException {
+    public synchronized void runRML(Node rmlProjectGraph, Node rmlProjectResource, int bufferSize, InvocationContext ctx) {
 
-        Path tempDir = Files.createTempDirectory("atic-run-rml-");
+        //TODO later from vocab class
+        Node stackTraceProperty = NodeFactory.createURI("urn:atic:ontology:stackTrace");
+        Node modifiedProperty = DCTerms.modified.asNode();
+        Node successfulProperty = NodeFactory.createURI("urn:atic:ontology:successful");
+        Node defaultGraphProperty = NodeFactory.createURI("urn:atic:ontology:defaultGraph");
+        Node clearGraphsProperty = NodeFactory.createURI("urn:atic:ontology:clearGraphs");
         
-        //Path cwd = Paths.get("").toAbsolutePath();
-        //System.out.println(cwd);
-        //tempDir = cwd;
-
-        //from project description to mapping file
-        Node rmlCodeLiteral = this.calculateRead(() -> {
-            Iterator<Quad> iter = this.find(rmlProjectGraph, rmlProjectResource, DCTerms.description.asNode(), Node.ANY, ctx);
-            if (!iter.hasNext()) {
-                throw new IllegalArgumentException("No RML code found in: " + rmlProjectResource);
-            }
-            return iter.next().getObject();
-        });
-        String rmlCode = rmlCodeLiteral.getLiteralLexicalForm();
-        Path mappingFile = tempDir.resolve("mapping.ttl");
-        File f = mappingFile.toFile();
-        FileUtils.writeStringToFile(f, rmlCode, StandardCharsets.UTF_8);
-        
-        String baseIRI = mappingFile.toUri().toString();
-        
-        //parsing RML code
-        List<TriplesMap> triplesMaps;
+        String stackTrace = null;
         try {
-            triplesMaps = Parse.parseMappingFile(mappingFile.toAbsolutePath().toString());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        if (triplesMaps.isEmpty()) {
-            throw new IllegalArgumentException("No triples map found in RML code of: " + rmlProjectResource);
-        }
-        
-        burp.Generator generator = new burp.Generator();
-        
-        SqliteAticGraph.setDefaultBufferAndBatchSize(bufferSize);
-        
-        this.executeWrite(() -> {
-            generator.generate(triplesMaps, baseIRI, quad -> {
-                //System.out.println(quad);
-                add(quad, ctx);
+            Path tempDir = Files.createTempDirectory("atic-run-rml-");
+
+            //Path cwd = Paths.get("").toAbsolutePath();
+            //System.out.println(cwd);
+            //tempDir = cwd;
+            //from project description to mapping file
+            Node rmlCodeLiteral = this.calculateRead(() -> {
+                Iterator<Quad> iter = this.find(rmlProjectGraph, rmlProjectResource, DCTerms.description.asNode(), Node.ANY, ctx);
+                if (!iter.hasNext()) {
+                    throw new IllegalArgumentException("No RML code found in: " + rmlProjectResource);
+                }
+                return iter.next().getObject();
             });
-        });
+            String rmlCode = rmlCodeLiteral.getLiteralLexicalForm();
+            Path mappingFile = tempDir.resolve("mapping.ttl");
+            File f = mappingFile.toFile();
+            FileUtils.writeStringToFile(f, rmlCode, StandardCharsets.UTF_8);
+            
+            //default graph setting
+            Node defaultGraph = this.calculateRead(() -> {
+                Iterator<Quad> iter = this.find(rmlProjectGraph, rmlProjectResource, defaultGraphProperty, Node.ANY, ctx);
+                if (!iter.hasNext()) {
+                    return Quad.defaultGraphIRI;
+                }
+                String defaultGraphStr = iter.next().getObject().getLiteralLexicalForm();
+                if(defaultGraphStr.isBlank()) {
+                    return Quad.defaultGraphIRI;
+                }
+                return NodeFactory.createURI(defaultGraphStr);
+            });
+            
+            //clear graphs setting
+            boolean clearGraphs = this.calculateRead(() -> {
+                Iterator<Quad> iter = this.find(rmlProjectGraph, rmlProjectResource, clearGraphsProperty, Node.ANY, ctx);
+                if (!iter.hasNext()) {
+                    return false;
+                }
+                boolean b = (boolean) iter.next().getObject().getLiteral().getValue();
+                return b;
+            });
+
+            String baseIRI = mappingFile.toUri().toString();
+
+            //parsing RML code
+            List<TriplesMap> triplesMaps;
+            try {
+                triplesMaps = Parse.parseMappingFile(mappingFile.toAbsolutePath().toString());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            if (triplesMaps.isEmpty()) {
+                throw new IllegalArgumentException("No triples map found in RML code of: " + rmlProjectResource);
+            }
+
+            burp.Generator generator = new burp.Generator();
+
+            SqliteAticGraph.setDefaultBufferAndBatchSize(bufferSize);
+            
+            //keep track of what graphs were cleared
+            boolean finalClearGraphs = clearGraphs;
+            Set<Node> clearedGraphs = new HashSet<>();
+
+            this.executeWrite(() -> {
+                generator.generate(triplesMaps, baseIRI, defaultGraph, quad -> {
+                    
+                    //clear beforehand
+                    if(finalClearGraphs) {
+                        //only if not cleared yet
+                        if(!clearedGraphs.contains(quad.getGraph())) {
+                            deleteAny(quad.getGraph(), Node.ANY, Node.ANY, Node.ANY, ctx);
+                            clearedGraphs.add(quad.getGraph());
+                        }
+                    }
+                    
+                    
+                    //System.out.println(quad);
+                    add(quad, ctx);
+                });
+            });
+
+        } catch (Exception ex) {
+            stackTrace = ExceptionUtils.getStackTrace(ex);
+        }
         
+        String finalStackTrace = stackTrace;
+        boolean successful = stackTrace == null;
+        
+        //update project state
+        //TODO this leads to SQLITE_BUSY_SNAPSHOT
+        this.executeWrite(() -> {
+            
+            //successful
+            this.deleteAny(rmlProjectGraph, rmlProjectResource, successfulProperty, Node.ANY, ctx);
+            this.add(
+                rmlProjectGraph,
+                rmlProjectResource,
+                successfulProperty,
+                NodeFactory.createLiteralByValue(successful),
+                ctx
+            );
+            
+            //modification time
+            this.deleteAny(rmlProjectGraph, rmlProjectResource, modifiedProperty, Node.ANY, ctx);
+            this.add(
+                rmlProjectGraph,
+                rmlProjectResource,
+                modifiedProperty,
+                NodeFactory.createLiteralDT(OffsetDateTime.now().toString(),XSDDatatype.XSDdateTime),
+                ctx
+            );
+            
+            //write error if available
+            if(finalStackTrace != null) {
+                this.deleteAny(rmlProjectGraph, rmlProjectResource, stackTraceProperty, Node.ANY, ctx);
+                this.add(rmlProjectGraph, rmlProjectResource, stackTraceProperty, NodeFactory.createLiteralString(finalStackTrace), ctx);
+            }
+        });
     }
 
 }

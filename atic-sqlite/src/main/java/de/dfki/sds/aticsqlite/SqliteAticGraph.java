@@ -15,6 +15,7 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -120,18 +121,18 @@ public class SqliteAticGraph implements AticGraph {
         queryCache = new HashMap<>();
 
         //so it is bound and memory is free
-        resourceUriIdCache = new LinkedHashMap<String, Long>(defaultResolveCacheInitialCapacity, defaultResolveCacheLoadFactor, true) {
+        resourceUriIdCache = Collections.synchronizedMap(new LinkedHashMap<String, Long>(defaultResolveCacheInitialCapacity, defaultResolveCacheLoadFactor, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
                 return size() > defaultResolveCacheSize;
             }
-        };
-        propertyUriIdCache = new LinkedHashMap<String, Long>(defaultResolveCacheInitialCapacity, defaultResolveCacheLoadFactor, true) {
+        });
+        propertyUriIdCache = Collections.synchronizedMap(new LinkedHashMap<String, Long>(defaultResolveCacheInitialCapacity, defaultResolveCacheLoadFactor, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
                 return size() > defaultResolveCacheSize;
             }
-        };
+        });
     }
 
     //======================================
