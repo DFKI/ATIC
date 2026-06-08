@@ -20,6 +20,7 @@ import de.dfki.sds.aticsqlite.DatabaseOptions;
 import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
 import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
+import de.dfki.sds.aticsqlite.SqliteAticGraph;
 import de.dfki.sds.rdfpatchsqlite.Converter;
 import io.javalin.Javalin;
 import io.javalin.http.ContentType;
