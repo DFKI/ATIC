@@ -62,6 +62,7 @@ import org.apache.jena.sparql.function.FunctionFactory;
 import org.apache.jena.sparql.util.Context;
 import org.apache.jena.sparql.util.Symbol;
 import org.apache.jena.util.iterator.ExtendedIterator;
+import org.apache.jena.util.iterator.NiceIterator;
 import org.apache.jena.vocabulary.DCTerms;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -2623,7 +2624,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return findInternal(g, s, p, o, false, ctx);
     }
 
-    private Iterator<Quad> findInternal(
+    private ExtendedIterator<Quad> findInternal(
             Node g,
             Node s,
             Node p,
@@ -2634,18 +2635,16 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
         final InvocationContext ctxFinal = ctx;
 
-        //ensure that Quad.defaultGraphIRI is used if default graph is mentioned
-        //turns g == null to Node.ANY
         final Node G = ensureDefaultGraphIRI(g);
 
-        // ----------------------------
-        // ANY graph → iterate all
-        // ----------------------------
+        // =========================================================
+        // ANY GRAPH
+        // =========================================================
         if (G.equals(Node.ANY)) {
 
-            Iterator<Node> graphIter = listGraphNodes(ctx);
+            final Iterator<Node> graphIter = listGraphNodes(ctxFinal);
 
-            return new Iterator<Quad>() {
+            return new NiceIterator<Quad>() {
 
                 private boolean defaultGraphPending = includeDefaultGraph;
                 private Node currentGraph = null;
@@ -2659,25 +2658,20 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                             return true;
                         }
 
-                        // close previous iterator before switching
                         tripleIter.close();
 
-                        // ----------------------------
-                        // handle default graph first
-                        // ----------------------------
+                        // default graph first
                         if (defaultGraphPending) {
                             defaultGraphPending = false;
 
-                            currentGraph = Quad.defaultGraphIRI; //Quad.defaultGraphIRI;
+                            currentGraph = Quad.defaultGraphIRI;
                             AticGraph defaultGraph = getDefaultGraph(ctxFinal);
 
                             tripleIter = defaultGraph.find(s, p, o, ctxFinal);
                             continue;
                         }
 
-                        // ----------------------------
-                        // move to next named graph
-                        // ----------------------------
+                        // next named graph
                         if (!graphIter.hasNext()) {
                             return false;
                         }
@@ -2694,16 +2688,22 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                     Triple t = tripleIter.next();
                     return Quad.create(currentGraph, t);
                 }
+
+                @Override
+                public void close() {
+                    tripleIter.close();
+                    NiceIterator.close(graphIter);
+                }
             };
         }
 
-        // ----------------------------
-        // named graph
-        // ----------------------------
-        AticGraph graph = getGraph(G, ctx);
-        ExtendedIterator<Triple> iter = graph.find(s, p, o, ctx);
+        // =========================================================
+        // SINGLE GRAPH
+        // =========================================================
+        AticGraph graph = getGraph(G, ctxFinal);
+        ExtendedIterator<Triple> iter = graph.find(s, p, o, ctxFinal);
 
-        return new Iterator<Quad>() {
+        return new NiceIterator<Quad>() {
 
             @Override
             public boolean hasNext() {
@@ -2713,6 +2713,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             @Override
             public Quad next() {
                 return Quad.create(G, iter.next());
+            }
+
+            @Override
+            public void close() {
+                iter.close();
             }
         };
     }
@@ -2976,7 +2981,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         generator.start(univNum, startIndex, seed, names ? 1 : 0, docs, "http://example.org/", writer);
     }
 
-    public synchronized void runRML(Node rmlProjectGraph, Node rmlProjectResource, int bufferSize, InvocationContext ctx) {
+    public synchronized void runRML(Node rmlProjectGraphNode, Node rmlProjectResource, int bufferSize, InvocationContext ctx) {
 
         //TODO later from vocab class
         Node stackTraceProperty = NodeFactory.createURI("urn:atic:ontology:stackTrace");
@@ -2984,7 +2989,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         Node successfulProperty = NodeFactory.createURI("urn:atic:ontology:successful");
         Node defaultGraphProperty = NodeFactory.createURI("urn:atic:ontology:defaultGraph");
         Node clearGraphsProperty = NodeFactory.createURI("urn:atic:ontology:clearGraphs");
-        
+
+        AticGraph rmlProjectGraph = getGraph(rmlProjectGraphNode, ctx);
+
         String stackTrace = null;
         try {
             Path tempDir = Files.createTempDirectory("atic-run-rml-");
@@ -2993,41 +3000,65 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             //System.out.println(cwd);
             //tempDir = cwd;
             //from project description to mapping file
-            Node rmlCodeLiteral = this.calculateRead(() -> {
-                Iterator<Quad> iter = this.find(rmlProjectGraph, rmlProjectResource, DCTerms.description.asNode(), Node.ANY, ctx);
-                if (!iter.hasNext()) {
-                    throw new IllegalArgumentException("No RML code found in: " + rmlProjectResource);
-                }
-                return iter.next().getObject();
-            });
+            //Node rmlCodeLiteral = this.calculateRead(() -> {
+            ExtendedIterator<Triple> iter = rmlProjectGraph.find(rmlProjectResource, DCTerms.description.asNode(), Node.ANY, ctx);
+            if (!iter.hasNext()) {
+                iter.close();
+                throw new IllegalArgumentException("No RML code found in: " + rmlProjectResource);
+            }
+            Node rmlCodeLiteral = iter.next().getObject();
+            iter.close();
+
+            //});
             String rmlCode = rmlCodeLiteral.getLiteralLexicalForm();
             Path mappingFile = tempDir.resolve("mapping.ttl");
             File f = mappingFile.toFile();
             FileUtils.writeStringToFile(f, rmlCode, StandardCharsets.UTF_8);
-            
-            //default graph setting
-            Node defaultGraph = this.calculateRead(() -> {
-                Iterator<Quad> iter = this.find(rmlProjectGraph, rmlProjectResource, defaultGraphProperty, Node.ANY, ctx);
-                if (!iter.hasNext()) {
-                    return Quad.defaultGraphIRI;
-                }
-                String defaultGraphStr = iter.next().getObject().getLiteralLexicalForm();
-                if(defaultGraphStr.isBlank()) {
-                    return Quad.defaultGraphIRI;
-                }
-                return NodeFactory.createURI(defaultGraphStr);
-            });
-            
-            //clear graphs setting
-            boolean clearGraphs = this.calculateRead(() -> {
-                Iterator<Quad> iter = this.find(rmlProjectGraph, rmlProjectResource, clearGraphsProperty, Node.ANY, ctx);
-                if (!iter.hasNext()) {
-                    return false;
-                }
-                boolean b = (boolean) iter.next().getObject().getLiteral().getValue();
-                return b;
-            });
 
+            //default graph setting
+            Node defaultGraph = Quad.defaultGraphIRI;
+            ExtendedIterator<Triple> iterDefaultGraph = rmlProjectGraph.find(
+                    rmlProjectResource,
+                    defaultGraphProperty,
+                    Node.ANY,
+                    ctx);
+            try {
+                if (iterDefaultGraph.hasNext()) {
+                    String defaultGraphStr = iterDefaultGraph.next()
+                            .getObject()
+                            .getLiteralLexicalForm();
+
+                    if (!defaultGraphStr.isBlank()) {
+                        defaultGraph = NodeFactory.createURI(defaultGraphStr);
+                    }
+                }
+            } finally {
+                iterDefaultGraph.close();
+            }
+
+            //});
+            //clear graphs setting
+            //boolean clearGraphs = this.calculateRead(() -> {
+            boolean clearGraphs = false;
+            ExtendedIterator<Triple> iterClearGraphs = rmlProjectGraph.find(
+                    rmlProjectResource,
+                    clearGraphsProperty,
+                    Node.ANY,
+                    ctx);
+
+            try {
+                if (iterClearGraphs.hasNext()) {
+                    clearGraphs = (boolean) iterClearGraphs.next()
+                            .getObject()
+                            .getLiteral()
+                            .getValue();
+                }
+            } finally {
+                iterClearGraphs.close();
+            }
+
+            //return b;
+            //});
             String baseIRI = mappingFile.toUri().toString();
 
             //parsing RML code
@@ -3044,66 +3075,62 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             burp.Generator generator = new burp.Generator();
 
             SqliteAticGraph.setDefaultBufferAndBatchSize(bufferSize);
-            
+
             //keep track of what graphs were cleared
             boolean finalClearGraphs = clearGraphs;
             Set<Node> clearedGraphs = new HashSet<>();
 
-            this.executeWrite(() -> {
-                generator.generate(triplesMaps, baseIRI, defaultGraph, quad -> {
-                    
-                    //clear beforehand
-                    if(finalClearGraphs) {
-                        //only if not cleared yet
-                        if(!clearedGraphs.contains(quad.getGraph())) {
-                            deleteAny(quad.getGraph(), Node.ANY, Node.ANY, Node.ANY, ctx);
-                            clearedGraphs.add(quad.getGraph());
-                        }
+            //this.executeWrite(() -> {
+            generator.generate(triplesMaps, baseIRI, defaultGraph, quad -> {
+
+                //clear beforehand
+                if (finalClearGraphs) {
+                    //only if not cleared yet
+                    if (!clearedGraphs.contains(quad.getGraph())) {
+                        deleteAny(quad.getGraph(), Node.ANY, Node.ANY, Node.ANY, ctx);
+                        clearedGraphs.add(quad.getGraph());
                     }
-                    
-                    
-                    //System.out.println(quad);
-                    add(quad, ctx);
-                });
+                }
+
+                //System.out.println(quad);
+                add(quad, ctx);
             });
+            //});
 
         } catch (Exception ex) {
             stackTrace = ExceptionUtils.getStackTrace(ex);
         }
-        
+
         String finalStackTrace = stackTrace;
         boolean successful = stackTrace == null;
-        
+
         //update project state
-        //TODO this leads to SQLITE_BUSY_SNAPSHOT
-        this.executeWrite(() -> {
-            
-            //successful
-            this.deleteAny(rmlProjectGraph, rmlProjectResource, successfulProperty, Node.ANY, ctx);
-            this.add(
-                rmlProjectGraph,
+        //successful
+        this.deleteAny(rmlProjectGraphNode, rmlProjectResource, successfulProperty, Node.ANY, ctx);
+        this.add(
+                rmlProjectGraphNode,
                 rmlProjectResource,
                 successfulProperty,
                 NodeFactory.createLiteralByValue(successful),
                 ctx
-            );
-            
-            //modification time
-            this.deleteAny(rmlProjectGraph, rmlProjectResource, modifiedProperty, Node.ANY, ctx);
-            this.add(
-                rmlProjectGraph,
+        );
+
+        //modification time
+        this.deleteAny(rmlProjectGraphNode, rmlProjectResource, modifiedProperty, Node.ANY, ctx);
+        this.add(
+                rmlProjectGraphNode,
                 rmlProjectResource,
                 modifiedProperty,
-                NodeFactory.createLiteralDT(OffsetDateTime.now().toString(),XSDDatatype.XSDdateTime),
+                NodeFactory.createLiteralDT(OffsetDateTime.now().toString(), XSDDatatype.XSDdateTime),
                 ctx
-            );
-            
-            //write error if available
-            if(finalStackTrace != null) {
-                this.deleteAny(rmlProjectGraph, rmlProjectResource, stackTraceProperty, Node.ANY, ctx);
-                this.add(rmlProjectGraph, rmlProjectResource, stackTraceProperty, NodeFactory.createLiteralString(finalStackTrace), ctx);
-            }
-        });
+        );
+
+        //write error if available
+        if (finalStackTrace != null) {
+            this.deleteAny(rmlProjectGraphNode, rmlProjectResource, stackTraceProperty, Node.ANY, ctx);
+            this.add(rmlProjectGraphNode, rmlProjectResource, stackTraceProperty, NodeFactory.createLiteralString(finalStackTrace), ctx);
+        }
+        //});
     }
 
 }

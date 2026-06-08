@@ -20,7 +20,6 @@ import de.dfki.sds.aticsqlite.DatabaseOptions;
 import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
 import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
-import de.dfki.sds.aticsqlite.SqliteAticGraph;
 import de.dfki.sds.rdfpatchsqlite.Converter;
 import io.javalin.Javalin;
 import io.javalin.http.ContentType;
@@ -612,7 +611,9 @@ public class AticServer {
         
         //never throws, will add stacktracke to rmlProjectResource
         synchronized(this) {
-            datasetGraph.runRML(rmlProjectGraph, rmlProjectResource, bufferSize, ictx);
+            datasetGraph.executeWrite(() -> {
+                datasetGraph.runRML(rmlProjectGraph, rmlProjectResource, bufferSize, ictx);
+            });
         }
         
         //because everything is attached to rmlProjectResource in RDF graph

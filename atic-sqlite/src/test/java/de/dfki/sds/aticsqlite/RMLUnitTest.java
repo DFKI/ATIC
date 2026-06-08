@@ -115,12 +115,14 @@ public class RMLUnitTest {
         //maybe specify default graph?
         //System.out.println("write:");
         //the project is run, all settings are on the project resources
-        dataset.runRML(
-                NodeFactory.createURI("urn:graph:rml"),
-                NodeFactory.createURI("urn:rml:project"),
-                100_000,
-                ctx
-        );
+        dataset.executeWrite(() -> {
+            dataset.runRML(
+                    NodeFactory.createURI("urn:graph:rml"),
+                    NodeFactory.createURI("urn:rml:project"),
+                    100_000,
+                    ctx
+            );
+        });
 
         /*
         System.out.println("read:");
