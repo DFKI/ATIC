@@ -871,6 +871,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             InvocationContext ctx
     ) {
 
+        boolean enableAC = !isAdmin(ctx);
+
         for (String graphUri : graphUris) {
             try {
                 // -----------------------------------------------
@@ -917,50 +919,57 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                     );
                 }
 
-                // compute highest caller permission
-                StringBuilder callerPermSql = new StringBuilder();
-                callerPermSql.append("SELECT group_id, permission FROM graph_acl ")
-                        .append("WHERE graph_id = ? AND group_id IN (")
-                        .append(callerGroupIds.stream().map(g -> "?")
-                                .collect(Collectors.joining(",")))
-                        .append(")");
-
-                List<Object> callerParams = new ArrayList<>();
-                callerParams.add(graphId);
-                callerParams.addAll(callerGroupIds.stream().map(g -> (Object) g).toList());
-
-                List<Pair<Integer, Integer>> callerPerms = db.read(
-                        callerPermSql.toString(),
-                        rs -> {
-                            List<Pair<Integer, Integer>> out = new ArrayList<>();
-                            while (rs.next()) {
-                                out.add(Pair.of(rs.getInt(1), rs.getInt(2)));
-                            }
-                            return out;
-                        },
-                        callerParams.toArray()
-                );
-
-                // determine effective
-                Permission callerEffective = null;
                 Integer callerGrantingGroup = null;
-                for (Pair<Integer, Integer> p : callerPerms) {
-                    Permission perm = Permission.fromCode(p.getRight());
-                    if (callerEffective == null || perm.getCode() > callerEffective.getCode()) {
-                        callerEffective = perm;
-                        callerGrantingGroup = p.getLeft();
-                    }
-                }
 
-                if (callerEffective == null
-                        || callerEffective.getCode() < permission.getCode()) {
-                    throw new PermissionDeniedException(
-                            "graph",
-                            graphId,
-                            graphUri,
-                            permission,
-                            callerEffective == null ? Set.of() : Set.of(callerEffective)
+                if (enableAC) {
+
+                    // compute highest caller permission
+                    StringBuilder callerPermSql = new StringBuilder();
+                    callerPermSql.append("SELECT group_id, permission FROM graph_acl ")
+                            .append("WHERE graph_id = ? AND group_id IN (")
+                            .append(callerGroupIds.stream().map(g -> "?")
+                                    .collect(Collectors.joining(",")))
+                            .append(")");
+
+                    List<Object> callerParams = new ArrayList<>();
+                    callerParams.add(graphId);
+                    callerParams.addAll(callerGroupIds.stream().map(g -> (Object) g).toList());
+
+                    List<Pair<Integer, Integer>> callerPerms = db.read(
+                            callerPermSql.toString(),
+                            rs -> {
+                                List<Pair<Integer, Integer>> out = new ArrayList<>();
+                                while (rs.next()) {
+                                    out.add(Pair.of(rs.getInt(1), rs.getInt(2)));
+                                }
+                                return out;
+                            },
+                            callerParams.toArray()
                     );
+
+                    // determine effective
+                    Permission callerEffective = null;
+                    for (Pair<Integer, Integer> p : callerPerms) {
+                        Permission perm = Permission.fromCode(p.getRight());
+                        if (callerEffective == null || perm.getCode() > callerEffective.getCode()) {
+                            callerEffective = perm;
+                            callerGrantingGroup = p.getLeft();
+                        }
+                    }
+
+                    if (callerEffective == null
+                            || callerEffective.getCode() < permission.getCode()) {
+                        throw new PermissionDeniedException(
+                                "graph",
+                                graphId,
+                                graphUri,
+                                permission,
+                                callerEffective == null ? Set.of() : Set.of(callerEffective)
+                        );
+                    }
+
+                } else {
+                    callerGrantingGroup = ctx.getPrimaryGroupId();
                 }
 
                 // -----------------------------------------------
@@ -1080,6 +1089,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             Set<String> groupUris,
             InvocationContext ctx
     ) {
+
+        boolean enableAC = !isAdmin(ctx);
+
         for (String graphUri : graphUris) {
             try {
                 // -----------------------------------------------
@@ -1094,7 +1106,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 if (graphId == null) {
                     throw new IllegalStateException("Graph does not exist: " + graphUri);
                 }
-                
+
                 // -----------------------------------------------
                 // 2) Validate group URIs
                 // -----------------------------------------------
@@ -1109,7 +1121,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                         throw new IllegalArgumentException("Group not found: " + grUri);
                     }
 
-                    if( groupId == ctx.getPrimaryGroupId().longValue()) {
+                    if (groupId == ctx.getPrimaryGroupId().longValue()) {
                         throw new IllegalArgumentException("You cannot unshare yourself: " + grUri);
                     }
                 }
@@ -1129,37 +1141,41 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                     );
                 }
 
-                // get max permission for caller groups
-                StringBuilder sql = new StringBuilder();
-                sql.append("SELECT MAX(permission) FROM graph_acl ")
-                        .append("WHERE graph_id = ? AND group_id IN (")
-                        .append(callerGroupIds.stream().map(g -> "?")
-                                .collect(Collectors.joining(",")))
-                        .append(")");
+                if (enableAC) {
 
-                List<Object> params = new ArrayList<>();
-                params.add(graphId);
-                params.addAll(callerGroupIds.stream().map(g -> (Object) g).toList());
+                    // get max permission for caller groups
+                    StringBuilder sql = new StringBuilder();
+                    sql.append("SELECT MAX(permission) FROM graph_acl ")
+                            .append("WHERE graph_id = ? AND group_id IN (")
+                            .append(callerGroupIds.stream().map(g -> "?")
+                                    .collect(Collectors.joining(",")))
+                            .append(")");
 
-                Integer callerMax = db.read(
-                        sql.toString(),
-                        rs -> rs.next() ? rs.getInt(1) : null,
-                        params.toArray()
-                );
+                    List<Object> params = new ArrayList<>();
+                    params.add(graphId);
+                    params.addAll(callerGroupIds.stream().map(g -> (Object) g).toList());
 
-                Permission callerEffective = callerMax == null
-                        ? null
-                        : Permission.fromCode(callerMax);
-
-                if (callerEffective == null
-                        || callerEffective.getCode() < Permission.ADMIN.getCode()) {
-                    throw new PermissionDeniedException(
-                            "graph",
-                            graphId,
-                            graphUri,
-                            Permission.ADMIN,
-                            callerEffective == null ? Set.of() : Set.of(callerEffective)
+                    Integer callerMax = db.read(
+                            sql.toString(),
+                            rs -> rs.next() ? rs.getInt(1) : null,
+                            params.toArray()
                     );
+
+                    Permission callerEffective = callerMax == null
+                            ? null
+                            : Permission.fromCode(callerMax);
+
+                    if (callerEffective == null
+                            || callerEffective.getCode() < Permission.ADMIN.getCode()) {
+                        throw new PermissionDeniedException(
+                                "graph",
+                                graphId,
+                                graphUri,
+                                Permission.ADMIN,
+                                callerEffective == null ? Set.of() : Set.of(callerEffective)
+                        );
+                    }
+
                 }
 
                 // -----------------------------------------------
@@ -1178,15 +1194,25 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                         throw new IllegalStateException("Group ID not found: " + grUri);
                     }
 
-                    db.write(
-                            "DELETE FROM graph_acl "
-                            + "WHERE graph_id = ? "
-                            + "AND group_id = ? "
-                            + "AND granted_by_group_id = ?",
-                            graphId,
-                            targetGroupId,
-                            primaryGranting
-                    );
+                    if(enableAC) {
+                        db.write(
+                                "DELETE FROM graph_acl "
+                                + "WHERE graph_id = ? "
+                                + "AND group_id = ? "
+                                + "AND granted_by_group_id = ?",
+                                graphId,
+                                targetGroupId,
+                                primaryGranting
+                        );
+                    } else {
+                        db.write(
+                                "DELETE FROM graph_acl "
+                                + "WHERE graph_id = ? "
+                                + "AND group_id = ? ",
+                                graphId,
+                                targetGroupId
+                        );
+                    }
 
                     rdfPatchEmitter.unshareGraph(
                             IdAndUri.create(graphId, graphUri),
@@ -1211,6 +1237,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             Permission permission,
             InvocationContext ctx
     ) {
+
+        boolean enableAC = !isAdmin(ctx);
 
         for (String resourceUri : resourceUris) {
             try {
@@ -1258,49 +1286,56 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                     );
                 }
 
-                StringBuilder callerPermSql = new StringBuilder();
-                callerPermSql.append("SELECT group_id, permission FROM resource_acl ")
-                        .append("WHERE resource_id = ? AND group_id IN (")
-                        .append(callerGroupIds.stream().map(g -> "?")
-                                .collect(Collectors.joining(",")))
-                        .append(")");
-
-                List<Object> callerParams = new ArrayList<>();
-                callerParams.add(resourceId);
-                callerParams.addAll(callerGroupIds.stream().map(g -> (Object) g).toList());
-
-                List<Pair<Integer, Integer>> callerPerms = db.read(
-                        callerPermSql.toString(),
-                        rs -> {
-                            List<Pair<Integer, Integer>> out = new ArrayList<>();
-                            while (rs.next()) {
-                                out.add(Pair.of(rs.getInt(1), rs.getInt(2)));
-                            }
-                            return out;
-                        },
-                        callerParams.toArray()
-                );
-
-                Permission callerEffective = null;
                 Integer callerGrantingGroup = null;
 
-                for (Pair<Integer, Integer> p : callerPerms) {
-                    Permission perm = Permission.fromCode(p.getRight());
-                    if (callerEffective == null || perm.getCode() > callerEffective.getCode()) {
-                        callerEffective = perm;
-                        callerGrantingGroup = p.getLeft();
-                    }
-                }
+                if (enableAC) {
 
-                if (callerEffective == null
-                        || callerEffective.getCode() < permission.getCode()) {
-                    throw new PermissionDeniedException(
-                            "resource",
-                            resourceId,
-                            resourceUri,
-                            permission,
-                            callerEffective == null ? Set.of() : Set.of(callerEffective)
+                    StringBuilder callerPermSql = new StringBuilder();
+                    callerPermSql.append("SELECT group_id, permission FROM resource_acl ")
+                            .append("WHERE resource_id = ? AND group_id IN (")
+                            .append(callerGroupIds.stream().map(g -> "?")
+                                    .collect(Collectors.joining(",")))
+                            .append(")");
+
+                    List<Object> callerParams = new ArrayList<>();
+                    callerParams.add(resourceId);
+                    callerParams.addAll(callerGroupIds.stream().map(g -> (Object) g).toList());
+
+                    List<Pair<Integer, Integer>> callerPerms = db.read(
+                            callerPermSql.toString(),
+                            rs -> {
+                                List<Pair<Integer, Integer>> out = new ArrayList<>();
+                                while (rs.next()) {
+                                    out.add(Pair.of(rs.getInt(1), rs.getInt(2)));
+                                }
+                                return out;
+                            },
+                            callerParams.toArray()
                     );
+
+                    Permission callerEffective = null;
+
+                    for (Pair<Integer, Integer> p : callerPerms) {
+                        Permission perm = Permission.fromCode(p.getRight());
+                        if (callerEffective == null || perm.getCode() > callerEffective.getCode()) {
+                            callerEffective = perm;
+                            callerGrantingGroup = p.getLeft();
+                        }
+                    }
+
+                    if (callerEffective == null
+                            || callerEffective.getCode() < permission.getCode()) {
+                        throw new PermissionDeniedException(
+                                "resource",
+                                resourceId,
+                                resourceUri,
+                                permission,
+                                callerEffective == null ? Set.of() : Set.of(callerEffective)
+                        );
+                    }
+
+                } else {
+                    callerGrantingGroup = ctx.getPrimaryGroupId();
                 }
 
                 // -----------------------------------------------
@@ -1330,7 +1365,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                             groupId
                     );
 
-                    // prevent lowering own admin
+                    // prevent lowering own permission
                     if (effectiveCode != null
                             && ctx.getGroupIds().contains(groupId.intValue())
                             && effectiveCode > permission.getCode()) {
@@ -1407,6 +1442,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             InvocationContext ctx
     ) {
 
+        boolean enableAC = !isAdmin(ctx);
+
         for (String resourceUri : resourceUris) {
             try {
                 // -----------------------------------------------
@@ -1436,7 +1473,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                         throw new IllegalArgumentException("Group not found: " + grUri);
                     }
 
-                    if( groupId == ctx.getPrimaryGroupId().longValue()) {
+                    if (groupId == ctx.getPrimaryGroupId().longValue()) {
                         throw new IllegalArgumentException("You cannot unshare yourself: " + grUri);
                     }
                 }
@@ -1455,36 +1492,39 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                     );
                 }
 
-                StringBuilder sql = new StringBuilder();
-                sql.append("SELECT MAX(permission) FROM resource_acl ")
-                        .append("WHERE resource_id = ? AND group_id IN (")
-                        .append(callerGroupIds.stream().map(g -> "?")
-                                .collect(Collectors.joining(",")))
-                        .append(")");
+                if (enableAC) {
 
-                List<Object> params = new ArrayList<>();
-                params.add(resourceId);
-                params.addAll(callerGroupIds.stream().map(g -> (Object) g).toList());
+                    StringBuilder sql = new StringBuilder();
+                    sql.append("SELECT MAX(permission) FROM resource_acl ")
+                            .append("WHERE resource_id = ? AND group_id IN (")
+                            .append(callerGroupIds.stream().map(g -> "?")
+                                    .collect(Collectors.joining(",")))
+                            .append(")");
 
-                Integer callerMax = db.read(
-                        sql.toString(),
-                        rs -> rs.next() ? rs.getInt(1) : null,
-                        params.toArray()
-                );
+                    List<Object> params = new ArrayList<>();
+                    params.add(resourceId);
+                    params.addAll(callerGroupIds.stream().map(g -> (Object) g).toList());
 
-                Permission callerEffective = callerMax == null
-                        ? null
-                        : Permission.fromCode(callerMax);
-
-                if (callerEffective == null
-                        || callerEffective.getCode() < Permission.ADMIN.getCode()) {
-                    throw new PermissionDeniedException(
-                            "resource",
-                            resourceId,
-                            resourceUri,
-                            Permission.ADMIN,
-                            callerEffective == null ? Set.of() : Set.of(callerEffective)
+                    Integer callerMax = db.read(
+                            sql.toString(),
+                            rs -> rs.next() ? rs.getInt(1) : null,
+                            params.toArray()
                     );
+
+                    Permission callerEffective = callerMax == null
+                            ? null
+                            : Permission.fromCode(callerMax);
+
+                    if (callerEffective == null
+                            || callerEffective.getCode() < Permission.ADMIN.getCode()) {
+                        throw new PermissionDeniedException(
+                                "resource",
+                                resourceId,
+                                resourceUri,
+                                Permission.ADMIN,
+                                callerEffective == null ? Set.of() : Set.of(callerEffective)
+                        );
+                    }
                 }
 
                 // -----------------------------------------------
@@ -1504,15 +1544,25 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                         throw new IllegalStateException("Group ID not found: " + grUri);
                     }
 
-                    db.write(
-                            "DELETE FROM resource_acl "
-                            + "WHERE resource_id = ? "
-                            + "AND group_id = ? "
-                            + "AND granted_by_group_id = ?",
-                            resourceId,
-                            targetGroupId,
-                            primaryGranting
-                    );
+                    if(enableAC) {
+                        db.write(
+                                "DELETE FROM resource_acl "
+                                + "WHERE resource_id = ? "
+                                + "AND group_id = ? "
+                                + "AND granted_by_group_id = ?",
+                                resourceId,
+                                targetGroupId,
+                                primaryGranting
+                        );
+                    } else {
+                        db.write(
+                                "DELETE FROM resource_acl "
+                                + "WHERE resource_id = ? "
+                                + "AND group_id = ? ",
+                                resourceId,
+                                targetGroupId
+                        );
+                    }
 
                     rdfPatchEmitter.unshareGraph(
                             IdAndUri.create(resourceId, resourceUri),

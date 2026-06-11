@@ -1510,25 +1510,23 @@ public class GraphSharingUnitTest {
         try {
             dataset.addUser("", "", "", "user2", InvocationContext.EMPTY);
             dataset.addUser("", "", "", "userX", InvocationContext.EMPTY);
+            dataset.addUser("", "", "", "user3", InvocationContext.EMPTY);
             dataset.commit();
         } finally {
             dataset.end();
         }
 
-        User user2, userX;
+        User user2, userX, user3;
         dataset.begin(TxnType.READ);
         try {
             user2 = dataset.getUser("user2", InvocationContext.EMPTY);
             userX = dataset.getUser("userX", InvocationContext.EMPTY);
+            user3 = dataset.getUser("user3", InvocationContext.EMPTY);
         } finally {
             dataset.end();
         }
 
-        User adminUser = dataset.calculateRead(() -> {
-            return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
-        });
-
-        InvocationContext user1Ctx = new InvocationContext.Builder().fromUser(adminUser).build();
+        InvocationContext user3Ctx = new InvocationContext.Builder().fromUser(user3).build();
 
         String graphUri = "urn:test:jointGrants";
         Node graphNode = NodeFactory.createURI(graphUri);
@@ -1538,7 +1536,7 @@ public class GraphSharingUnitTest {
         try {
             dataset.addGraph(graphNode,
                     GraphFactory.createDefaultGraph(),
-                    user1Ctx);
+                    user3Ctx);
             dataset.commit();
         } finally {
             dataset.end();
@@ -1551,7 +1549,7 @@ public class GraphSharingUnitTest {
                     Set.of(graphUri),
                     Set.of(userX.getPrimaryGroup().getUri()),
                     Permission.READ,
-                    user1Ctx
+                    user3Ctx
             );
             dataset.commit();
         } finally {
@@ -1574,7 +1572,7 @@ public class GraphSharingUnitTest {
                     Set.of(graphUri),
                     Set.of(user2.getPrimaryGroup().getUri()),
                     Permission.READ,
-                    user1Ctx
+                    user3Ctx
             );
             dataset.shareGraphs(
                     Set.of(graphUri),
@@ -1609,7 +1607,7 @@ public class GraphSharingUnitTest {
             dataset.unshareGraphs(
                     Set.of(graphUri),
                     Set.of(user2.getPrimaryGroup().getUri()),
-                    user1Ctx
+                    user3Ctx
             );
             dataset.commit();
         } finally {
