@@ -37,8 +37,12 @@ public class ConfigLoader {
         for (Field field : clazz.getDeclaredFields()) {
             Config cfg = field.getAnnotation(Config.class);
             if (cfg != null) {
-                boolean hasArg = field.getType() != boolean.class;
-                options.addOption(null, cfg.value(), hasArg, cfg.description());
+                if (field.getType() == boolean.class) {
+                    options.addOption(null, cfg.value(), false, cfg.description());
+                    options.addOption(null, "no-" + cfg.value(), false, "Disables: " + cfg.description());
+                } else {
+                    options.addOption(null, cfg.value(), true, cfg.description());
+                }                
             }
         }
 
@@ -80,12 +84,14 @@ public class ConfigLoader {
             }
 
             // --- CLI ---
-            if (cmd.hasOption(key)) {
-                if (field.getType() == boolean.class) {
+            if (field.getType() == boolean.class) {
+                if (cmd.hasOption("no-" + key)) {
+                    value = false;
+                } else if (cmd.hasOption(key)) {
                     value = true;
-                } else {
-                    value = cast(cmd.getOptionValue(key), field.getType());
                 }
+            } else if (cmd.hasOption(key)) {
+                value = cast(cmd.getOptionValue(key), field.getType());
             }
 
             field.set(instance, convert(value, field.getType()));
