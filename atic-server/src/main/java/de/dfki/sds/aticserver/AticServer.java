@@ -269,6 +269,8 @@ public class AticServer {
         app.get("/app", ctx -> ctx.redirect("/app/login.html"));
         app.get("/app/login.html", this::getAppLogin);
 
+        app.get("/about", this::getAbout);
+        
         app.post("/auth/token", this::postToken);
         app.post("/auth/register", this::postRegister);
         app.get("/auth/me", this::getAuthMe);
@@ -315,6 +317,16 @@ public class AticServer {
         html = html.replace("{{instanceName}}", config.instanceName);
 
         ctx.html(html);
+    }
+    
+    private void getAbout(Context ctx) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        sb.append(Main.ASCII_LOGO).append("\n");
+        sb.append(VersionUtil.getVersion()).append("\n");
+        sb.append("https://github.com/DFKI/ATIC").append("\n\n");
+        sb.append("Instance Name: ").append(config.instanceName).append("\n");
+        ctx.contentType(ContentType.TEXT_PLAIN);
+        ctx.result(sb.toString());
     }
 
     //------------------------------------------
@@ -1336,6 +1348,7 @@ public class AticServer {
         String path = ctx.path();
         // Skip JWT auth for public static paths
         if (path.equals("/")
+                || path.equals("/about")
                 || path.equals("/favicon.ico")
                 || path.equals("/auth/token")
                 || path.equals("/auth/register")
