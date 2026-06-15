@@ -1,0 +1,196 @@
+path: /rml-project
+
+endpoints:
+
+  get:
+    sparql: |
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      PREFIX dcterms: <http://purl.org/dc/terms/>
+      PREFIX void: <http://rdfs.org/ns/void#>
+
+      CONSTRUCT {
+        ?collection a rdfs:Container ;
+                    void:entities ?total ;
+                    rdfs:member ?project .
+
+        ?project a <urn:atic:ontology:RmlProject> ;
+                 rdfs:label ?label ;
+                 dcterms:description ?description ;
+                 dcterms:modified ?modified .
+      }
+      WHERE {
+        {
+          SELECT (COUNT(?p) AS ?total) WHERE {
+            ?p a <urn:atic:ontology:RmlProject> .
+          }
+        }
+
+        {
+          BIND(BNODE() AS ?collection)
+        }
+
+        OPTIONAL {
+          ?project a <urn:atic:ontology:RmlProject> ;
+                   rdfs:label ?label ;
+                   dcterms:modified ?modified .
+          OPTIONAL {
+            ?project dcterms:description ?description .
+          }
+        }
+      }
+      LIMIT ?limit
+      OFFSET ?offset
+
+    frame: |
+      {
+        "@context": {
+          "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+          "dcterms": "http://purl.org/dc/terms/",
+          "modified": "dcterms:modified",
+          "label": "rdfs:label",
+          "description": "dcterms:description",
+          "entities": "http://rdfs.org/ns/void#entities",
+          "items": {
+            "@id": "http://www.w3.org/2000/01/rdf-schema#member",
+            "@container": "@set"
+          }
+        },
+        "@type": "rdfs:Container",
+        "entities": {},
+        "items": {
+          "@embed": "@always",
+          "@default": []
+        }
+      }
+
+  getInstance:
+    sparql: |
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      PREFIX dcterms: <http://purl.org/dc/terms/>
+
+      CONSTRUCT {
+        ?uri a <urn:atic:ontology:RmlProject> ;
+             rdfs:label ?label ;
+             dcterms:description ?description ;
+             <urn:atic:ontology:stackTrace> ?stackTrace ;
+             <urn:atic:ontology:successful> ?successful ;
+             <urn:atic:ontology:defaultGraph> ?defaultGraph ;
+             <urn:atic:ontology:clearGraphs> ?clearGraphs .
+      }
+      WHERE {
+        ?uri a <urn:atic:ontology:RmlProject> ;
+             rdfs:label ?label .
+
+        OPTIONAL {
+          ?uri dcterms:description ?description .
+        }
+        OPTIONAL {
+          ?uri <urn:atic:ontology:stackTrace> ?stackTrace .
+        }
+        OPTIONAL {
+          ?uri <urn:atic:ontology:successful> ?successful .
+        }
+        OPTIONAL {
+          ?uri <urn:atic:ontology:defaultGraph> ?defaultGraph .
+        }
+        OPTIONAL {
+          ?uri <urn:atic:ontology:clearGraphs> ?clearGraphs .
+        }
+      }
+
+    frame: |
+      {
+        "@context": {
+          "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+          "dcterms": "http://purl.org/dc/terms/",
+          "label": "rdfs:label",
+          "description": "dcterms:description",
+          "stackTrace": "urn:atic:ontology:stackTrace",
+          "successful": "urn:atic:ontology:successful",
+          "defaultGraph": "urn:atic:ontology:defaultGraph",
+          "clearGraphs": "urn:atic:ontology:clearGraphs"
+        },
+        "@type": "urn:atic:ontology:RmlProject",
+        "label": {},
+        "description": {},
+        "@id": {}
+      }
+
+  post:
+    sparql: |
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      PREFIX dcterms: <http://purl.org/dc/terms/>
+      PREFIX fn: <https://comem.ai/atic/fn#>
+      PREFIX atic: <urn:atic:>
+
+      INSERT {
+        ?newProject a <urn:atic:ontology:RmlProject> ;
+                    rdfs:label ?label ;
+                    dcterms:description ?description ;
+                    dcterms:modified ?modified ;
+                    <urn:atic:ontology:defaultGraph> "" ;
+                    <urn:atic:ontology:clearGraphs> false .
+                    
+
+        GRAPH ?meta {
+          ?newProject a atic:Location .
+        }
+      }
+      WHERE {
+        GRAPH ?payload {
+          ?project a <urn:atic:ontology:RmlProject> ;
+                   rdfs:label ?label .
+
+          OPTIONAL {
+            ?project dcterms:description ?description .
+          }
+        }
+
+        BIND(fn:createURN() AS ?newProject)
+        BIND(NOW() AS ?modified)
+      }
+
+  putInstance:
+    sparql: |
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      PREFIX dcterms: <http://purl.org/dc/terms/>
+
+      INSERT {
+        ?uri a <urn:atic:ontology:RmlProject> ;
+             rdfs:label ?label ;
+             dcterms:description ?description ;
+             <urn:atic:ontology:defaultGraph> ?defaultGraph ;
+             <urn:atic:ontology:clearGraphs> ?clearGraphs .
+      }
+      WHERE {
+        GRAPH ?payload {
+          ?uri a <urn:atic:ontology:RmlProject> ;
+               rdfs:label ?label .
+
+          OPTIONAL {
+            ?uri dcterms:description ?description .
+          }
+          OPTIONAL {
+            ?uri <urn:atic:ontology:defaultGraph> ?defaultGraph .
+          }
+          OPTIONAL {
+            ?uri <urn:atic:ontology:clearGraphs> ?clearGraphs .
+          }
+        }
+      }
+
+  deleteInstance:
+    sparql: |
+      DELETE {
+        ?uri ?p ?o .
+        ?s ?p2 ?uri .
+      }
+      WHERE {
+        {
+          ?uri ?p ?o .
+        }
+        UNION
+        {
+          ?s ?p2 ?uri .
+        }
+      }
