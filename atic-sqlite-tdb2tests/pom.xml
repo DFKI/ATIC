@@ -3,13 +3,12 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>de.dfki.sds</groupId>
     <artifactId>atic-sqlite-tdb2tests</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
     <packaging>jar</packaging>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
-        <atic.version>1.0.0</atic.version>
         <jena.version>5.6.0</jena.version> 
     </properties>
     
@@ -17,7 +16,7 @@
         <dependency>
             <groupId>de.dfki.sds</groupId>
             <artifactId>atic-sqlite</artifactId>
-            <version>${atic.version}</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.jena</groupId>
