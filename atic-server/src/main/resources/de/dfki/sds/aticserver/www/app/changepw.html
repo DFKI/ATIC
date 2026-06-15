@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Change Password | ATIC</title>
+    </head>
+    <body>
+        <div class="container text-center" id="app">
+
+            <div class="row d-flex justify-content-center">
+
+                <div class="col-lg-6">
+                    <h1 class="m-4">
+                        <img src="img/atic-server.png" style="height: 60px">
+                        Change Password
+                    </h1>
+
+                    <form @submit.prevent="changePassword">
+                        <div class="mb-3" v-if="user">
+                            <label class="form-label fw-bold">Username</label>
+                            <input type="text"
+                                   class="form-control"
+                                   v-model="user.username"
+                                   readonly
+                                   disabled />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Current Password</label>
+                            <input type="password"
+                                   class="form-control"
+                                   v-model="oldPassword"
+                                   required />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">New Password</label>
+
+                            <div class="input-group">
+                                <input :type="showNewPassword ? 'text' : 'password'"
+                                       class="form-control"
+                                       v-model="newPassword"
+                                       required />
+
+                                <button class="btn btn-outline-secondary"
+                                        type="button"
+                                        @click="showNewPassword = !showNewPassword">
+                                    <i :class="showNewPassword ? 'fa fa-eye-slash' : 'fa fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Confirm New Password</label>
+                            <input type="password"
+                                   class="form-control"
+                                   v-model="confirmPassword"
+                                   required />
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit"
+                                    class="btn btn-primary btn-lg"
+                                    :disabled="loading">
+                                Change Password
+                            </button>
+                        </div>
+                    </form>
+
+                    <div v-if="successMsg" class="alert alert-success mt-4">
+                        {{ successMsg }}
+                    </div>
+
+                    <div v-if="error_msg" class="alert alert-danger mt-4">
+                        {{ error_msg }}
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                &nbsp;
+                &copy; 2026 <a href="https://www.dfki.de/" target="_blank">
+                    <img src="img/dfki_Logo_digital_black.png" style="height: 12px;">
+                </a>
+            </div>
+        </div>
+
+        <script>
+// axios base path handling
+let basePath = window.location.pathname;
+if (basePath.endsWith('/')) {
+    basePath = basePath.slice(0, -1);
+}
+basePath = basePath.replace(/\/[^/]+\.html$/, '');
+if (basePath === '') {
+    basePath = '/';
+}
+axios.defaults.baseURL = basePath;
+
+const {createApp} = Vue;
+
+createApp({
+    data() {
+        return {
+            loading: false,
+
+            oldPassword: "",
+            newPassword: "",
+            showNewPassword: false,
+            confirmPassword: "",
+
+            user: null,
+
+            successMsg: "",
+            error_msg: ""
+        };
+    },
+    created() {
+        this.getAuthMe();
+    },
+    methods: {
+        changePassword() {
+            this.error_msg = "";
+            this.successMsg = "";
+
+            if (this.newPassword !== this.confirmPassword) {
+                this.error_msg = "The new passwords do not match.";
+                return;
+            }
+
+            this.loading = true;
+
+            axios.put("../auth/password", {
+                oldPassword: this.oldPassword,
+                newPassword: this.newPassword
+            })
+                    .then(() => {
+                        this.loading = false;
+
+                        this.oldPassword = "";
+                        this.newPassword = "";
+                        this.confirmPassword = "";
+
+                        this.successMsg = "Password changed successfully.";
+                    })
+                    .catch(error => {
+                        this.loading = false;
+
+                        if (error.response) {
+                            if (typeof error.response.data === "string") {
+                                this.error_msg = error.response.data;
+                            } else {
+                                this.error_msg =
+                                        error.response.data?.error ||
+                                        "Failed to change password.";
+                            }
+                        } else if (error.request) {
+                            this.error_msg = "No response from server.";
+                        } else {
+                            this.error_msg = error.message;
+                        }
+                    });
+        },
+
+        getAuthMe() {
+            axios.get('../auth/me').then(response => {
+                this.user = response.data;
+            }).catch(error => {
+                this.error_msg = "Need to log in";
+            });
+        },
+    }
+}).mount("#app");
+        </script>
+
+    </body>
+</html>

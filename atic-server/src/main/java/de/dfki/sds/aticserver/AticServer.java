@@ -93,6 +93,7 @@ import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
 import org.apache.jena.vocabulary.VOID;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.mindrot.jbcrypt.BCrypt;
 
@@ -270,11 +271,12 @@ public class AticServer {
         app.get("/app/login.html", this::getAppLogin);
 
         app.get("/about", this::getAbout);
-        
+
         app.post("/auth/token", this::postToken);
         app.post("/auth/register", this::postRegister);
         app.get("/auth/me", this::getAuthMe);
         app.post("/auth/logout", this::postLogout);
+        app.put("/auth/password", this::putPassword);
 
         app.get("/config", this::getAllConfig);
         app.get("/config/{name}", this::getSingleConfig);
@@ -318,7 +320,7 @@ public class AticServer {
 
         ctx.html(html);
     }
-    
+
     private void getAbout(Context ctx) throws IOException {
         StringBuilder sb = new StringBuilder();
         sb.append(Main.ASCII_LOGO).append("\n");
@@ -1094,7 +1096,7 @@ public class AticServer {
                         patch.apply(new RDFChangesBase() {
                             @Override
                             public void add(Node g, Node s, Node p, Node o) {
-                                
+
                                 //ignore special graphs for permission and group assignment
                                 g = Converter.unwrapNode(g);
                                 if (RDFPatchEmitterTransactional.isSpecialGraph(g)) {
@@ -1341,6 +1343,32 @@ public class AticServer {
         });
 
         ctx.json(user.toMap());
+    }
+
+    private void putPassword(Context ctx) {
+        String username = ctx.attribute("user.username");
+
+        try {
+            JSONObject body = new JSONObject(ctx.body());
+
+            String oldPassword = body.getString("oldPassword");
+            String newPassword = body.getString("newPassword");
+
+            Txn.executeWrite(datasetGraph, () -> {
+                datasetGraph.changePassword(username, oldPassword, newPassword);
+            });
+
+            ctx.status(204);
+
+        } catch (JSONException e) {
+            ctx.status(400).result("Request must contain 'oldPassword' and 'newPassword'.");
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).result(e.getMessage());
+        } catch (SecurityException e) {
+            ctx.status(401).result(e.getMessage());
+        } catch (Exception e) {
+            ctx.status(500).result("Failed to change password.");
+        }
     }
 
     private void authorizationMiddleware(Context ctx) {

@@ -862,6 +862,71 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return ctx.getUserId() == adminUser.getId();
     }
 
+    public void changePassword(String username, String oldPassword, String newPassword) {
+        validatePassword(newPassword);
+
+        try {
+            String currentHash = db.read(
+                    """
+                SELECT password
+                FROM user
+                WHERE username = ?;
+                """,
+                    rs -> rs.getString("password"),
+                    username
+            );
+
+            if (currentHash == null) {
+                throw new IllegalStateException("User does not exist: " + username);
+            }
+
+            if (!BCrypt.checkpw(oldPassword, currentHash)) {
+                throw new SecurityException("Current password is incorrect.");
+            }
+
+            String newHash = BCrypt.hashpw(newPassword, BCrypt.gensalt());
+
+            db.write(
+                    """
+                UPDATE user
+                SET password = ?
+                WHERE username = ?;
+                """,
+                    newHash,
+                    username
+            );
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to change password for user: " + username, e);
+        }
+    }
+
+    private static void validatePassword(String password) {
+        if (password == null) {
+            throw new IllegalArgumentException(
+                    "Password must be at least 8 characters long and contain at least one uppercase letter and one digit."
+            );
+        }
+
+        if (password.length() < 8) {
+            throw new IllegalArgumentException(
+                    "Password must be at least 8 characters long."
+            );
+        }
+
+        if (!password.chars().anyMatch(Character::isUpperCase)) {
+            throw new IllegalArgumentException(
+                    "Password must contain at least one uppercase letter."
+            );
+        }
+
+        if (!password.chars().anyMatch(Character::isDigit)) {
+            throw new IllegalArgumentException(
+                    "Password must contain at least one digit."
+            );
+        }
+    }
+
     //sharing ===============================================================
     @Override
     public void shareGraphs(
@@ -1194,7 +1259,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                         throw new IllegalStateException("Group ID not found: " + grUri);
                     }
 
-                    if(enableAC) {
+                    if (enableAC) {
                         db.write(
                                 "DELETE FROM graph_acl "
                                 + "WHERE graph_id = ? "
@@ -1544,7 +1609,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                         throw new IllegalStateException("Group ID not found: " + grUri);
                     }
 
-                    if(enableAC) {
+                    if (enableAC) {
                         db.write(
                                 "DELETE FROM resource_acl "
                                 + "WHERE resource_id = ? "
