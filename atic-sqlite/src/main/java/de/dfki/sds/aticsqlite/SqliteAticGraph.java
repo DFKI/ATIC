@@ -65,6 +65,7 @@ public class SqliteAticGraph implements AticGraph {
 
     //TODO later better ontology vocabulary
     public static final Node ATIC_CONFIDENCE = NodeFactory.createURI("urn:atic:confidence");
+    public static final Node ATIC_APPLICABILITY = NodeFactory.createURI("urn:atic:applicability");
 
     //TODO later solve with logger
     public static boolean PRINT_FIND = false;
@@ -339,8 +340,11 @@ public class SqliteAticGraph implements AticGraph {
             long p = predicateCache.get(t.getPredicate());
 
             double confidence = 1.0;
+            double applicability = 1.0;
             if (t instanceof AticTriple) {
-                confidence = ((AticTriple) t).getConfidence();
+                AticTriple at = (AticTriple) t;
+                confidence = at.getConfidence();
+                applicability = at.getApplicability();
             }
 
             Node obj = t.getObject();
@@ -369,6 +373,7 @@ public class SqliteAticGraph implements AticGraph {
                     lit.language(),
                     lit.getDatatypeURI(),
                     confidence,
+                    applicability,
                     ctx.getUserId()
                 });
 
@@ -386,10 +391,13 @@ public class SqliteAticGraph implements AticGraph {
                     IdAndUriTriple idAndUriTriple = IdAndUriTriple.create(
                             IdAndUri.create(s, subject),
                             IdAndUri.create(p, t.getPredicate()),
-                            IdAndUriOrLiteral.create(obj)
+                            IdAndUriOrLiteral.create(obj),
+                            confidence,
+                            applicability
                     );
                     IdAndUriQuad idAndUriQuad = IdAndUriQuad.create(idAndUris.get(0), idAndUriTriple);
                     idAndUriQuad.getTriple().setConfidence(confidence);
+                    idAndUriQuad.getTriple().setApplicability(applicability);
 
                     datasetGraph.getRDFPatchEmitter().add(idAndUriQuad, ctx);
                 }
@@ -421,6 +429,7 @@ public class SqliteAticGraph implements AticGraph {
                     o,
                     graphId,
                     confidence,
+                    applicability,
                     ctx.getUserId()
                 });
 
@@ -439,10 +448,13 @@ public class SqliteAticGraph implements AticGraph {
                     IdAndUriTriple idAndUriTriple = IdAndUriTriple.create(
                             IdAndUri.create(s, subject),
                             IdAndUri.create(p, t.getPredicate()),
-                            IdAndUriOrLiteral.create(o, obj)
+                            IdAndUriOrLiteral.create(o, obj),
+                            confidence,
+                            applicability
                     );
                     IdAndUriQuad idAndUriQuad = IdAndUriQuad.create(idAndUris.get(0), idAndUriTriple);
                     idAndUriQuad.getTriple().setConfidence(confidence);
+                    idAndUriQuad.getTriple().setApplicability(applicability);
 
                     datasetGraph.getRDFPatchEmitter().add(idAndUriQuad, ctx);
                 }
@@ -454,14 +466,14 @@ public class SqliteAticGraph implements AticGraph {
         // ---------------------------------------
         db.writeBatch("""
         INSERT OR IGNORE INTO splg
-        (s, p, g, lex, lang, dt, confidence, creator)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (s, p, g, lex, lang, dt, confidence, applicability, creator)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, splgBatch, batchSize);
 
         db.writeBatch("""
         INSERT OR IGNORE INTO spog
-        (s, p, o, g, confidence, creator)
-        VALUES (?, ?, ?, ?, ?, ?)
+        (s, p, o, g, confidence, applicability, creator)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """, spogBatch, batchSize);
     }
 
@@ -2132,7 +2144,8 @@ public class SqliteAticGraph implements AticGraph {
             ruri_opls.uri AS rspl_o_s_uri,     -- 33
             pplo.uri      AS rspl_o_p_uri,     -- 34
             
-            spog.confidence                    -- 35
+            spog.confidence,                   -- 35
+            spog.applicability                 -- 36
         """;
 
         QueryWithParams queryWithParams = buildQuery(
@@ -2261,12 +2274,13 @@ public class SqliteAticGraph implements AticGraph {
                                 IdAndUri.create(sId, subj),
                                 IdAndUri.create(pId, pred),
                                 IdAndUriOrLiteral.create(oId, obj),
-                                rs.getDouble(35)
+                                rs.getDouble(35),
+                                rs.getDouble(36)
                         )
                 );
             }
 
-            AticTriple t = AticTriple.create(subj, pred, obj, rs.getDouble(35));
+            AticTriple t = AticTriple.create(subj, pred, obj, rs.getDouble(35), rs.getDouble(36));
 
             if (PRINT_FIND) {
                 System.out.println("findSPO(" + s + ", " + p + ", " + o + ", " + idAndUris + "): " + t);
@@ -2363,7 +2377,8 @@ public class SqliteAticGraph implements AticGraph {
             splg.lang,                         -- 20
             splg.dt,                           -- 21
             
-            splg.confidence                    -- 22
+            splg.confidence,                   -- 22
+            splg.applicability                 -- 23
             """;
 
         QueryWithParams queryWithParams = buildQuery(
@@ -2463,12 +2478,13 @@ public class SqliteAticGraph implements AticGraph {
                                 IdAndUri.create(sId, subj),
                                 IdAndUri.create(pId, pred),
                                 IdAndUriOrLiteral.create(obj),
-                                rs.getDouble(22)
+                                rs.getDouble(22),
+                                rs.getDouble(23)
                         )
                 );
             }
 
-            AticTriple t = AticTriple.create(subj, pred, obj, rs.getDouble(22));
+            AticTriple t = AticTriple.create(subj, pred, obj, rs.getDouble(22), rs.getDouble(23));
 
             if (PRINT_FIND) {
                 System.out.println("findSPL(" + s + ", " + p + ", " + o + "," + idAndUris + "): " + t);

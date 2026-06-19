@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS splg (
     confidence REAL NOT NULL DEFAULT 1
         CHECK (confidence >= 0 AND confidence <= 1),
 
+    applicability REAL NOT NULL DEFAULT 1
+        CHECK (applicability >= -1 AND applicability <= 1),
+
     FOREIGN KEY (s) REFERENCES resource(id),
     FOREIGN KEY (p) REFERENCES property(id),
     FOREIGN KEY (g) REFERENCES graph(id),

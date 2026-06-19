@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Assertions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -750,5 +751,264 @@ public class DatasetGraphUnitTest {
         } finally {
             dataset.end();
         }
+    }
+
+    @Test
+    void testAticTripleApplicabilityPersistedInSpog() throws Exception {
+
+        User adminUser = dataset.calculateRead(() -> {
+            return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
+        });
+
+        InvocationContext ctx = new InvocationContext.Builder().fromUser(adminUser).build();
+
+        Node graph = NodeFactory.createURI("urn:test:applicabilityGraph");
+
+        Node s = NodeFactory.createURI("urn:test:s");
+        Node p = NodeFactory.createURI("urn:test:p");
+        Node o = NodeFactory.createURI("urn:test:o");
+
+        double applicability = 0.75;
+
+        // -----------------------
+        // Insert triple
+        // -----------------------
+        dataset.begin(TxnType.WRITE);
+        try {
+            dataset.addGraph(graph, GraphFactory.createDefaultGraph(), ctx);
+
+            AticTriple triple = AticTriple.create(s, p, o, 1.0, applicability);
+            dataset.getGraph(graph, ctx).add(triple, ctx);
+
+            dataset.commit();
+        } finally {
+            dataset.end();
+        }
+
+        // -----------------------
+        // Verify via db.read(...)
+        // -----------------------
+        dataset.begin(TxnType.READ);
+        try {
+
+            Double dbApplicability = dataset.getDatabase().read(
+                    "SELECT applicability FROM spog "
+                    + "JOIN graph g ON spog.g = g.id "
+                    + "WHERE g.uri = ? LIMIT 1",
+                    rs -> {
+                        if (!rs.next()) {
+                            throw new AssertionError("Expected one row in spog");
+                        }
+                        return rs.getDouble("applicability");
+                    },
+                    graph.getURI()
+            );
+
+            assertEquals(applicability, dbApplicability, 1e-9,
+                    "Stored applicability should match inserted value");
+
+        } finally {
+            dataset.end();
+        }
+    }
+
+    @Test
+    void testAticTripleApplicabilityRetrievedViaFind() throws Exception {
+
+        User adminUser = dataset.calculateRead(() -> {
+            return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
+        });
+
+        InvocationContext ctx = new InvocationContext.Builder().fromUser(adminUser).build();
+
+        Node graph = NodeFactory.createURI("urn:test:applicabilityGraphFind");
+
+        Node s = NodeFactory.createURI("urn:test:s");
+        Node p = NodeFactory.createURI("urn:test:p");
+        Node o = NodeFactory.createURI("urn:test:o");
+
+        double applicability = -0.5;
+
+        // -----------------------
+        // Insert triple
+        // -----------------------
+        dataset.begin(TxnType.WRITE);
+        try {
+            dataset.addGraph(graph, GraphFactory.createDefaultGraph(), ctx);
+
+            AticTriple triple = AticTriple.create(s, p, o, 1.0, applicability);
+            dataset.getGraph(graph, ctx).add(triple, ctx);
+
+            dataset.commit();
+        } finally {
+            dataset.end();
+        }
+
+        // -----------------------
+        // Verify via find(...)
+        // -----------------------
+        dataset.begin(TxnType.READ);
+        try {
+
+            Iterator<Triple> it = dataset.getGraph(graph, ctx)
+                    .find(s, p, o, ctx);
+
+            assertTrue(it.hasNext(), "Expected one triple");
+
+            Triple t = it.next();
+
+            assertTrue(t instanceof AticTriple,
+                    "Returned triple should be an AticTriple");
+
+            AticTriple at = (AticTriple) t;
+
+            assertEquals(applicability, at.getApplicability(), 1e-9,
+                    "Applicability should match inserted value");
+
+            assertFalse(it.hasNext(), "Expected exactly one triple");
+
+        } finally {
+            dataset.end();
+        }
+    }
+
+    @Test
+    void testAticTripleDefaultApplicabilityIsOne() throws Exception {
+
+        User adminUser = dataset.calculateRead(() -> {
+            return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
+        });
+
+        InvocationContext ctx = new InvocationContext.Builder().fromUser(adminUser).build();
+
+        Node graph = NodeFactory.createURI("urn:test:defaultApplicabilityGraph");
+
+        Node s = NodeFactory.createURI("urn:test:s");
+        Node p = NodeFactory.createURI("urn:test:p");
+        Node o = NodeFactory.createURI("urn:test:o");
+
+        // -----------------------
+        // Insert triple without specifying applicability
+        // -----------------------
+        dataset.begin(TxnType.WRITE);
+        try {
+            dataset.addGraph(graph, GraphFactory.createDefaultGraph(), ctx);
+
+            AticTriple triple = AticTriple.create(s, p, o, 1.0);
+            dataset.getGraph(graph, ctx).add(triple, ctx);
+
+            dataset.commit();
+        } finally {
+            dataset.end();
+        }
+
+        // -----------------------
+        // Verify via find(...)
+        // -----------------------
+        dataset.begin(TxnType.READ);
+        try {
+
+            Iterator<Triple> it = dataset.getGraph(graph, ctx)
+                    .find(s, p, o, ctx);
+
+            assertTrue(it.hasNext(), "Expected one triple");
+
+            Triple t = it.next();
+            AticTriple at = (AticTriple) t;
+
+            assertEquals(1.0, at.getApplicability(), 1e-9,
+                    "Default applicability should be 1.0");
+
+            assertFalse(it.hasNext(), "Expected exactly one triple");
+
+        } finally {
+            dataset.end();
+        }
+    }
+
+    @Test
+    void testAticTripleApplicabilityBoundaryValues() throws Exception {
+
+        User adminUser = dataset.calculateRead(() -> {
+            return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
+        });
+
+        InvocationContext ctx = new InvocationContext.Builder().fromUser(adminUser).build();
+
+        Node graph = NodeFactory.createURI("urn:test:boundaryApplicabilityGraph");
+
+        Node s = NodeFactory.createURI("urn:test:s");
+        Node p = NodeFactory.createURI("urn:test:p");
+        Node o = NodeFactory.createURI("urn:test:o");
+
+        // Test -1.0
+        dataset.begin(TxnType.WRITE);
+        try {
+            dataset.addGraph(graph, GraphFactory.createDefaultGraph(), ctx);
+
+            AticTriple tripleNeg = AticTriple.create(s, p, o, 1.0, -1.0);
+            dataset.getGraph(graph, ctx).add(tripleNeg, ctx);
+
+            dataset.commit();
+        } finally {
+            dataset.end();
+        }
+
+        dataset.begin(TxnType.READ);
+        try {
+            Iterator<Triple> it = dataset.getGraph(graph, ctx).find(s, p, o, ctx);
+            assertTrue(it.hasNext());
+            assertEquals(-1.0, ((AticTriple) it.next()).getApplicability(), 1e-9,
+                    "Applicability -1.0 should persist correctly");
+        } finally {
+            dataset.end();
+        }
+
+        // Test 1.0
+        dataset.begin(TxnType.WRITE);
+        try {
+            Node s2 = NodeFactory.createURI("urn:test:s2");
+            AticTriple triplePos = AticTriple.create(s2, p, o, 1.0, 1.0);
+            dataset.getGraph(graph, ctx).add(triplePos, ctx);
+
+            dataset.commit();
+        } finally {
+            dataset.end();
+        }
+
+        dataset.begin(TxnType.READ);
+        try {
+            Node s2 = NodeFactory.createURI("urn:test:s2");
+            Iterator<Triple> it = dataset.getGraph(graph, ctx).find(s2, p, o, ctx);
+            assertTrue(it.hasNext());
+            assertEquals(1.0, ((AticTriple) it.next()).getApplicability(), 1e-9,
+                    "Applicability 1.0 should persist correctly");
+        } finally {
+            dataset.end();
+        }
+    }
+
+    @Test
+    void testAticTripleApplicabilityValidation() {
+        Node s = NodeFactory.createURI("urn:test:s");
+        Node p = NodeFactory.createURI("urn:test:p");
+        Node o = NodeFactory.createURI("urn:test:o");
+
+        // Valid boundaries
+        AticTriple t = AticTriple.create(s, p, o, 1.0, -1.0);
+        assertEquals(-1.0, t.getApplicability(), 1e-9);
+
+        t = AticTriple.create(s, p, o, 1.0, 1.0);
+        assertEquals(1.0, t.getApplicability(), 1e-9);
+
+        // Invalid values should throw
+        assertThrows(IllegalArgumentException.class, () ->
+            AticTriple.create(s, p, o, 1.0, 1.1));
+        assertThrows(IllegalArgumentException.class, () ->
+            AticTriple.create(s, p, o, 1.0, -1.1));
+        assertThrows(IllegalArgumentException.class, () ->
+            AticTriple.create(s, p, o, 1.0, 2.0));
+        assertThrows(IllegalArgumentException.class, () ->
+            AticTriple.create(s, p, o, 1.0, -2.0));
     }
 }

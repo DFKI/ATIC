@@ -12,17 +12,28 @@ public class IdAndUriTriple {
     private IdAndUriOrLiteral o;
 
     private double confidence = 1.0;
+    private double applicability = 1.0;
     
     public IdAndUriTriple(IdAndUri s, IdAndUri p, IdAndUriOrLiteral o) {
         this.s = s;
         this.p = p;
         this.o = o;
         this.confidence = 1.0;
+        this.applicability = 1.0;
     }
-    
+
     public IdAndUriTriple(IdAndUri s, IdAndUri p, IdAndUriOrLiteral o, double confidence) {
         this(s, p, o);
         setConfidence(confidence);
+        this.applicability = 1.0;
+    }
+
+    public IdAndUriTriple(IdAndUri s, IdAndUri p, IdAndUriOrLiteral o, double confidence, double applicability) {
+        this.s = s;
+        this.p = p;
+        this.o = o;
+        setConfidence(confidence);
+        setApplicability(applicability);
     }
     
     public static IdAndUriTriple create(IdAndUri s, IdAndUri p, IdAndUriOrLiteral o) {
@@ -31,6 +42,10 @@ public class IdAndUriTriple {
 
     public static IdAndUriTriple create(IdAndUri s, IdAndUri p, IdAndUriOrLiteral o, double confidence) {
         return new IdAndUriTriple(s, p, o, confidence);
+    }
+
+    public static IdAndUriTriple create(IdAndUri s, IdAndUri p, IdAndUriOrLiteral o, double confidence, double applicability) {
+        return new IdAndUriTriple(s, p, o, confidence, applicability);
     }
     
     // -----------------------
@@ -47,6 +62,17 @@ public class IdAndUriTriple {
         this.confidence = confidence;
     }
 
+    public double getApplicability() {
+        return applicability;
+    }
+
+    public final void setApplicability(double applicability) {
+        if (applicability < -1.0 || applicability > 1.0) {
+            throw new IllegalArgumentException("Applicability must be between -1 and 1");
+        }
+        this.applicability = applicability;
+    }
+
     public IdAndUri getSubject() {
         return s;
     }
@@ -61,7 +87,7 @@ public class IdAndUriTriple {
 
     @Override
     public String toString() {
-        return "IdAndUriTriple{" + "s=" + s + ", p=" + p + ", o=" + o + ", confidence=" + confidence + '}';
+        return "IdAndUriTriple{" + "s=" + s + ", p=" + p + ", o=" + o + ", confidence=" + confidence + ", applicability=" + applicability + '}';
     }
     
 }
