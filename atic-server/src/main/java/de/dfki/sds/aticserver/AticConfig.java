@@ -18,7 +18,7 @@ public class AticConfig {
     File home = new File(".");
     
     @Config(value = "landingpage", description = "Landing page after login")
-    String landingpage = "/app/app.html";
+    String landingpage = "/app/home.html";
     
     @Config(value = "instance.name", description = "Name of this ATIC instance")
     String instanceName = "ATIC";

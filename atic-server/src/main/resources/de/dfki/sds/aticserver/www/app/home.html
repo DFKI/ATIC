@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Home</title>
+    </head>
+    <body>
+        <div class="container py-4" id="app">
+
+            <div class="row">
+
+                <div class="col-lg-6">
+                    
+                    <h2>Home</h2>
+                    
+                    <br/>
+                    
+                    <h4>Management</h4>
+                    <ul>
+                        <li><a href="reg.html" target="_blank">Registration</a></li>
+                        <li><a href="changepw.html" target="_blank">Change Password</a></li>
+                        <li><a href="/about" target="_blank">About</a></li>
+                    </ul>
+                    
+                    
+                    
+                    <h4>Demos</h4>
+                    <ul>
+                        <li><a href="graph-demo.html" target="_blank">Graph</a></li>
+                        <li><a href="molecule-demo.html" target="_blank">Molecule</a></li>
+                        <li><a href="person-demo.html" target="_blank">Person</a></li>
+                        <li><a href="upload-demo.html" target="_blank">Upload</a></li>
+                        <li><a href="rml-demo.html" target="_blank">RML</a></li>
+                    </ul>
+                    
+                    <h4>Services</h4>
+                    <ul>
+                        <li><a href="/sparql" target="_blank">SPARQL</a></li>
+                    </ul>
+                </div>
+
+                <div v-if="error_msg" class="text-danger text-center mt-3">
+                    {{ error_msg }}
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                &nbsp;
+
+                &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+            </div>
+        </div>
+
+
+        <script>
+        //axios settings
+        let basePath = window.location.pathname;
+        if (basePath.endsWith('/')) {
+            basePath = basePath.slice(0, -1);
+        }
+        // remove last segment if it ends with .html
+        basePath = basePath.replace(/\/[^/]+\.html$/, '');
+        if (basePath === '') {
+            basePath = '/';
+        }
+        axios.defaults.baseURL = basePath;
+        console.log("axios baseURL is " + basePath);
+
+        const {createApp} = Vue;
+
+        createApp({
+            data() {
+                return {
+                    error_msg: ""
+                };
+            },
+            created() {
+
+            },
+            methods: {
+                
+            }
+        }).mount('#app');
+        </script>
+    </body>
+</html>
