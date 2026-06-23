@@ -60,6 +60,7 @@ import java.util.logging.FileHandler;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 import java.util.stream.Collectors;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
@@ -942,7 +943,7 @@ public class AticServer {
         } catch (PermissionDeniedException e) {
             ctx.status(HttpStatus.FORBIDDEN).result(e.getMessage());
         } catch (Exception e) {
-            ctx.status(500).result("SPARQL execution error:\n" + e.getMessage());
+            ctx.status(500).result("SPARQL execution error:\n" + e.getMessage() + "\n\n" + ExceptionUtils.getStackTrace(e));
         } finally {
             datasetGraph.end();
         }

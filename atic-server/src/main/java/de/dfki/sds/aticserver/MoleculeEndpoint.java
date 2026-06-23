@@ -230,6 +230,8 @@ public class MoleculeEndpoint {
                             = graph.find(node, p.asNode(), Node.ANY, ictx);
 
                     Node best = selectBestLiteral(it, options.getLocale());
+                    
+                    it.close();
 
                     if (best != null) {
                         //TODO there can be a clash because "label" is rdfs:label but in another object foaf:name
@@ -273,6 +275,7 @@ public class MoleculeEndpoint {
                         otherTypes.put(t.getURI());
                     }
                 }
+                typeIter.close();
                 if (primaryType != null) {
                     if (options.expandType && depth == 0) {
                         context.put(key, p.getURI());
@@ -361,6 +364,8 @@ public class MoleculeEndpoint {
                         break;
                     }
                 }
+                
+                it.close();
             }
 
         return selectedProperties;
@@ -433,6 +438,7 @@ public class MoleculeEndpoint {
         }
 
         if (predicateMap.isEmpty()) {
+            iter.close();
             return;
         }
 
@@ -456,6 +462,8 @@ public class MoleculeEndpoint {
         }
         context.put("moreSPL", MORE_SPL_URI);
         result.put("moreSPL", hasMore);
+        
+        iter.close();
     }
 
     private void renderOutgoingSPO(Node node, AticGraph graph, InvocationContext ictx, Rendering rendering, int depth, Property[] lcti, RenderOptions options, JSONObject context, JSONObject result) {
@@ -522,6 +530,7 @@ public class MoleculeEndpoint {
         }
 
         if (predicateMap.isEmpty()) {
+            iter.close();
             return;
         }
 
@@ -545,6 +554,8 @@ public class MoleculeEndpoint {
         }
         context.put("moreSPO", MORE_SPO_URI);
         result.put("moreSPO", hasMore);
+        
+        iter.close();
     }
 
     private void renderIncomingSPO(Node node, AticGraph graph, InvocationContext ictx, Rendering rendering, int depth, Property[] lcti, RenderOptions options, JSONObject context, JSONObject result) {
@@ -598,6 +609,7 @@ public class MoleculeEndpoint {
         }
 
         if (predicateMap.isEmpty()) {
+            iter.close();
             return;
         }
 
