@@ -69,10 +69,14 @@ import org.json.JSONObject;
 import org.mindrot.jbcrypt.BCrypt;
 
 /**
- *
+ * A SQLite-backed implementation of the {@link AticDatasetGraph} interface that provides
+ * a virtual dataset graph over a SQLite database. It supports named graphs, virtual graphs,
+ * access control via the ATiC authorization core, user and group management, RDF patch
+ * emission, and transaction management.
  */
 public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManagement, SharingManagement {
 
+    /** Symbol key storing the absolute path of the SQLite database folder in the Jena {@link Context}. */
     public static final Symbol ATIC_LOCATION = Symbol.create("atic.location");
 
     //to simulate TDB2's Symbol
@@ -80,28 +84,51 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      * Symbol to use the union of named graphs as the default graph of a query.
      */
     //public static final Symbol UNION_DEFAULT_GRAPH = Symbol.create("http://jena.apache.org/TDB#unionDefaultGraph");
+
+    /** The Jena {@link Context} holding configuration symbols for this dataset graph instance. */
     private Context context;
 
+    /** The underlying {@link Database} wrapper providing SQLite read/write operations. */
     private Database db;
 
+    /** A {@link SqlitePrefixMap} instance managing RDF prefix mappings stored in the database. */
     private SqlitePrefixMap sqlitePrefixMap;
 
+    /** Maps virtual graph URIs to their in-memory {@link AticVirtualGraph} implementations. */
     private Map<Node, AticVirtualGraph> virtualGraphMap;
 
+    /** Maps blank nodes to their assigned URIs during a transaction for consistency. */
     private Map<Node, String> bnode2uri;
 
+    /** Caches {@link SqliteAticGraph} instances keyed by their graph ID/URI set. */
     private Map<Set<IdAndUri>, SqliteAticGraph> graphMap;
 
+    /** Flag indicating whether this dataset graph has been closed. */
     private boolean closed;
 
+    /** Emits RDF patch events (add/delete) for listeners when data changes. */
     private RDFPatchEmitterTransactional rdfPatchEmitter;
 
+    /** The admin {@link User} object, loaded during bootstrap. */
     private User adminUser;
 
+    /**
+     * Creates a new {@code SqliteAticDatasetGraph} backed by the given SQLite database.
+     * Bootstraps tables, admin user, default graph, and virtual graphs.
+     *
+     * @param db the SQLite database to back this dataset graph
+     */
     public SqliteAticDatasetGraph(Database db) {
         this(db, null);
     }
 
+    /**
+     * Creates a new {@code SqliteAticDatasetGraph} with an additional listener for RDF patch events.
+     * Bootstraps tables, admin user, default graph, and virtual graphs.
+     *
+     * @param db              the SQLite database to back this dataset graph
+     * @param mainListener    an {@link RDFPatchListener} to receive RDF patch events
+     */
     public SqliteAticDatasetGraph(Database db, RDFPatchListener mainListener) {
         this.db = db;
         this.sqlitePrefixMap = new SqlitePrefixMap(this);
@@ -118,6 +145,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     //bootstrap ==============================================================================
+    /**
+     * Orchestrates the full bootstrap sequence: creates database tables, initializes
+     * the admin user and everyone group, creates the default graph, loads virtual graphs,
+     * and registers SPARQL functions.
+     */
     private void bootstrap() {
         this.executeWrite(() -> {
             try {
@@ -159,6 +191,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
          */
     }
 
+    /**
+     * Creates all SQLite tables required for users, groups, graphs, ACLs, resources,
+     * properties, and triple storage (SPoG, SPtG, RDF-star).
+     */
     private void bootstrapTables() throws SQLException {
         db.writeQuery("create_table_user.sql");
         db.writeQuery("create_table_group.sql");
@@ -182,6 +218,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         db.writeQuery("create_table_resource_spl.sql");
     }
 
+    /**
+     * Checks for and creates the admin user if it does not already exist, then stores a reference to it.
+     */
     private void bootstrapAdmin() throws SQLException {
         boolean adminExists = db.read(
                 "SELECT EXISTS(SELECT 1 FROM user WHERE username=?)",
@@ -200,6 +239,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         adminUser = getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
     }
 
+    /**
+     * Creates the {@code everyone} group if it does not already exist.
+     */
     private void bootstrapEveryoneGroup() throws SQLException {
 
         boolean groupExists = db.read(
@@ -216,6 +258,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Creates the Jena default graph with ADMIN permission for the admin user and EDIT
+     * permission for the everyone group.
+     */
     private void bootstrapDefaultGraph() throws SQLException {
 
         // Jena default graph URI
@@ -281,6 +327,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
     }
 
+    /**
+     * Loads and executes index creation SQL definitions from {@code indices.json} in the classpath resources.
+     */
     private void bootstrapIndices() throws SQLException {
 
         // load json from resource file
@@ -305,6 +354,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Registers the {@code https://comem.ai/atic/fn#createURN} SPARQL function factory.
+     */
     private void bootstrapSparqlFunctions() {
         SparqlFunctionCreateURN f = new SparqlFunctionCreateURN(this);
 
@@ -322,6 +374,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         );
     }
 
+    /**
+     * Loads all virtual graphs marked with {@code is_virtual = 1} from the {@code graph} table
+     * and registers them in {@code virtualGraphMap}.
+     */
     private void bootstrapVirtualGraphs() throws SQLException {
         db.read(
                 """
@@ -360,20 +416,46 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         );
     }
 
+    /**
+     * Generates a URN of the form {@code urn:atic:{type}-{UUID}} for creating unique resource identifiers.
+     *
+     * @param type the type prefix for the URN (e.g., "user", "group", "graph")
+     * @return the generated URN string
+     */
     /*package*/ String createURN(String type) {
         return "urn:atic:" + type + "-" + UUID.randomUUID();
     }
 
     //query log =============================================================
+    /**
+     * Enables the SQLite query logger, writing all queries to the specified file path.
+     *
+     * @param dbFilePath the path to the query log file
+     */
     public void enableQueryLogger(String dbFilePath) {
         db.enableQueryLogger(dbFilePath);
     }
 
+    /**
+     * Disables the SQLite query logger.
+     */
     public void disableQueryLogger() {
         db.disableQueryLogger();
     }
 
     //user & group management ================================================================
+    /**
+     * Creates a new user with a randomly generated 8-character password. The user is
+     * automatically assigned to the {@code everyone} group. The password is appended to
+     * {@code passwords.json.generated}. Requires ADMIN permission.
+     *
+     * @param firstname  the user's first name
+     * @param lastname   the user's last name
+     * @param email      the user's email address
+     * @param username   the user's login username
+     * @param ctx        the invocation context containing caller information
+     * @return the randomly generated plain-text password
+     */
     @Override
     public String addUser(String firstname, String lastname, String email, String username, InvocationContext ctx) {
         requireAdmin(ctx);
@@ -423,6 +505,12 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return plainPassword;
     }
 
+    /**
+     * Creates a new named group with a generated URN. Requires ADMIN permission.
+     *
+     * @param groupname the name of the group to create
+     * @param ctx       the invocation context containing caller information
+     */
     @Override
     public void addGroup(String groupname, InvocationContext ctx) {
 
@@ -448,6 +536,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Loads a {@link User} object by username, including their primary group and all assigned groups.
+     *
+     * @param username the username to look up
+     * @param ctx      the invocation context containing caller information
+     * @return the {@link User} object
+     */
     @Override
     public User getUser(String username, InvocationContext ctx) {
         String sql
@@ -475,6 +570,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Loads a {@link User} object by numeric ID, including their primary group and all assigned groups.
+     *
+     * @param userId the user ID to look up
+     * @param ctx    the invocation context containing caller information
+     * @return the {@link User} object
+     */
     @Override
     public User getUser(int userId, InvocationContext ctx) {
 
@@ -502,6 +604,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Loads a {@link Group} object by its group name.
+     *
+     * @param groupname the name of the group to look up
+     * @param ctx       the invocation context containing caller information
+     * @return the {@link Group} object
+     */
     @Override
     public Group getGroup(String groupname, InvocationContext ctx) {
 
@@ -529,6 +638,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Assigns a user to a group via the {@code user_group_assignment} table. Requires ADMIN permission.
+     *
+     * @param username  the username of the user to assign
+     * @param groupname the name of the group to assign to
+     * @param ctx       the invocation context containing caller information
+     */
     @Override
     public void assignUserToGroup(String username, String groupname, InvocationContext ctx) {
         requireAdmin(ctx);
@@ -571,6 +687,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Removes a user's assignment from a group. Requires ADMIN permission.
+     *
+     * @param username  the username of the user to unassign
+     * @param groupname the name of the group to unassign from
+     * @param ctx       the invocation context containing caller information
+     */
     @Override
     public void unassignUserFromGroup(String username, String groupname, InvocationContext ctx) {
         requireAdmin(ctx);
@@ -613,6 +736,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Maps a {@link java.sql.ResultSet} row to a {@link User} object, including loading all groups
+     * the user belongs to.
+     *
+     * @param rs the result set to map
+     * @param id the user identifier
+     * @return the mapped {@link User} object
+     * @throws SQLException if a database error occurs
+     */
     private User mapUser(java.sql.ResultSet rs, Object id) throws SQLException {
 
         if (!rs.next()) {
@@ -654,6 +786,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         );
     }
 
+    /**
+     * Searches for users whose username, first name, or last name contains the given query string (case-insensitive).
+     *
+     * @param query the search query string
+     * @param ctx   the invocation context containing caller information
+     * @return a list of matching {@link User} objects
+     */
     public List<User> searchUsers(String query, InvocationContext ctx) {
 
         String searchTerm = "%" + query.toLowerCase() + "%";
@@ -727,6 +866,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Searches for named groups (excluding user-specific groups) whose name contains the given query string.
+     *
+     * @param query the search query string
+     * @param ctx   the invocation context containing caller information
+     * @return a list of matching {@link Group} objects
+     */
     public List<Group> searchGroups(String query, InvocationContext ctx) {
 
         String searchTerm = "%" + query.toLowerCase() + "%";
@@ -770,6 +916,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Searches both users and groups for principals whose names match the given query.
+     *
+     * @param query the search query string
+     * @param ctx   the invocation context containing caller information
+     * @return a list of matching {@link Principal} objects
+     */
     public List<Principal> searchPrincipals(String query, InvocationContext ctx) {
         List<Principal> pricipals = new ArrayList<>();
         pricipals.addAll(searchUsers(query, ctx));
@@ -777,6 +930,12 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return pricipals;
     }
 
+    /**
+     * Loads all groups assigned to a specific user from the {@code user_group_assignment} table.
+     *
+     * @param userId the user ID
+     * @return a list of {@link Group} objects
+     */
     private List<Group> loadUserGroups(long userId) throws SQLException {
 
         return db.read(
@@ -802,6 +961,12 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         );
     }
 
+    /**
+     * Writes or updates a username-password pair in the {@code passwords.json.generated} file.
+     *
+     * @param username      the username
+     * @param plainPassword the plain-text password
+     */
     private void appendToPasswordsFile(String username, String plainPassword) {
         JSONObject json;
 
@@ -831,6 +996,12 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Generates a random password consisting of uppercase and lowercase letters of the specified length.
+     *
+     * @param length the desired password length
+     * @return the generated random password
+     */
     private String generateRandomPassword(int length) {
         Random rnd = new Random();
         StringBuilder sb = new StringBuilder(length);
@@ -842,6 +1013,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return sb.toString();
     }
 
+    /**
+     * Throws {@link PermissionDeniedException} if the caller is not an admin. Allows empty context
+     * (no access control).
+     *
+     * @param ctx the invocation context containing caller information
+     * @throws IllegalArgumentException if ctx is null or missing user ID
+     * @throws PermissionDeniedException if the caller is not an admin
+     */
     private void requireAdmin(InvocationContext ctx) {
         if (ctx == null) {
             throw new IllegalArgumentException("InvocationContext must not be null");
@@ -867,10 +1046,26 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Returns {@code true} if the caller's user ID matches the admin user's ID.
+     *
+     * @param ctx the invocation context containing caller information
+     * @return {@code true} if the caller is the admin user
+     */
     /*package*/ boolean isAdmin(InvocationContext ctx) {
         return ctx.getUserId() == adminUser.getId();
     }
 
+    /**
+     * Validates the old password via BCrypt and updates to the new password. The new password
+     * must be at least 8 characters, contain an uppercase letter and a digit.
+     *
+     * @param username      the username of the user
+     * @param oldPassword   the current plain-text password
+     * @param newPassword   the new plain-text password
+     * @throws IllegalStateException if the user does not exist
+     * @throws SecurityException if the current password is incorrect
+     */
     public void changePassword(String username, String oldPassword, String newPassword) {
         validatePassword(newPassword);
 
@@ -910,6 +1105,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Validates that a password meets complexity requirements: at least 8 characters, one uppercase
+     * letter, and one digit.
+     *
+     * @param password the password to validate
+     * @throws IllegalArgumentException if the password does not meet the requirements
+     */
     private static void validatePassword(String password) {
         if (password == null) {
             throw new IllegalArgumentException(
@@ -937,6 +1139,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     //sharing ===============================================================
+    /**
+     * Grants the specified permission on one or more graphs to one or more groups. Performs upsert
+     * on {@code graph_acl} entries. The caller must have at least the requested permission on each graph.
+     *
+     * @param graphUris    the URIs of the graphs to share
+     * @param groupUris    the URIs of the groups to grant permission to
+     * @param permission   the permission to grant
+     * @param ctx          the invocation context containing caller information
+     */
     @Override
     public void shareGraphs(
             Set<String> graphUris,
@@ -1157,6 +1368,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Revokes permission grants on graphs that were granted by the caller's primary group.
+     * Requires ADMIN permission on each graph. Cannot unshare oneself.
+     *
+     * @param graphUris    the URIs of the graphs to unshare
+     * @param groupUris    the URIs of the groups to revoke permission from
+     * @param ctx          the invocation context containing caller information
+     */
     @Override
     public void unshareGraphs(
             Set<String> graphUris,
@@ -1304,6 +1523,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Grants the specified permission on one or more resources to one or more groups. Performs upsert
+     * on {@code resource_acl} entries. The caller must have at least the requested permission on each resource.
+     *
+     * @param resourceUris the URIs of the resources to share
+     * @param groupUris    the URIs of the groups to grant permission to
+     * @param permission   the permission to grant
+     * @param ctx          the invocation context containing caller information
+     */
     @Override
     public void shareResources(
             Set<String> resourceUris,
@@ -1509,6 +1737,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Revokes permission grants on resources that were granted by the caller's primary group.
+     * Requires ADMIN permission on each resource. Cannot unshare oneself.
+     *
+     * @param resourceUris the URIs of the resources to unshare
+     * @param groupUris    the URIs of the groups to revoke permission from
+     * @param ctx          the invocation context containing caller information
+     */
     @Override
     public void unshareResources(
             Set<String> resourceUris,
@@ -1655,6 +1891,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     //list the permissions of the caller
+    /**
+     * Returns a map from resource URI to the caller's highest effective permission for each resource.
+     *
+     * @param resourceUris the URIs of the resources to query
+     * @param ctx          the invocation context containing caller information
+     * @return a map from resource URI to {@link Permission}
+     */
     public Map<String, Permission> listResourcePermissions(Set<String> resourceUris, InvocationContext ctx) {
 
         if (resourceUris == null || resourceUris.isEmpty()) {
@@ -1709,6 +1952,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Returns a map from graph URI to the caller's highest effective permission for each graph.
+     *
+     * @param graphUris the URIs of the graphs to query
+     * @param ctx       the invocation context containing caller information
+     * @return a map from graph URI to {@link Permission}
+     */
     public Map<String, Permission> listGraphPermissions(Set<String> graphUris, InvocationContext ctx) {
 
         if (graphUris == null || graphUris.isEmpty()) {
@@ -1763,6 +2013,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Returns a map from URI to a list of {@link PrincipalPermission} entries showing all principals
+     * (users/groups) that have access to each URI, sorted by permission descending then name ascending.
+     *
+     * @param uris        the URIs to query
+     * @param forGraphs   {@code true} if querying graph permissions, {@code false} for resource permissions
+     * @param ctx         the invocation context containing caller information
+     * @return a map from URI to a list of {@link PrincipalPermission}
+     */
     public Map<String, List<PrincipalPermission>> listPrincipalPermissions(
             Set<String> uris,
             boolean forGraphs,
@@ -1944,6 +2203,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
     //graph management =====================================================
     //just calls getGraph
+    /**
+     * Returns the {@link AticGraph} for the Jena default graph. Delegates to {@link #getGraph(Node, InvocationContext)}
+     * with {@link org.apache.jena.sparql.core.Quad#defaultGraphIRI}.
+     *
+     * @param ctx the invocation context containing caller information
+     * @return the default {@link AticGraph}
+     */
     @Override
     public AticGraph getDefaultGraph(InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
@@ -1952,6 +2218,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return getGraph(org.apache.jena.sparql.core.Quad.defaultGraphIRI, ctx);
     }
 
+    /**
+     * Returns an {@link AticGraph} for the given node. Creates the graph if it does not exist.
+     * Handles virtual graphs and the union graph. Performs a READ access control check.
+     *
+     * @param graphNode the graph node identifier
+     * @param ctx       the invocation context containing caller information
+     * @return the {@link AticGraph} for the given node
+     */
     //note: getGraph will create a graph if it does not exist
     //note: if Quad.unionGraph is used, getUnionGraph is called
     @Override
@@ -2092,6 +2366,12 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Returns a union graph over all named graphs the caller has permission to read.
+     *
+     * @param ctx the invocation context containing caller information
+     * @return the union {@link AticGraph}
+     */
     //reuses getUnionGraph(Iterator<Node> graphNodes)
     @Override
     public AticGraph getUnionGraph(InvocationContext ctx) {
@@ -2102,6 +2382,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return getUnionGraph(iter, ctx);
     }
 
+    /**
+     * Returns a union graph over the specified graph nodes, after validating the caller has READ
+     * permission on each.
+     *
+     * @param graphNodes an iterator of graph nodes to union
+     * @param ctx        the invocation context containing caller information
+     * @return the union {@link AticGraph}
+     */
     //note: getUnionGraph() is meant to be returning union of all visible graphs
     //therefore, getUnionGraph does not create graph if missing
     @Override
@@ -2188,11 +2476,25 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return sqliteAticGraph;
     }
 
+    /**
+     * Returns an iterator over all named graph URIs the caller can access.
+     *
+     * @param ctx the invocation context containing caller information
+     * @return an iterator over accessible graph URIs
+     */
     @Override
     public Iterator<Node> listGraphNodes(InvocationContext ctx) {
         return listGraphNodes(ctx, false);
     }
 
+    /**
+     * Returns an iterator over accessible graph URIs, optionally including the default graph.
+     * Applies READ permission filtering.
+     *
+     * @param ctx                 the invocation context containing caller information
+     * @param withDefaultGraph    whether to include the default graph in the result
+     * @return an iterator over accessible graph URIs
+     */
     private Iterator<Node> listGraphNodes(InvocationContext ctx, boolean withDefaultGraph) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
@@ -2255,6 +2557,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Returns {@code true} if the given graph exists and the caller has READ permission on it.
+     *
+     * @param graphNode the graph node identifier
+     * @param ctx       the invocation context containing caller information
+     * @return {@code true} if the graph exists and is accessible
+     */
     @Override
     public boolean containsGraph(Node graphNode, InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
@@ -2313,6 +2622,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Creates a new graph with the given name and transfers all triples from the source graph.
+     * The creator receives ADMIN permission.
+     *
+     * @param graphName  the URI of the graph to create
+     * @param graph      the source graph whose triples will be copied
+     * @param ctx        the invocation context containing caller information
+     */
     @Override
     public void addGraph(Node graphName, Graph graph, InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
@@ -2379,6 +2696,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Registers a virtual graph by resolving and invoking a factory method, then storing it
+     * in the database and in-memory map.
+     *
+     * @param graphName         the URI of the virtual graph to create
+     * @param factoryMethodPath the classpath path to the factory method (e.g., "com.example.Factory.createGraph")
+     * @param config            the configuration JSON for the virtual graph
+     * @param ctx               the invocation context containing caller information
+     */
     public void addVirtualGraph(Node graphName, String factoryMethodPath, JSONObject config, InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
@@ -2435,6 +2761,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Dynamically loads a virtual graph by resolving the factory method from its class path string
+     * and invoking it with the given configuration.
+     *
+     * @param graphUri          the URI of the virtual graph
+     * @param factoryMethodPath the classpath path to the factory method
+     * @param config            the configuration JSON for the virtual graph
+     * @return the loaded {@link AticVirtualGraph}
+     */
     private AticVirtualGraph loadVirtualGraph(String graphUri, String factoryMethodPath, JSONObject config) {
 
         Method factoryMethod;
@@ -2492,6 +2827,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Creates a new graph with an auto-generated URN and transfers all triples from the source graph.
+     * Returns the new graph's node.
+     *
+     * @param graph the source graph whose triples will be copied
+     * @param ctx   the invocation context containing caller information
+     * @return the node representing the new graph
+     */
     //generates a URI for the graph
     public Node addGraph(Graph graph, InvocationContext ctx) {
         Node graphNode = NodeFactory.createURI(createURN("graph"));
@@ -2499,6 +2842,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return graphNode;
     }
 
+    /**
+     * Deletes a graph and all its ACL entries. Clears stored triples for physical graphs or removes
+     * from memory for virtual graphs. Requires ADMIN permission. Cannot delete the default graph.
+     *
+     * @param graphName the URI of the graph to delete
+     * @param ctx       the invocation context containing caller information
+     */
     @Override
     public void removeGraph(Node graphName, InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
@@ -2615,6 +2965,17 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     //triple management ======================================================
+    /**
+     * Adds a single triple to the specified graph. If {@code g} is null, uses the default graph.
+     * Throws {@link org.apache.jena.shared.AddDeniedException} for union graphs. Delegates to
+     * {@link SqliteAticGraph#add(org.apache.jena.graph.Triple, InvocationContext)} for edit access control.
+     *
+     * @param g   the graph node (null for default graph)
+     * @param s   the subject node
+     * @param p   the predicate node
+     * @param o   the object node
+     * @param ctx the invocation context containing caller information
+     */
     @Override
     public void add(Node g, Node s, Node p, Node o, InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
@@ -2640,8 +3001,16 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         graph.add(Triple.create(s, p, o), ctx);
     }
 
-    /*
-        Delete a quad.
+    /**
+     * Deletes a specific triple from the specified graph. Throws {@link org.apache.jena.shared.DeleteDeniedException}
+     * for union graphs. Delegates to {@link SqliteAticGraph#delete(org.apache.jena.graph.Triple, InvocationContext)}
+     * for edit access control.
+     *
+     * @param g   the graph node (null for default graph)
+     * @param s   the subject node
+     * @param p   the predicate node
+     * @param o   the object node
+     * @param ctx the invocation context containing caller information
      */
     @Override
     public void delete(Node g, Node s, Node p, Node o, InvocationContext ctx) {
@@ -2668,6 +3037,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         graph.delete(Triple.create(s, p, o), ctx);
     }
 
+    /**
+     * Applies an {@link org.apache.jena.rdfpatch.RDFPatch} by iterating its changes and delegating
+     * each add/delete to the corresponding method.
+     *
+     * @param rdfPatch the RDF patch to apply
+     * @param ctx      the invocation context containing caller information
+     */
     public void apply(RDFPatch rdfPatch, InvocationContext ctx) {
         SqliteAticDatasetGraph dg = this;
 
@@ -2684,6 +3060,17 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         });
     }
 
+    /**
+     * Deletes all triples matching the given pattern. If {@code g} is {@link org.apache.jena.graph.Node#ANY},
+     * iterates over all accessible graphs. Delegates to {@link SqliteAticGraph#remove(Node, Node, Node, InvocationContext)}
+     * for bulk deletion with edit access control.
+     *
+     * @param g   the graph node (Node.ANY for all graphs)
+     * @param s   the subject node (Node.ANY for any subject)
+     * @param p   the predicate node (Node.ANY for any predicate)
+     * @param o   the object node (Node.ANY for any object)
+     * @param ctx the invocation context containing caller information
+     */
     /*
         Delete any quads matching the pattern.
      */
@@ -2723,6 +3110,16 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         graph.remove(s, p, o, ctx);
     }
 
+    /**
+     * Iterates over all quads matching the given pattern, including the default graph.
+     *
+     * @param g   the graph node (Node.ANY for all graphs)
+     * @param s   the subject node (Node.ANY for any subject)
+     * @param p   the predicate node (Node.ANY for any predicate)
+     * @param o   the object node (Node.ANY for any object)
+     * @param ctx the invocation context containing caller information
+     * @return an iterator over matching {@link Quad} objects
+     */
     /*
         Iterate over all quads in the dataset graph.
      */
@@ -2731,6 +3128,16 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return findInternal(g, s, p, o, true, ctx);
     }
 
+    /**
+     * Iterates over all quads matching the given pattern in named graphs only (excludes the default graph).
+     *
+     * @param g   the graph node (Node.ANY for all named graphs)
+     * @param s   the subject node (Node.ANY for any subject)
+     * @param p   the predicate node (Node.ANY for any predicate)
+     * @param o   the object node (Node.ANY for any object)
+     * @param ctx the invocation context containing caller information
+     * @return an iterator over matching {@link Quad} objects
+     */
     /*
         Find matching quads in the dataset in named graphs (NG) only
      */
@@ -2739,6 +3146,19 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return findInternal(g, s, p, o, false, ctx);
     }
 
+    /**
+     * Internal quad iteration implementation. Handles {@link org.apache.jena.graph.Node#ANY} graph
+     * by iterating over all accessible graphs, and single-graph queries by delegating to the graph's
+     * triple iterator.
+     *
+     * @param g                    the graph node
+     * @param s                    the subject node
+     * @param p                    the predicate node
+     * @param o                    the object node
+     * @param includeDefaultGraph  whether to include the default graph
+     * @param ctx                  the invocation context containing caller information
+     * @return an iterator over matching {@link Quad} objects
+     */
     private ExtendedIterator<Quad> findInternal(
             Node g,
             Node s,
@@ -2837,6 +3257,17 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         };
     }
 
+    /**
+     * Returns {@code true} if any graph contains the specified triple. For {@link org.apache.jena.graph.Node#ANY},
+     * short-circuits on the first match.
+     *
+     * @param g   the graph node (Node.ANY for all graphs)
+     * @param s   the subject node
+     * @param p   the predicate node
+     * @param o   the object node
+     * @param ctx the invocation context containing caller information
+     * @return {@code true} if the triple is found
+     */
     @Override
     public boolean contains(Node g, Node s, Node p, Node o, InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
@@ -2862,6 +3293,12 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return graph.contains(s, p, o, ctx);
     }
 
+    /**
+     * Clears all data: triples, resources, properties, graphs, and ACLs. Re-bootstraps the default graph.
+     * Requires ADMIN permission.
+     *
+     * @param ctx the invocation context containing caller information
+     */
     @Override
     public void clear(InvocationContext ctx) {
         requireAdmin(ctx);
@@ -2899,6 +3336,12 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Returns the total number of triples across all accessible graphs.
+     *
+     * @param ctx the invocation context containing caller information
+     * @return the total triple count
+     */
     @Override
     public long size(InvocationContext ctx) {
         long total = 0L;
@@ -2911,6 +3354,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return total;
     }
 
+    /**
+     * Converts {@code null} to {@link org.apache.jena.graph.Node#ANY} and auto-generated default graph
+     * nodes to {@link org.apache.jena.sparql.core.Quad#defaultGraphIRI}.
+     *
+     * @param g the graph node to normalize
+     * @return the normalized graph node
+     */
     //note: turns also g == null to Node.ANY
     private Node ensureDefaultGraphIRI(Node g) {
         if (g == null) {
@@ -2925,26 +3375,31 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
     //----------------------------------------------------------
     //delegate methods
+    /** Delegates to {@link #delete(Node, Node, Node, Node, InvocationContext)} using the quad's components. */
     @Override
     public void delete(Quad quad, InvocationContext ctx) {
         delete(quad.getGraph(), quad.getSubject(), quad.getPredicate(), quad.getObject(), ctx);
     }
 
+    /** Delegates to {@link #find(Node, Node, Node, Node, InvocationContext)} using the quad's components. */
     @Override
     public Iterator<Quad> find(Quad quad, InvocationContext ctx) {
         return find(quad.getGraph(), quad.getSubject(), quad.getPredicate(), quad.getObject(), ctx);
     }
 
+    /** Delegates to {@link #contains(Node, Node, Node, Node, InvocationContext)} using the quad's components. */
     @Override
     public boolean contains(Quad quad, InvocationContext ctx) {
         return contains(quad.getGraph(), quad.getSubject(), quad.getPredicate(), quad.getObject(), ctx);
     }
 
+    /** Delegates to {@link #add(Node, Node, Node, Node, InvocationContext)} using the quad's components. */
     @Override
     public void add(Quad quad, InvocationContext ctx) {
         add(quad.getGraph(), quad.getSubject(), quad.getPredicate(), quad.getObject(), ctx);
     }
 
+    /** Returns {@code true} if the total triple count across all graphs is zero. */
     @Override
     public boolean isEmpty(InvocationContext ctx) {
         return size(ctx) == 0;
@@ -2954,22 +3409,28 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     //dataset management
     //TODO implement prefixes: SqlitePrefixMap
     //private PrefixMapStd prefixMap = new PrefixMapStd();
+    /** Returns the {@link SqlitePrefixMap} instance managing RDF prefix mappings. */
     @Override
     public PrefixMap prefixes(InvocationContext ctx) {
         return sqlitePrefixMap;
     }
 
+    /** Throws {@link UnsupportedOperationException} — lock is not yet implemented. */
     @Override
     public Lock getLock() {
         //TODO implement getLock - is this even used?
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
+    /** Returns the Jena {@link Context} associated with this dataset graph. */
     @Override
     public Context getContext() {
         return context;
     }
 
+    /**
+     * Marks the dataset graph as closed and clears the virtual graph map.
+     */
     @Override
     public void close() {
         if (closed) {
@@ -2986,16 +3447,24 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         closed = true;
     }
 
+    /** Returns {@code true} if the dataset graph has been closed. */
     public boolean isClosed() {
         return closed;
     }
 
     //transaction ================================================
+    /** Returns {@code true} — transactions are supported. */
     @Override
     public boolean supportsTransactions() {
         return true;
     }
 
+    /**
+     * Begins a transaction: delegates to the database, starts the RDF patch emitter, clears blank
+     * node mapping, and begins on all cached graphs.
+     *
+     * @param type the transaction type (read or write)
+     */
     @Override
     public void begin(TxnType type) {
         db.begin(type);
@@ -3006,6 +3475,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    /**
+     * Promotes the current transaction mode (e.g., read to write). Delegates to the database and
+     * RDF patch emitter.
+     *
+     * @param mode the promotion mode
+     * @return {@code true} if the promotion succeeded
+     */
     @Override
     public boolean promote(Promote mode) {
         boolean p = db.promote(mode);
@@ -3013,6 +3489,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return p;
     }
 
+    /**
+     * Commits the transaction: commits all cached graphs, the database, and the RDF patch emitter.
+     */
     @Override
     public void commit() {
         for (SqliteAticGraph graph : graphMap.values()) {
@@ -3022,6 +3501,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         rdfPatchEmitter.commit();
     }
 
+    /**
+     * Aborts the transaction: aborts all cached graphs, the database, and the RDF patch emitter.
+     */
     @Override
     public void abort() {
         for (SqliteAticGraph graph : graphMap.values()) {
@@ -3031,6 +3513,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         rdfPatchEmitter.abort();
     }
 
+    /**
+     * Ends the current transaction: delegates to the database and RDF patch emitter, clears blank node mapping.
+     */
     @Override
     public void end() {
         db.end();
@@ -3038,16 +3523,19 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         bnode2uri.clear();
     }
 
+    /** Returns the current transaction mode (read/write) from the database. */
     @Override
     public ReadWrite transactionMode() {
         return db.transactionMode();
     }
 
+    /** Returns the current transaction type from the database. */
     @Override
     public TxnType transactionType() {
         return db.transactionType();
     }
 
+    /** Returns {@code true} if a transaction is currently active. */
     @Override
     public boolean isInTransaction() {
         return db.isInTransaction();
@@ -3055,10 +3543,20 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
     //=========================================================
     //rdf patch emitter
+    /**
+     * Registers an {@link RDFPatchListener} to receive RDF patch events.
+     *
+     * @param listener the listener to add
+     */
     public void addListener(RDFPatchListener listener) {
         rdfPatchEmitter.addListener(listener);
     }
 
+    /**
+     * Unregisters an {@link RDFPatchListener}.
+     *
+     * @param listener the listener to remove
+     */
     public void removeListener(RDFPatchListener listener) {
         rdfPatchEmitter.removeListener(listener);
     }
@@ -3066,24 +3564,41 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
     //==========================================================
     //getter
+    /** Returns the underlying {@link Database} instance. */
     /*package*/ Database getDatabase() {
         return db;
     }
 
+    /** Returns the blank-node-to-URI mapping used during the current transaction. */
     /*package*/ Map<Node, String> getBnode2uri() {
         return bnode2uri;
     }
 
+    /** Returns an unmodifiable view of the virtual graph map. */
     public Map<Node, AticVirtualGraph> getVirtualGraphMap() {
         return Collections.unmodifiableMap(virtualGraphMap);
     }
 
+    /** Returns the {@link RDFPatchEmitterTransactional} instance. */
     /*package*/ RDFPatchEmitterTransactional getRDFPatchEmitter() {
         return rdfPatchEmitter;
     }
 
     //==========================================================
     //extra
+    /**
+     * Generates LUBM benchmark data into a new graph using the UBA benchmark generator.
+     *
+     * @param graphName  the URI of the target graph
+     * @param univNum    the number of universities
+     * @param startIndex the starting index
+     * @param seed       the random seed
+     * @param names      whether to generate names
+     * @param docs       whether to generate documents
+     * @param bufferSize the buffer size
+     * @param batchSize  the batch size
+     * @param ctx        the invocation context containing caller information
+     */
     public void generateLUBMftGraph(Node graphName, int univNum, int startIndex, int seed, boolean names, boolean docs, int bufferSize, int batchSize, InvocationContext ctx) {
         addGraph(graphName, Graph.emptyGraph, ctx);
         SqliteAticGraph graph = (SqliteAticGraph) getGraph(graphName, ctx);
@@ -3096,6 +3611,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         generator.start(univNum, startIndex, seed, names ? 1 : 0, docs, "http://example.org/", writer);
     }
 
+    /**
+     * Parses and executes RML mapping code stored in the database, generates triples, writes them
+     * to the target graph, and records execution status (success, modification time, stack trace).
+     *
+     * @param rmlProjectGraphNode   the graph node containing the RML project
+     * @param rmlProjectResource    the resource identifying the RML project
+     * @param bufferSize            the buffer size for triple generation
+     * @param ctx                   the invocation context containing caller information
+     */
     public synchronized void runRML(Node rmlProjectGraphNode, Node rmlProjectResource, int bufferSize, InvocationContext ctx) {
 
         //TODO later from vocab class
