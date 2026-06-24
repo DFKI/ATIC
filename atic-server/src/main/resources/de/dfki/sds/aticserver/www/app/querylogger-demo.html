@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js"></script>
+        <script src="js/vue.global.prod.js"></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Query Logger Demo | Atic</title>
+    </head>
+    <body>
+        <div class="container mt-4" id="app">
+
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Query Logger</h2>
+
+                <div v-if="user">
+                    Logged in as <strong>{{ user.username }}</strong>
+                    <button class="btn btn-outline-secondary btn-sm ms-2"
+                            @click="postLogout">
+                        Logout
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    Query Logger Control
+                </div>
+
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="path" class="form-label">
+                            Log File Path
+                        </label>
+
+                        <input
+                            id="path"
+                            type="text"
+                            class="form-control"
+                            v-model="path"
+                            placeholder="/tmp/query.log">
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button
+                            class="btn btn-success"
+                            @click="postQueryLoggerEnable">
+                            <i class="fas fa-play"></i>
+                            Enable
+                        </button>
+
+                        <button
+                            class="btn btn-danger"
+                            @click="postQueryLoggerDisable">
+                            <i class="fas fa-stop"></i>
+                            Disable
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal" id="errorModal" tabindex="-1" ref="error_modal">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title fs-5">Error</h1>
+                            <button type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <div class="modal-body">
+                            <div class="alert alert-danger" role="alert">
+                                <span style="white-space: pre-wrap; word-break: break-word;">
+                                    {{ error }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button"
+                                    class="btn btn-secondary"
+                                    data-bs-dismiss="modal">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="row">
+            <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                &nbsp;
+                &copy; 2026
+                <a href="https://www.dfki.de/" target="_blank">
+                    <img src="img/dfki_Logo_digital_black.png" style="height: 12px;">
+                </a>
+            </div>
+        </div>
+
+        <script>
+        const {createApp} = Vue;
+
+        createApp({
+            data() {
+                return {
+                    loading: false,
+                    error: null,
+                    user: null,
+                    path: `./querylogger/${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`
+                };
+            },
+
+            created() {
+                axios.interceptors.response.use(
+                        response => response,
+                        error => {
+                            const errorMsg =
+                                    error.response?.data ||
+                                    error.message ||
+                                    "Unknown error";
+
+                            this.open_error_modal(errorMsg);
+                            return Promise.reject(error);
+                        }
+                );
+
+                this.getAuthMe();
+            },
+
+            methods: {
+
+                getAuthMe() {
+                    axios.get('/auth/me').then(response => {
+                        this.user = response.data;
+                    });
+                },
+
+                postLogout() {
+                    axios.post('/auth/logout').then(response => {
+                        window.location.href = response.data.redirect;
+                    });
+                },
+
+                postQueryLoggerEnable() {
+                    axios.post('/querylogger:enable', {
+                        path: this.path
+                    });
+                },
+
+                postQueryLoggerDisable() {
+                    axios.post('/querylogger:disable');
+                },
+
+                open_error_modal(msg) {
+                    this.error = msg;
+                    this.loading = false;
+
+                    const modalInstance =
+                            new window.bootstrap.Modal(this.$refs.error_modal);
+
+                    modalInstance.show();
+                }
+            }
+        }).mount("#app");
+        </script>
+    </body>
+</html>

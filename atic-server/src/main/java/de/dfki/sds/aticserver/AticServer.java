@@ -313,6 +313,9 @@ public class AticServer {
         app.delete("/graph/{uri}", this::deleteGraph);
         
         app.post("/rml/execution", this::postRmlExecution);
+        
+        app.post("/querylogger:enable", this::postQueryLoggerEnable);
+        app.post("/querylogger:disable", this::postQueryLoggerDisable);
 
         app.post("/upload", this::postUpload);
 
@@ -1261,6 +1264,21 @@ public class AticServer {
         }
 
         ctx.status(200).result("Upload successful");
+    }
+    
+    //-------------------------------------
+    //query logger
+    
+    private void postQueryLoggerEnable(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        JSONObject body = new JSONObject(ctx.body());
+        String path = body.getString("path");
+        datasetGraph.enableQueryLogger(path, ictx);
+    }
+    
+    private void postQueryLoggerDisable(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        datasetGraph.disableQueryLogger(ictx);
     }
 
     //---------------------------------------

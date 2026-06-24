@@ -31,8 +31,14 @@ public class QueryLoggerUnitTest {
     void setup(@org.junit.jupiter.api.io.TempDir Path tempDir) throws Exception {
         dataset = TL.createDatasetGraph(tempDir);
         
+        User adminUser = dataset.calculateRead(() -> {
+            return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
+        });
+
+        InvocationContext ctx = new InvocationContext.Builder().fromUser(adminUser).build();
+        
         Path queryLogFile = tempDir.resolve("query_log.db");
-        dataset.enableQueryLogger(queryLogFile.toString());
+        dataset.enableQueryLogger(queryLogFile.toString(), ctx);
         
         //System.out.println("query logger enabled: " + queryLogFile);
     }

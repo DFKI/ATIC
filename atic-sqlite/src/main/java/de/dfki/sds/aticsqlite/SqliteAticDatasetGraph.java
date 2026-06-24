@@ -432,14 +432,16 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      *
      * @param dbFilePath the path to the query log file
      */
-    public void enableQueryLogger(String dbFilePath) {
+    public void enableQueryLogger(String dbFilePath, InvocationContext ctx) {
+        requireAdmin(ctx);
         db.enableQueryLogger(dbFilePath);
     }
 
     /**
      * Disables the SQLite query logger.
      */
-    public void disableQueryLogger() {
+    public void disableQueryLogger(InvocationContext ctx) {
+        requireAdmin(ctx);
         db.disableQueryLogger();
     }
 

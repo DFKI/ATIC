@@ -1,5 +1,6 @@
 package de.dfki.sds.aticsqlite;
 
+import java.io.File;
 import java.sql.SQLException;
 import org.apache.jena.query.TxnType;
 import org.json.JSONArray;
@@ -107,6 +108,11 @@ public class QueryLogger {
     }
 
     public void enable(String dbFilePath) {
+        File f = new File(dbFilePath);
+        File parent = f.getParentFile();
+        if(parent != null) {
+            parent.mkdirs();
+        }
         DatabaseOptions options
                 = new DatabaseOptions.Builder(dbFilePath)
                         .build();
