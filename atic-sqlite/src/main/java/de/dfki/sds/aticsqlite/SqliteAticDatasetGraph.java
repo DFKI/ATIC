@@ -112,24 +112,25 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     /** The admin {@link User} object, loaded during bootstrap. */
     private User adminUser;
 
+    /** Dataset capabilities configuration (rdf-star support, etc.). */
+    private Capabilities capabilities;
+
     /**
-     * Creates a new {@code SqliteAticDatasetGraph} backed by the given SQLite database.
-     * Bootstraps tables, admin user, default graph, and virtual graphs.
-     *
-     * @param db the SQLite database to back this dataset graph
+     * Capabilities configuration for this dataset graph instance.
      */
+    public record Capabilities(boolean rdfStarEnabled) {
+        public static final Capabilities DEFAULT = new Capabilities(true);
+    }
+
     public SqliteAticDatasetGraph(Database db) {
         this(db, null);
     }
 
-    /**
-     * Creates a new {@code SqliteAticDatasetGraph} with an additional listener for RDF patch events.
-     * Bootstraps tables, admin user, default graph, and virtual graphs.
-     *
-     * @param db              the SQLite database to back this dataset graph
-     * @param mainListener    an {@link RDFPatchListener} to receive RDF patch events
-     */
     public SqliteAticDatasetGraph(Database db, RDFPatchListener mainListener) {
+        this(db, mainListener, Capabilities.DEFAULT);
+    }
+
+    public SqliteAticDatasetGraph(Database db, RDFPatchListener mainListener, Capabilities capabilities) {
         this.db = db;
         this.sqlitePrefixMap = new SqlitePrefixMap(this);
         this.context = new Context();
@@ -138,10 +139,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         this.bnode2uri = new HashMap<>();
         this.graphMap = new HashMap<>();
         this.rdfPatchEmitter = new RDFPatchEmitterTransactional();
+        this.capabilities = capabilities;
         if (mainListener != null) {
             this.rdfPatchEmitter.addListener(mainListener);
         }
         bootstrap();
+    }
+
+    public Capabilities getCapabilities() {
+        return capabilities;
     }
 
     //bootstrap ==============================================================================

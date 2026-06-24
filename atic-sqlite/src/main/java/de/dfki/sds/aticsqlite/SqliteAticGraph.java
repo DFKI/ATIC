@@ -82,7 +82,10 @@ public class SqliteAticGraph implements AticGraph {
 
     private Map<Integer, TransactionData> user2trans;
 
+    private final boolean rdfStarEnabled;
+
     public SqliteAticGraph(List<IdAndUri> idAndUris, SqliteAticDatasetGraph datasetGraph) {
+        this.rdfStarEnabled = datasetGraph.getCapabilities().rdfStarEnabled();
         if (idAndUris == null || idAndUris.isEmpty()) {
             throw new IllegalArgumentException("idAndUris must have at least one graph");
         }
@@ -1378,13 +1381,16 @@ public class SqliteAticGraph implements AticGraph {
     private class Joiner {
 
         boolean isSPL;
+        boolean rdfStarEnabled;
 
-        public Joiner(boolean isSPL) {
+        public Joiner(boolean isSPL, boolean rdfStarEnabled) {
             this.isSPL = isSPL;
+            this.rdfStarEnabled = rdfStarEnabled;
         }
 
         public void addPermColumns(StringBuilder sql) {
-            sql.append("""
+            if (rdfStarEnabled) {
+                sql.append("""
              -- ================= SUBJECT PERMISSION =================
             , CASE
                 -- normal resource
@@ -1399,20 +1405,27 @@ public class SqliteAticGraph implements AticGraph {
                     s_inner_spl.perm
             END AS s_perm
             """);
+            } else {
+                sql.append(", s_acl.perm AS s_perm\n");
+            }
 
             if (!isSPL) {
-                sql.append("""
-                -- ================= OBJECT PERMISSION =================
-                , CASE
-                    WHEN rspo_o.id IS NULL AND rspl_o.id IS NULL THEN o_acl.perm
+                if (rdfStarEnabled) {
+                    sql.append("""
+                    -- ================= OBJECT PERMISSION =================
+                    , CASE
+                        WHEN rspo_o.id IS NULL AND rspl_o.id IS NULL THEN o_acl.perm
 
-                    WHEN rspo_o.id IS NOT NULL THEN 
-                        MIN(o_inner_s.perm, o_inner_o.perm)
+                        WHEN rspo_o.id IS NOT NULL THEN 
+                            MIN(o_inner_s.perm, o_inner_o.perm)
 
-                    WHEN rspl_o.id IS NOT NULL THEN 
-                        o_inner_spl.perm
-                END AS o_perm
-                """);
+                        WHEN rspl_o.id IS NOT NULL THEN 
+                            o_inner_spl.perm
+                    END AS o_perm
+                    """);
+                } else {
+                    sql.append(", o_acl.perm AS o_perm\n");
+                }
             }
         }
 
@@ -1455,7 +1468,7 @@ public class SqliteAticGraph implements AticGraph {
                     -- expand SPL (object)
                     LEFT JOIN resource_uri ruri_opls ON ruri_opls.id = rspl_o.s
                     LEFT JOIN property pplo          ON pplo.id = rspl_o.p
-                       
+                        
             """);
             }
         }
@@ -1471,20 +1484,22 @@ public class SqliteAticGraph implements AticGraph {
                 """);
             }
 
-            sql.append("""
-            -- ================= SUBJECT INNER =================
-            LEFT JOIN acl s_inner_s ON s_inner_s.resource_id = rspo_s.s
-            LEFT JOIN acl s_inner_o ON s_inner_o.resource_id = rspo_s.o
-            LEFT JOIN acl s_inner_spl ON s_inner_spl.resource_id = rspl_s.s
-            """);
-
-            if (!isSPL) {
+            if (rdfStarEnabled) {
                 sql.append("""
-                -- ================= OBJECT INNER =================
-                LEFT JOIN acl o_inner_s ON o_inner_s.resource_id = rspo_o.s
-                LEFT JOIN acl o_inner_o ON o_inner_o.resource_id = rspo_o.o
-                LEFT JOIN acl o_inner_spl ON o_inner_spl.resource_id = rspl_o.s
+                -- ================= SUBJECT INNER =================
+                LEFT JOIN acl s_inner_s ON s_inner_s.resource_id = rspo_s.s
+                LEFT JOIN acl s_inner_o ON s_inner_o.resource_id = rspo_s.o
+                LEFT JOIN acl s_inner_spl ON s_inner_spl.resource_id = rspl_s.s
                 """);
+
+                if (!isSPL) {
+                    sql.append("""
+                    -- ================= OBJECT INNER =================
+                    LEFT JOIN acl o_inner_s ON o_inner_s.resource_id = rspo_o.s
+                    LEFT JOIN acl o_inner_o ON o_inner_o.resource_id = rspo_o.o
+                    LEFT JOIN acl o_inner_spl ON o_inner_spl.resource_id = rspl_o.s
+                    """);
+                }
             }
         }
     }
@@ -1871,6 +1886,7 @@ public class SqliteAticGraph implements AticGraph {
             boolean orderBy,
             boolean edit,
             boolean enableAC,
+            boolean rdfStarEnabled,
             int groups,
             int graphs
             ) {
@@ -1896,7 +1912,7 @@ public class SqliteAticGraph implements AticGraph {
         boolean enableAC = !datasetGraph.isAdmin(ctx);
         GraphFilter graphFilter = new GraphFilter(isSPL);
         GroupFilter groupFilter = new GroupFilter(ctx);
-        Joiner joiner = new Joiner(isSPL);
+        Joiner joiner = new Joiner(isSPL, rdfStarEnabled);
 
         QueryKey queryKey = new QueryKey(
                 method,
@@ -1926,6 +1942,7 @@ public class SqliteAticGraph implements AticGraph {
                 orderBy,
                 edit,
                 enableAC,
+                rdfStarEnabled,
                 ctx.getGroupIds().size(),
                 idAndUris.size()
         );
@@ -1939,18 +1956,26 @@ public class SqliteAticGraph implements AticGraph {
             // build SQL
             StringBuilder sql = new StringBuilder();
 
+            // Build SELECT clause - simplified when RDF-Star is disabled
+            String selectClause;
+            if (rdfStarEnabled) {
+                selectClause = prefixQuery;
+            } else {
+                selectClause = buildMinimalSelectClause(isSPL, prefixQuery);
+            }
+
             if (enableAC) {
                 groupFilter.appendClause(sql);
 
                 //special case: it also starts with "WITH" so it it just a comma we need to add
-                if (prefixQuery.trim().toLowerCase().startsWith("with")) {
-                    sql.append(", ").append(prefixQuery.substring("WITH".length(), prefixQuery.length()));
+                if (selectClause.trim().toLowerCase().startsWith("with")) {
+                    sql.append(", ").append(selectClause.substring("WITH".length(), selectClause.length()));
                 } else {
-                    sql.append(prefixQuery);
+                    sql.append(selectClause);
                 }
 
             } else {
-                sql.append(prefixQuery);
+                sql.append(selectClause);
             }
 
             if (enableAC) {
@@ -2172,122 +2197,161 @@ public class SqliteAticGraph implements AticGraph {
             throw new RuntimeException("Failed to read SPO triples", e);
         }
 
-        ResultSetTripleMapper spoMapper = rs -> {
+        ResultSetTripleMapper spoMapper;
+        if (rdfStarEnabled) {
+            spoMapper = rs -> {
 
-            // ================= SUBJECT =================
-            long sId = rs.getLong(1);
-            Node subj;
+                // ================= SUBJECT =================
+                long sId = rs.getLong(1);
+                Node subj;
 
-            String sUri = rs.getString(2);
+                String sUri = rs.getString(2);
 
-            // ---- URI / blank ----
-            if (sUri != null) {
-                boolean sBlank = rs.getBoolean(3);
-                subj = sBlank
-                        ? NodeFactory.createBlankNode(sUri)
-                        : NodeFactory.createURI(sUri);
-            } // ---- SPO triple ----
-            else if (rs.getObject(4) != null) {
+                // ---- URI / blank ----
+                if (sUri != null) {
+                    boolean sBlank = rs.getBoolean(3);
+                    subj = sBlank
+                            ? NodeFactory.createBlankNode(sUri)
+                            : NodeFactory.createURI(sUri);
+                } // ---- SPO triple ----
+                else if (rs.getObject(4) != null) {
 
-                Node rspo_s = NodeFactory.createURI(rs.getString(12));
-                Node rspo_p = NodeFactory.createURI(rs.getString(14));
-                Node rspo_o = NodeFactory.createURI(rs.getString(13));
+                    Node rspo_s = NodeFactory.createURI(rs.getString(12));
+                    Node rspo_p = NodeFactory.createURI(rs.getString(14));
+                    Node rspo_o = NodeFactory.createURI(rs.getString(13));
 
-                subj = NodeFactory.createTripleTerm(rspo_s, rspo_p, rspo_o);
-            } // ---- SPL triple ----
-            else if (rs.getObject(7) != null) {
+                    subj = NodeFactory.createTripleTerm(rspo_s, rspo_p, rspo_o);
+                } // ---- SPL triple ----
+                else if (rs.getObject(7) != null) {
 
-                Node rspl_s = NodeFactory.createURI(rs.getString(15));
-                Node rspl_p = NodeFactory.createURI(rs.getString(16));
+                    Node rspl_s = NodeFactory.createURI(rs.getString(15));
+                    Node rspl_p = NodeFactory.createURI(rs.getString(16));
 
-                String lex = rs.getString(9);
-                String lang = rs.getString(10);
-                String dt = rs.getString(11);
+                    String lex = rs.getString(9);
+                    String lang = rs.getString(10);
+                    String dt = rs.getString(11);
 
-                Node rspl_o;
-                if (lang != null && !lang.isEmpty()) {
-                    rspl_o = NodeFactory.createLiteralLang(lex, lang);
-                } else if (dt != null) {
-                    rspl_o = NodeFactory.createLiteralDT(lex, NodeFactory.getType(dt));
+                    Node rspl_o;
+                    if (lang != null && !lang.isEmpty()) {
+                        rspl_o = NodeFactory.createLiteralLang(lex, lang);
+                    } else if (dt != null) {
+                        rspl_o = NodeFactory.createLiteralDT(lex, NodeFactory.getType(dt));
+                    } else {
+                        rspl_o = NodeFactory.createLiteralString(lex);
+                    }
+
+                    subj = NodeFactory.createTripleTerm(rspl_s, rspl_p, rspl_o);
                 } else {
-                    rspl_o = NodeFactory.createLiteralString(lex);
+                    throw new IllegalStateException("Unknown subject type id=" + sId);
                 }
 
-                subj = NodeFactory.createTripleTerm(rspl_s, rspl_p, rspl_o);
-            } else {
-                throw new IllegalStateException("Unknown subject type id=" + sId);
-            }
+                // ================= PREDICATE =================
+                long pId = rs.getLong(17);
+                Node pred = NodeFactory.createURI(rs.getString(18));
 
-            // ================= PREDICATE =================
-            long pId = rs.getLong(17);
-            Node pred = NodeFactory.createURI(rs.getString(18));
+                // ================= OBJECT =================
+                long oId = rs.getLong(19);
+                Node obj;
 
-            // ================= OBJECT =================
-            long oId = rs.getLong(19);
-            Node obj;
+                String oUri = rs.getString(20);
 
-            String oUri = rs.getString(20);
+                // ---- URI / blank ----
+                if (oUri != null) {
+                    boolean oBlank = rs.getBoolean(21);
+                    obj = oBlank
+                            ? NodeFactory.createBlankNode(oUri)
+                            : NodeFactory.createURI(oUri);
+                } // ---- SPO triple ----
+                else if (rs.getObject(22) != null) {
 
-            // ---- URI / blank ----
-            if (oUri != null) {
-                boolean oBlank = rs.getBoolean(21);
-                obj = oBlank
-                        ? NodeFactory.createBlankNode(oUri)
-                        : NodeFactory.createURI(oUri);
-            } // ---- SPO triple ----
-            else if (rs.getObject(22) != null) {
+                    Node rspo_s = NodeFactory.createURI(rs.getString(30));
+                    Node rspo_p = NodeFactory.createURI(rs.getString(32));
+                    Node rspo_o = NodeFactory.createURI(rs.getString(31));
 
-                Node rspo_s = NodeFactory.createURI(rs.getString(30));
-                Node rspo_p = NodeFactory.createURI(rs.getString(32));
-                Node rspo_o = NodeFactory.createURI(rs.getString(31));
+                    obj = NodeFactory.createTripleTerm(rspo_s, rspo_p, rspo_o);
+                } // ---- SPL triple ----
+                else if (rs.getObject(25) != null) {
 
-                obj = NodeFactory.createTripleTerm(rspo_s, rspo_p, rspo_o);
-            } // ---- SPL triple ----
-            else if (rs.getObject(25) != null) {
+                    Node rspl_s = NodeFactory.createURI(rs.getString(33));
+                    Node rspl_p = NodeFactory.createURI(rs.getString(34));
 
-                Node rspl_s = NodeFactory.createURI(rs.getString(33));
-                Node rspl_p = NodeFactory.createURI(rs.getString(34));
+                    String lex = rs.getString(27);
+                    String lang = rs.getString(28);
+                    String dt = rs.getString(29);
 
-                String lex = rs.getString(27);
-                String lang = rs.getString(28);
-                String dt = rs.getString(29);
+                    Node rspl_o;
+                    if (lang != null && !lang.isEmpty()) {
+                        rspl_o = NodeFactory.createLiteralLang(lex, lang);
+                    } else if (dt != null) {
+                        rspl_o = NodeFactory.createLiteralDT(lex, NodeFactory.getType(dt));
+                    } else {
+                        rspl_o = NodeFactory.createLiteralString(lex);
+                    }
 
-                Node rspl_o;
-                if (lang != null && !lang.isEmpty()) {
-                    rspl_o = NodeFactory.createLiteralLang(lex, lang);
-                } else if (dt != null) {
-                    rspl_o = NodeFactory.createLiteralDT(lex, NodeFactory.getType(dt));
+                    obj = NodeFactory.createTripleTerm(rspl_s, rspl_p, rspl_o);
                 } else {
-                    rspl_o = NodeFactory.createLiteralString(lex);
+                    throw new IllegalStateException("Unknown object type id=" + oId);
                 }
 
-                obj = NodeFactory.createTripleTerm(rspl_s, rspl_p, rspl_o);
-            } else {
-                throw new IllegalStateException("Unknown object type id=" + oId);
-            }
+                // ================= DEBUG / CONSUMER =================
+                if (dbTripleConsumer != null && !subj.isTripleTerm() && !obj.isTripleTerm()) {
+                    dbTripleConsumer.accept(
+                            IdAndUriTriple.create(
+                                    IdAndUri.create(sId, subj),
+                                    IdAndUri.create(pId, pred),
+                                    IdAndUriOrLiteral.create(oId, obj),
+                                    rs.getDouble(35),
+                                    rs.getDouble(36)
+                            )
+                    );
+                }
 
-            // ================= DEBUG / CONSUMER =================
-            //TODO IdAndUri is designed to save URI but if subj or obj is triple term this is not possible
-            if (dbTripleConsumer != null && !subj.isTripleTerm() && !obj.isTripleTerm()) {
-                dbTripleConsumer.accept(
-                        IdAndUriTriple.create(
-                                IdAndUri.create(sId, subj),
-                                IdAndUri.create(pId, pred),
-                                IdAndUriOrLiteral.create(oId, obj),
-                                rs.getDouble(35),
-                                rs.getDouble(36)
-                        )
-                );
-            }
+                AticTriple t = AticTriple.create(subj, pred, obj, rs.getDouble(35), rs.getDouble(36));
 
-            AticTriple t = AticTriple.create(subj, pred, obj, rs.getDouble(35), rs.getDouble(36));
+                if (PRINT_FIND) {
+                    System.out.println("findSPO(" + s + ", " + p + ", " + o + ", " + idAndUris + "): " + t);
+                }
 
-            if (PRINT_FIND) {
-                System.out.println("findSPO(" + s + ", " + p + ", " + o + ", " + idAndUris + "): " + t);
-            }
+                return t;
+            };
+        } else {
+            spoMapper = rs -> {
+                // Simplified column indices (10 columns when RDF-star disabled):
+                // 1=s_id, 2=s_uri, 3=s_is_blank, 4=p_id, 5=p_uri, 6=o_id, 7=o_uri, 8=o_is_blank, 9=confidence, 10=applicability
+                long sId = rs.getLong(1);
+                Node subj = rs.getString(2) != null
+                        ? (rs.getBoolean(3) ? NodeFactory.createBlankNode(rs.getString(2)) : NodeFactory.createURI(rs.getString(2)))
+                        : null;
 
-            return t;
-        };
+                long pId = rs.getLong(4);
+                Node pred = NodeFactory.createURI(rs.getString(5));
+
+                long oId = rs.getLong(6);
+                Node obj = rs.getString(7) != null
+                        ? (rs.getBoolean(8) ? NodeFactory.createBlankNode(rs.getString(7)) : NodeFactory.createURI(rs.getString(7)))
+                        : null;
+
+                if (dbTripleConsumer != null && subj != null && obj != null) {
+                    dbTripleConsumer.accept(
+                            IdAndUriTriple.create(
+                                    IdAndUri.create(sId, subj),
+                                    IdAndUri.create(pId, pred),
+                                    IdAndUriOrLiteral.create(oId, obj),
+                                    rs.getDouble(9),
+                                    rs.getDouble(10)
+                            )
+                    );
+                }
+
+                AticTriple t = AticTriple.create(subj, pred, obj, rs.getDouble(9), rs.getDouble(10));
+
+                if (PRINT_FIND) {
+                    System.out.println("findSPO(" + s + ", " + p + ", " + o + ", " + idAndUris + "): " + t);
+                }
+
+                return t;
+            };
+        }
 
         return new PagedTripleIterator(txnResultSet, limit, datasetGraph, spoMapper);
     }
@@ -2405,93 +2469,141 @@ public class SqliteAticGraph implements AticGraph {
             throw new RuntimeException("Failed to read triples", e);
         }
 
-        ResultSetTripleMapper splMapper = rs -> {
+        ResultSetTripleMapper splMapper;
+        if (rdfStarEnabled) {
+            splMapper = rs -> {
 
-            long sId = rs.getLong(1);
+                long sId = rs.getLong(1);
 
-            Node subj;
+                Node subj;
 
-            // -------- CASE 1: URI / BLANK --------
-            String sUri = rs.getString(2);
+                // -------- CASE 1: URI / BLANK --------
+                String sUri = rs.getString(2);
 
-            if (sUri != null) {
-                boolean sBlank = rs.getBoolean(3);
+                if (sUri != null) {
+                    boolean sBlank = rs.getBoolean(3);
 
-                subj = sBlank
-                        ? NodeFactory.createBlankNode(sUri)
-                        : NodeFactory.createURI(sUri);
-            } // -------- CASE 2: SPO triple --------
-            else if (rs.getObject(4) != null) {
+                    subj = sBlank
+                            ? NodeFactory.createBlankNode(sUri)
+                            : NodeFactory.createURI(sUri);
+                } // -------- CASE 2: SPO triple --------
+                else if (rs.getObject(4) != null) {
 
-                Node rspo_s = NodeFactory.createURI(rs.getString(12));
-                Node rspo_p = NodeFactory.createURI(rs.getString(14));
-                Node rspo_o = NodeFactory.createURI(rs.getString(13));
+                    Node rspo_s = NodeFactory.createURI(rs.getString(12));
+                    Node rspo_p = NodeFactory.createURI(rs.getString(14));
+                    Node rspo_o = NodeFactory.createURI(rs.getString(13));
 
-                subj = NodeFactory.createTripleTerm(rspo_s, rspo_p, rspo_o);
-            } // -------- CASE 3: SPL triple --------
-            else if (rs.getObject(7) != null) {
+                    subj = NodeFactory.createTripleTerm(rspo_s, rspo_p, rspo_o);
+                } // -------- CASE 3: SPL triple --------
+                else if (rs.getObject(7) != null) {
 
-                Node rspl_s = NodeFactory.createURI(rs.getString(15));
-                Node rspl_p = NodeFactory.createURI(rs.getString(16));
+                    Node rspl_s = NodeFactory.createURI(rs.getString(15));
+                    Node rspl_p = NodeFactory.createURI(rs.getString(16));
 
-                String lex = rs.getString(9);
-                String lang = rs.getString(10);
-                String dt = rs.getString(11);
+                    String lex = rs.getString(9);
+                    String lang = rs.getString(10);
+                    String dt = rs.getString(11);
 
-                Node rspl_o;
-                if (lang != null && !lang.isEmpty()) {
-                    rspl_o = NodeFactory.createLiteralLang(lex, lang);
-                } else if (dt != null) {
-                    rspl_o = NodeFactory.createLiteralDT(lex, NodeFactory.getType(dt));
+                    Node rspl_o;
+                    if (lang != null && !lang.isEmpty()) {
+                        rspl_o = NodeFactory.createLiteralLang(lex, lang);
+                    } else if (dt != null) {
+                        rspl_o = NodeFactory.createLiteralDT(lex, NodeFactory.getType(dt));
+                    } else {
+                        rspl_o = NodeFactory.createLiteralString(lex);
+                    }
+
+                    subj = NodeFactory.createTripleTerm(rspl_s, rspl_p, rspl_o);
                 } else {
-                    rspl_o = NodeFactory.createLiteralString(lex);
+                    throw new IllegalStateException("Unknown subject type for id=" + sId);
                 }
 
-                subj = NodeFactory.createTripleTerm(rspl_s, rspl_p, rspl_o);
-            } else {
-                throw new IllegalStateException("Unknown subject type for id=" + sId);
-            }
+                // -------- Predicate --------
+                long pId = rs.getLong(17);
+                Node pred = NodeFactory.createURI(rs.getString(18));
 
-            // -------- Predicate --------
-            long pId = rs.getLong(17);
-            Node pred = NodeFactory.createURI(rs.getString(18));
+                // -------- Object (literal from splg) --------
+                String lex = rs.getString(19);
+                String lang = rs.getString(20);
+                String dt = rs.getString(21);
 
-            // -------- Object (literal from splg) --------
-            String lex = rs.getString(19);
-            String lang = rs.getString(20);
-            String dt = rs.getString(21);
+                Node obj;
 
-            Node obj;
+                if (!lang.isEmpty()) {
+                    obj = NodeFactory.createLiteralLang(lex, lang);
+                } else if (dt != null) {
+                    obj = NodeFactory.createLiteralDT(lex, NodeFactory.getType(dt));
+                } else {
+                    obj = NodeFactory.createLiteralString(lex);
+                }
 
-            if (!lang.isEmpty()) {
-                obj = NodeFactory.createLiteralLang(lex, lang);
-            } else if (dt != null) {
-                obj = NodeFactory.createLiteralDT(lex, NodeFactory.getType(dt));
-            } else {
-                obj = NodeFactory.createLiteralString(lex);
-            }
+                //TODO IdAndUri is designed to save URI but if subj is triple term this is not possible
+                if (dbTripleConsumer != null && !subj.isTripleTerm()) {
+                    dbTripleConsumer.accept(
+                            IdAndUriTriple.create(
+                                    IdAndUri.create(sId, subj),
+                                    IdAndUri.create(pId, pred),
+                                    IdAndUriOrLiteral.create(obj),
+                                    rs.getDouble(22),
+                                    rs.getDouble(23)
+                            )
+                    );
+                }
 
-            //TODO IdAndUri is designed to save URI but if subj is triple term this is not possible
-            if (dbTripleConsumer != null && !subj.isTripleTerm()) {
-                dbTripleConsumer.accept(
-                        IdAndUriTriple.create(
-                                IdAndUri.create(sId, subj),
-                                IdAndUri.create(pId, pred),
-                                IdAndUriOrLiteral.create(obj),
-                                rs.getDouble(22),
-                                rs.getDouble(23)
-                        )
-                );
-            }
+                AticTriple t = AticTriple.create(subj, pred, obj, rs.getDouble(22), rs.getDouble(23));
 
-            AticTriple t = AticTriple.create(subj, pred, obj, rs.getDouble(22), rs.getDouble(23));
+                if (PRINT_FIND) {
+                    System.out.println("findSPL(" + s + ", " + p + ", " + o + "," + idAndUris + "): " + t);
+                }
 
-            if (PRINT_FIND) {
-                System.out.println("findSPL(" + s + ", " + p + ", " + o + "," + idAndUris + "): " + t);
-            }
+                return t;
+            };
+        } else {
+            splMapper = rs -> {
+                // Simplified column indices (10 columns when RDF-star disabled):
+                // 1=s_id, 2=s_uri, 3=s_is_blank, 4=p_id, 5=p_uri, 6=lex, 7=lang, 8=dt, 9=confidence, 10=applicability
+                long sId = rs.getLong(1);
+                Node subj = rs.getString(2) != null
+                        ? (rs.getBoolean(3) ? NodeFactory.createBlankNode(rs.getString(2)) : NodeFactory.createURI(rs.getString(2)))
+                        : null;
 
-            return t;
-        };
+                long pId = rs.getLong(4);
+                Node pred = NodeFactory.createURI(rs.getString(5));
+
+                String lex = rs.getString(6);
+                String lang = rs.getString(7);
+                String dt = rs.getString(8);
+
+                Node obj;
+                if (!lang.isEmpty()) {
+                    obj = NodeFactory.createLiteralLang(lex, lang);
+                } else if (dt != null) {
+                    obj = NodeFactory.createLiteralDT(lex, NodeFactory.getType(dt));
+                } else {
+                    obj = NodeFactory.createLiteralString(lex);
+                }
+
+                if (dbTripleConsumer != null && !subj.isTripleTerm()) {
+                    dbTripleConsumer.accept(
+                            IdAndUriTriple.create(
+                                    IdAndUri.create(sId, subj),
+                                    IdAndUri.create(pId, pred),
+                                    IdAndUriOrLiteral.create(obj),
+                                    rs.getDouble(9),
+                                    rs.getDouble(10)
+                            )
+                    );
+                }
+
+                AticTriple t = AticTriple.create(subj, pred, obj, rs.getDouble(9), rs.getDouble(10));
+
+                if (PRINT_FIND) {
+                    System.out.println("findSPL(" + s + ", " + p + ", " + o + "," + idAndUris + "): " + t);
+                }
+
+                return t;
+            };
+        }
 
         return new PagedTripleIterator(txnResultSet, limit, datasetGraph, splMapper);
     }
@@ -2939,6 +3051,71 @@ public class SqliteAticGraph implements AticGraph {
     }
 
     //getter & setter =======================================
+
+    /**
+     * Builds a minimal SELECT clause without RDF-star columns.
+     * Used when rdfStarEnabled is false to avoid materializing triple expansion columns.
+     * The column indices match the mapper in findSPO/findSPL.
+     */
+    private String buildMinimalSelectClause(boolean isSPL, String originalPrefixQuery) {
+        // If the prefixQuery is not a full column list (e.g., EXISTS, COUNT, WITH), return as-is
+        String trimmed = originalPrefixQuery.trim();
+        if (!trimmed.startsWith("SELECT") || trimmed.contains("EXISTS") || trimmed.contains("COUNT")) {
+            return originalPrefixQuery;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT ");
+        if (idAndUris.size() > 1) {
+            sb.append("DISTINCT ");
+        }
+        sb.append("\n");
+
+        if (isSPL) {
+            sb.append("""
+                -- ================= SUBJECT (1-3) =================
+                rs.id   AS s_id,
+                ruri_s.uri AS s_uri,
+                ruri_s.is_blank AS s_is_blank,
+
+                -- ================= PREDICATE (17-18) =================
+                pp.id  AS p_id,
+                pp.uri AS p_uri,
+
+                -- ================= OBJECT: literal from splg (19-21) =================
+                splg.lex,
+                splg.lang,
+                splg.dt,
+
+                -- ================= METADATA (22-23) =================
+                splg.confidence,
+                splg.applicability
+                """);
+        } else {
+            sb.append("""
+                -- ================= SUBJECT (1-3) =================
+                rs.id   AS s_id,
+                ruri_s.uri AS s_uri,
+                ruri_s.is_blank AS s_is_blank,
+
+                -- ================= PREDICATE (17-18) =================
+                pp.id  AS p_id,
+                pp.uri AS p_uri,
+
+                -- ================= OBJECT (19-21) =================
+                ro.id   AS o_id,
+                ruri_o.uri AS o_uri,
+                ruri_o.is_blank AS o_is_blank,
+
+                -- ================= METADATA (35-36) =================
+                spog.confidence,
+                spog.applicability
+                """);
+        }
+
+        return sb.toString();
+    }
+
     public static int getDefaultBufferSize() {
         return defaultBufferSize;
     }
