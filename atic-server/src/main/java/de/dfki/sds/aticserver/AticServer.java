@@ -137,7 +137,7 @@ public class AticServer {
                         .build();
         Database database = new DatabaseLongLivedConnection(options);
 
-        datasetGraph = new SqliteAticDatasetGraph(database, rdfPatchWriter);
+        datasetGraph = new SqliteAticDatasetGraph(database, rdfPatchWriter, new SqliteAticDatasetGraph.Capabilities(config.isRdfStarEnabled()));
     }
 
     private void initFolders() {

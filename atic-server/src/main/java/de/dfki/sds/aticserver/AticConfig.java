@@ -66,6 +66,9 @@ PREFIX ex: <http://example.org/>
     @Config(value = "rdfpatch.rotationinterval", description = "RDFPatch rotation interval in seconds")
     long rdfpatchRotationinterval = 60 * 60 * 24;
     
+    @Config(value = "rdf-star", description = "Enable RDF-Star support")
+    boolean rdfStarEnabled = true;
+    
     public int getPort() {
         return port;
     }
@@ -128,6 +131,10 @@ PREFIX ex: <http://example.org/>
     
     public long getRdfpatchRotationinterval() {
         return rdfpatchRotationinterval;
+    }
+
+    public boolean isRdfStarEnabled() {
+        return rdfStarEnabled;
     }
     
 }
