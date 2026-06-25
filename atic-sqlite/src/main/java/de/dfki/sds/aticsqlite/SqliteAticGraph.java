@@ -1444,46 +1444,55 @@ public class SqliteAticGraph implements AticGraph {
         }
 
         /**
-         * Generates a scalar subquery for the permission of a triple term's inner resources.
-         * For SPO: checks MIN(permission of s, permission of o)
-         * For SPL: checks permission of s
+         * Generates a SQL expression for the effective subject permission.
+         * For RDF-star: uses triple-term logic (MIN of inner resource permissions).
+         * For non-RDF-star: simple scalar subquery on rs.id.
          */
-        private String tripleTermPermSubquery(String groupIds, boolean isSubject) {
-            String sAlias = isSubject ? "rspl_s" : "rspl_o";
-            String oAlias = isSubject ? "rspo_s" : "rspo_o";
+        public String buildSubjectPermissionExpr(String groupPlaceholders) {
+            if (rdfStarEnabled) {
+                return """
+                    CASE
+                        WHEN rspo_s.id IS NOT NULL THEN
+                            COALESCE((SELECT MIN(s_inner.permission, o_inner.permission) FROM resource_acl s_inner, resource_acl o_inner
+                             WHERE s_inner.resource_id = rspo_s.s AND s_inner.group_id IN ( %s )
+                             AND o_inner.resource_id = rspo_s.o AND o_inner.group_id IN ( %s )), 0)
+                        WHEN rspl_s.id IS NOT NULL THEN
+                            COALESCE((SELECT MAX(a.permission) FROM resource_acl a
+                             WHERE a.resource_id = rspl_s.s AND a.group_id IN ( %s )), 0)
+                        ELSE
+                            COALESCE((SELECT MAX(a.permission) FROM resource_acl a
+                             WHERE a.resource_id = rs.id AND a.group_id IN ( %s )), 0)
+                    END
+                    """.formatted(groupPlaceholders, groupPlaceholders, groupPlaceholders, groupPlaceholders);
+            } else {
+                return "COALESCE((SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = rs.id AND a.group_id IN ( " + groupPlaceholders + " )), 0)";
+            }
+        }
 
-            // SPO triple: MIN(s_inner, o_inner)
-            String spoSubquery = String.format(
-                "(SELECT MIN(%s_inner_s.perm, %s_inner_o.perm) FROM resource_acl %s_inner_s, resource_acl %s_inner_o " +
-                "WHERE %s_inner_s.resource_id = %s.s AND %s_inner_s.group_id IN (%%s) " +
-                "AND %s_inner_o.resource_id = %s.o AND %s_inner_o.group_id IN (%%s))",
-                isSubject ? "s" : "o",
-                isSubject ? "s" : "o",
-                isSubject ? "s" : "o",
-                isSubject ? "s" : "o",
-                isSubject ? "s" : "o",
-                oAlias,
-                isSubject ? "s" : "o",
-                isSubject ? "o" : "o",
-                oAlias,
-                isSubject ? "o" : "o"
-            );
-
-            // SPL triple: permission of s
-            String splSubquery = String.format(
-                "(SELECT MAX(a.permission) FROM resource_acl a " +
-                "WHERE a.resource_id = %s.s AND a.group_id IN (%%s))",
-                sAlias
-            );
-
-            // CASE: if SPO triple, use MIN(s,o); if SPL triple, use s
-            return String.format(
-                "CASE WHEN %s.id IS NOT NULL THEN %s WHEN %s.id IS NOT NULL THEN %s END",
-                oAlias,
-                spoSubquery.formatted(groupIds, groupIds),
-                sAlias,
-                splSubquery.formatted(groupIds)
-            );
+        /**
+         * Generates a SQL expression for the effective object permission.
+         * For RDF-star: uses triple-term logic (MIN of inner resource permissions).
+         * For non-RDF-star: simple scalar subquery on ro.id.
+         */
+        public String buildObjectPermissionExpr(String groupPlaceholders) {
+            if (rdfStarEnabled) {
+                return """
+                    CASE
+                        WHEN rspo_o.id IS NOT NULL THEN
+                            COALESCE((SELECT MIN(s_inner.permission, o_inner.permission) FROM resource_acl s_inner, resource_acl o_inner
+                             WHERE s_inner.resource_id = rspo_o.s AND s_inner.group_id IN ( %s )
+                             AND o_inner.resource_id = rspo_o.o AND o_inner.group_id IN ( %s )), 0)
+                        WHEN rspl_o.id IS NOT NULL THEN
+                            COALESCE((SELECT MAX(a.permission) FROM resource_acl a
+                             WHERE a.resource_id = rspl_o.s AND a.group_id IN ( %s )), 0)
+                        ELSE
+                            COALESCE((SELECT MAX(a.permission) FROM resource_acl a
+                             WHERE a.resource_id = ro.id AND a.group_id IN ( %s )), 0)
+                    END
+                    """.formatted(groupPlaceholders, groupPlaceholders, groupPlaceholders, groupPlaceholders);
+            } else {
+                return "COALESCE((SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = ro.id AND a.group_id IN ( " + groupPlaceholders + " )), 0)";
+            }
         }
 
         public void addJoinClause(StringBuilder sql) {
@@ -1495,38 +1504,51 @@ public class SqliteAticGraph implements AticGraph {
             if (!isSPL) {
                 sql.append("JOIN resource ro ON ").append(tableName).append(".o = ro.id\n");
             }
-            sql.append("""
-                    -- ================= SUBJECT =================
-                    LEFT JOIN resource_uri ruri_s ON ruri_s.id = rs.id
-                    LEFT JOIN resource_spo rspo_s ON rspo_s.id = rs.id
-                    LEFT JOIN resource_spl rspl_s ON rspl_s.id = rs.id
-
-                    -- expand SPO (subject)
-                    LEFT JOIN resource_uri ruri_ss ON ruri_ss.id = rspo_s.s
-                    LEFT JOIN resource_uri ruri_so ON ruri_so.id = rspo_s.o
-                    LEFT JOIN property pps        ON pps.id = rspo_s.p
-
-                    -- expand SPL (subject)
-                    LEFT JOIN resource_uri ruri_spls ON ruri_spls.id = rspl_s.s
-                    LEFT JOIN property ppls          ON ppls.id = rspl_s.p
-            """);
-            if (!isSPL) {
+            if (rdfStarEnabled) {
                 sql.append("""
-                    -- ================= OBJECT =================
-                    LEFT JOIN resource_uri ruri_o ON ruri_o.id = ro.id
-                    LEFT JOIN resource_spo rspo_o ON rspo_o.id = ro.id
-                    LEFT JOIN resource_spl rspl_o ON rspl_o.id = ro.id
+                        -- ================= SUBJECT =================
+                        LEFT JOIN resource_uri ruri_s ON ruri_s.id = rs.id
+                        LEFT JOIN resource_spo rspo_s ON rspo_s.id = rs.id
+                        LEFT JOIN resource_spl rspl_s ON rspl_s.id = rs.id
 
-                    -- expand SPO (object)
-                    LEFT JOIN resource_uri ruri_os ON ruri_os.id = rspo_o.s
-                    LEFT JOIN resource_uri ruri_oo ON ruri_oo.id = rspo_o.o
-                    LEFT JOIN property ppo         ON ppo.id = rspo_o.p
+                        -- expand SPO (subject)
+                        LEFT JOIN resource_uri ruri_ss ON ruri_ss.id = rspo_s.s
+                        LEFT JOIN resource_uri ruri_so ON ruri_so.id = rspo_s.o
+                        LEFT JOIN property pps        ON pps.id = rspo_s.p
 
-                    -- expand SPL (object)
-                    LEFT JOIN resource_uri ruri_opls ON ruri_opls.id = rspl_o.s
-                    LEFT JOIN property pplo          ON pplo.id = rspl_o.p
-                        
-            """);
+                        -- expand SPL (subject)
+                        LEFT JOIN resource_uri ruri_spls ON ruri_spls.id = rspl_s.s
+                        LEFT JOIN property ppls          ON ppls.id = rspl_s.p
+                """);
+                if (!isSPL) {
+                    sql.append("""
+                        -- ================= OBJECT =================
+                        LEFT JOIN resource_uri ruri_o ON ruri_o.id = ro.id
+                        LEFT JOIN resource_spo rspo_o ON rspo_o.id = ro.id
+                        LEFT JOIN resource_spl rspl_o ON rspl_o.id = ro.id
+
+                        -- expand SPO (object)
+                        LEFT JOIN resource_uri ruri_os ON ruri_os.id = rspo_o.s
+                        LEFT JOIN resource_uri ruri_oo ON ruri_oo.id = rspo_o.o
+                        LEFT JOIN property ppo         ON ppo.id = rspo_o.p
+
+                        -- expand SPL (object)
+                        LEFT JOIN resource_uri ruri_opls ON ruri_opls.id = rspl_o.s
+                        LEFT JOIN property pplo          ON pplo.id = rspl_o.p
+
+                    """);
+                }
+            } else {
+                sql.append("""
+                        -- ================= SUBJECT =================
+                        LEFT JOIN resource_uri ruri_s ON ruri_s.id = rs.id
+                """);
+                if (!isSPL) {
+                    sql.append("""
+                        -- ================= OBJECT =================
+                        LEFT JOIN resource_uri ruri_o ON ruri_o.id = ro.id
+                    """);
+                }
             }
         }
 
@@ -2033,6 +2055,9 @@ public class SqliteAticGraph implements AticGraph {
                 String sPermSubquery = "(SELECT COALESCE(MAX(a.permission), 0) FROM resource_acl a WHERE a.resource_id = rs.id AND a.group_id IN ( " + gid + " ))";
                 String oPermSubquery = "(SELECT COALESCE(MAX(a.permission), 0) FROM resource_acl a WHERE a.resource_id = ro.id AND a.group_id IN ( " + gid + " ))";
 
+                //String sPermSubquery = joiner.buildSubjectPermissionExpr(gid);
+                //String oPermSubquery = joiner.buildObjectPermissionExpr(gid);
+                
                 if (isSPL) {
                     sql.append("AND ").append(sPermSubquery).append(" >= ").append((edit ? Permission.EDIT : Permission.READ).getCode()).append(" ");
 
