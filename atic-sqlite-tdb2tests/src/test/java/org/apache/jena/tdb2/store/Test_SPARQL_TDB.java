@@ -20,6 +20,7 @@ package org.apache.jena.tdb2.store;
 
 import de.dfki.sds.aticsqlite.AticFactory;
 import java.io.File;
+import java.util.UUID;
 import org.apache.jena.atlas.lib.StrUtils;
 import org.apache.jena.dboe.base.file.Location;
 import org.apache.jena.graph.Graph;
@@ -174,8 +175,10 @@ public class Test_SPARQL_TDB
 
     @Test public void sparql_txn_2()
     {
-        Dataset dataset1 = create(Location.mem("foo"));
-        Dataset dataset2 = create(Location.mem("foo"));
+        String location = UUID.randomUUID().toString();
+
+        Dataset dataset1 = create(Location.mem(location));
+        Dataset dataset2 = create(Location.mem(location));
 
         Txn.executeWrite(dataset1, ()->{
             update(dataset1, "INSERT DATA { <x:s> <x:p> <x:o> }");

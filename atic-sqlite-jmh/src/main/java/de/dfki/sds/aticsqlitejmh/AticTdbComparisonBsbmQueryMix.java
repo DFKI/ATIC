@@ -61,13 +61,16 @@ public class AticTdbComparisonBsbmQueryMix {
     
     @Param({"ATIC", "TDB2"}) //"TDB2-InMemory"
     private String storeType;
+    
+    @Param({"Admin", "User"})
+    private String userType;
 
     private DatasetGraph datasetGraph;
     private Graph defaultGraph;
 
     private Path bsbmFile;
 
-    private InvocationContext adminCtx;
+    private InvocationContext userCtx;
 
     private TestDriver testDriver;
 
@@ -78,18 +81,32 @@ public class AticTdbComparisonBsbmQueryMix {
 
         //low level atic
         datasetGraph = (SqliteAticDatasetGraph) dataset.asDatasetGraph();
-
-        //set to admin
-        User adminUser = datasetGraph.calculateRead(() -> {
-            return ((SqliteAticDatasetGraph) datasetGraph).getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
-        });
-        adminCtx = new InvocationContext.Builder().fromUser(adminUser).build();
+        
+        if(userType.equals("Admin")) {
+            //set to admin
+            User adminUser = datasetGraph.calculateRead(() -> {
+                return ((SqliteAticDatasetGraph) datasetGraph).getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
+            });
+            userCtx = new InvocationContext.Builder().fromUser(adminUser).build();
+        } else {
+            
+            String username = "jdoe";
+            
+            datasetGraph.executeWrite(() -> {
+                ((SqliteAticDatasetGraph) datasetGraph).addUser("John", "Doe", "john.doe@example.org", username, InvocationContext.EMPTY);
+            });
+            
+            User johnUser = datasetGraph.calculateRead(() -> {
+                return ((SqliteAticDatasetGraph) datasetGraph).getUser(username, InvocationContext.EMPTY);
+            });
+            userCtx = new InvocationContext.Builder().fromUser(johnUser).build();
+        }
 
         defaultGraph = datasetGraph.calculateRead(() -> {
-            return (SqliteAticGraph) ((SqliteAticDatasetGraph) datasetGraph).getDefaultGraph(adminCtx);
+            return (SqliteAticGraph) ((SqliteAticDatasetGraph) datasetGraph).getDefaultGraph(userCtx);
         });
 
-        adminCtx.transferContext(datasetGraph.getContext());
+        userCtx.transferContext(datasetGraph.getContext());
         
         //BSBM 200 has 75_550 triples
         //BSBM 2000 has 725_305 triples
