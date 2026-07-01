@@ -30,6 +30,7 @@ public class BootstrapUnitTest {
                 "resource",
                 "resource_uri",
                 "resource_acl",
+                "resource_acl_effective",
                 "resource_spo",
                 "resource_spl",
                 "property",
