@@ -7,28 +7,38 @@
         "name": "idx_property",
         "sql": "CREATE INDEX IF NOT EXISTS idx_property ON property(uri, id);"
     },
+    
     {
         "name": "idx_gspo",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_gspl ON splg(g, s, p, lex);"
+        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_gspl ON splg(g, p);"
     },
     {
         "name": "idx_gpos",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_gpls ON splg(g, p, lex, s);"
+        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_gpls ON splg(g, lex);"
     },
     {
         "name": "idx_gosp",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_glsp ON splg(g, lex, s, p);"
+        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_glsp ON splg(g, s, lex);"
     },
     {
-        "name": "idx_g_spo",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_gspo ON spog(g, s, p, o);"
+        "name": "idx_gosp",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_glsp ON splg(g, p, lex);"
+    },
+    
+    {
+        "name": "idx_spog_gp",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_gp ON spog(g, p);"
     },
     {
-        "name": "idx_g_pos",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_gpos ON spog(g, p, o, s);"
+        "name": "idx_spog_go",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_go ON spog(g, o);"
     },
     {
-        "name": "idx_g_osp",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_gosp ON spog(g, o, s, p);"
+        "name": "idx_spog_so",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_so ON spog(g, s, o);"
+    },
+    {
+        "name": "idx_spog_po",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_po ON spog(g, p, o);"
     }
 ]

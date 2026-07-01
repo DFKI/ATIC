@@ -212,8 +212,6 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         bootstrapSparqlFunctions();
 
-        //TODO later consider indices
-        /*
         this.executeWrite(() -> {
             try {
                 bootstrapIndices();
@@ -221,7 +219,6 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 throw new RuntimeException("Failed to bootstrap indices", ex);
             }
         });
-         */
     }
 
     /**
@@ -397,7 +394,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         for (int i = 0; i < arr.length(); i++) {
             JSONObject idx = arr.getJSONObject(i);
             String sql = idx.getString("sql");
-            db.write(sql);  // execute index creation
+            db.write(sql);
         }
     }
 

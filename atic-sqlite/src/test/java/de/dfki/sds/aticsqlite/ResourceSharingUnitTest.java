@@ -784,7 +784,7 @@ public class ResourceSharingUnitTest {
             );
         });
 
-        Util.dumpAclState(dataset, "after alice shared read to phoenix");
+        //Util.dumpAclState(dataset, "after alice shared read to phoenix");
         
         // ---------------------------------------
         // 4) Bob reads → sees triple

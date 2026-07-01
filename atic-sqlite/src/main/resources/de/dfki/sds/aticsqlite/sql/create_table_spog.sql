@@ -22,5 +22,5 @@ CREATE TABLE IF NOT EXISTS spog (
     FOREIGN KEY (g) REFERENCES graph(id),
     FOREIGN KEY (creator) REFERENCES user(id),
 
-    UNIQUE (s, p, o, g)
+    UNIQUE (g, s, p, o)
 );

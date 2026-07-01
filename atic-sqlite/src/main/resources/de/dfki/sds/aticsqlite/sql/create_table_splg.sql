@@ -24,5 +24,5 @@ CREATE TABLE IF NOT EXISTS splg (
     FOREIGN KEY (g) REFERENCES graph(id),
     FOREIGN KEY (creator) REFERENCES user(id),
 
-    UNIQUE (s, p, lex, lang, dt, g)
+    UNIQUE (g, s, p, lex, lang, dt)
 );
