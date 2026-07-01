@@ -12,3 +12,4 @@ nbactions.xml
 /atic-server/target/
 /atic-sqlite-tdb2tests/target/
 /atic-sqlite-jmh/target/
+*.versionsBackup
