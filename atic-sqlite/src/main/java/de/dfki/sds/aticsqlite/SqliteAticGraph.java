@@ -156,7 +156,7 @@ public class SqliteAticGraph implements AticGraph {
 
         boolean enableAC;
         InvocationContext ctx;
-        
+
         boolean graphPermissionChecked = false;
 
         public TransactionData(InvocationContext ctx) {
@@ -178,7 +178,7 @@ public class SqliteAticGraph implements AticGraph {
 
         public void flush() {
             //check once because of performance
-            if(!graphPermissionChecked) {
+            if (!graphPermissionChecked) {
                 try {
                     checkGraphPermission(Permission.EDIT, datasetGraph.getDatabase(), ctx);
                 } catch (SQLException ex) {
@@ -1321,6 +1321,41 @@ public class SqliteAticGraph implements AticGraph {
         remove(Node.ANY, Node.ANY, Node.ANY, ctx);
     }
 
+    private record QueryKey(
+            String method,
+            boolean subjId,
+            boolean subjTripleS,
+            boolean subjTripleP,
+            boolean subjTripleO,
+            boolean subjTripleLex,
+            boolean subjTripleLang,
+            boolean subjTripleDt,
+            boolean subjIsTriple,
+            boolean predId,
+            boolean objId,
+            boolean objTripleS,
+            boolean objTripleP,
+            boolean objTripleO,
+            boolean objTripleLex,
+            boolean objTripleLang,
+            boolean objTripleDt,
+            boolean objIsTriple,
+            boolean litLex,
+            boolean litLang,
+            boolean litDt,
+            boolean isSPL,
+            boolean hasLimit,
+            boolean hasOffset,
+            boolean orderBy,
+            boolean edit,
+            boolean enableAC,
+            boolean rdfStarEnabled,
+            int groups,
+            int graphs
+            ) {
+
+    }
+
     private class GraphFilter {
 
         List<Long> graphIds;
@@ -1348,214 +1383,15 @@ public class SqliteAticGraph implements AticGraph {
         }
 
     }
-
-    private class GroupFilter {
-
-        Set<Integer> groups;
-        String groupPlaceholders;
-
-        public GroupFilter(InvocationContext ctx) {
-            groups = ctx.getGroupIds();
-            groupPlaceholders = groups.stream()
-                    .map(g -> "?")
-                    .collect(Collectors.joining(","));
-        }
-
-        public void appendClause(StringBuilder sql) {
-            // No longer emits WITH acl CTE.
-            // Permissions are now checked via correlated scalar subqueries in addPermColumns().
-            // This avoids scanning the entire resource_acl table upfront.
-        }
-
-        public void addParams(List<Object> params) {
-            groups.forEach(params::add);
-        }
-
-        public String getGroupPlaceholders() {
-            return groupPlaceholders;
-        }
-
-        public Set<Integer> getGroups() {
-            return groups;
-        }
-
-    }
-
-    private class Joiner {
+    
+    private class JoinerV2 {
 
         boolean isSPL;
         boolean rdfStarEnabled;
 
-        public Joiner(boolean isSPL, boolean rdfStarEnabled) {
+        public JoinerV2(boolean isSPL, boolean rdfStarEnabled) {
             this.isSPL = isSPL;
             this.rdfStarEnabled = rdfStarEnabled;
-        }
-
-        /**
-         * Appends EXISTS-based permission check to the WHERE clause.
-         * Uses EXISTS (SELECT 1 ... AND permission >= ?) so SQLite stops at first match.
-         * Parameters are appended to whereParams in SQL placeholder order.
-         */
-        private void appendExistsPermCheck(Set<Integer> groups, StringBuilder whereSql, List<Object> whereParams, int permLevel, String resourceIdExpr) {
-            whereSql.append("EXISTS (SELECT 1 FROM resource_acl a WHERE a.resource_id = ").append(resourceIdExpr).append(" AND a.group_id IN (");
-            int idx = 0;
-            for (Integer g : groups) {
-                if (idx > 0) whereSql.append(",");
-                whereSql.append("?");
-                whereParams.add(g);
-                idx++;
-            }
-            whereSql.append(") AND a.permission >= ").append(permLevel).append(")");
-        }
-
-        /**
-         * Generates a SQL expression for the effective subject permission.
-         * For RDF-star triple terms: uses ACL propagation from inner resources.
-         * For non-RDF-star: simple scalar subquery on rs.id.
-         * Populates params with group filter values for each placeholder.
-         */
-        public String buildSubjectPermissionExpr(Set<Integer> groups, List<Object> params) {
-            if (groups.isEmpty()) {
-                return "0";
-            }
-            String gp = String.join(",", Collections.nCopies(groups.size(), "?"));
-            if (rdfStarEnabled) {
-                String sql = "(SELECT COALESCE("
-                    + "CASE WHEN rspo_s.id IS NOT NULL THEN "
-                    + "MIN(COALESCE((SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = rspo_s.s AND a.group_id IN (%s)),0),"
-                    + "      COALESCE((SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = rspo_s.o AND a.group_id IN (%s)),0)) "
-                    + "WHEN rspl_s.id IS NOT NULL THEN "
-                    + "COALESCE((SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = rspl_s.s AND a.group_id IN (%s)),0) "
-                    + "ELSE "
-                    + "(SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = rs.id AND a.group_id IN (%s)) "
-                    + "END, 0))";
-                String result = sql.formatted(gp, gp, gp, gp);
-                for (int i = 0; i < 4; i++) {
-                    for (Integer g : groups) {
-                        params.add(g);
-                    }
-                }
-                return result;
-            } else {
-                for (Integer g : groups) {
-                    params.add(g);
-                }
-                return "(SELECT COALESCE(MAX(a.permission), 0) FROM resource_acl a WHERE a.resource_id = rs.id AND a.group_id IN ( " + gp + " ))";
-            }
-        }
-
-        /**
-         * Generates a SQL expression for the effective object permission.
-         * For RDF-star triple terms: uses ACL propagation from inner resources.
-         * For non-RDF-star: simple scalar subquery on ro.id.
-         * Populates params with group filter values for each placeholder.
-         */
-        public String buildObjectPermissionExpr(Set<Integer> groups, List<Object> params) {
-            if (groups.isEmpty()) {
-                return "0";
-            }
-            String gp = String.join(",", Collections.nCopies(groups.size(), "?"));
-            if (rdfStarEnabled) {
-                String sql = "(SELECT COALESCE("
-                    + "CASE WHEN rspo_o.id IS NOT NULL THEN "
-                    + "MIN(COALESCE((SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = rspo_o.s AND a.group_id IN (%s)),0),"
-                    + "      COALESCE((SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = rspo_o.o AND a.group_id IN (%s)),0)) "
-                    + "WHEN rspl_o.id IS NOT NULL THEN "
-                    + "COALESCE((SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = rspl_o.s AND a.group_id IN (%s)),0) "
-                    + "ELSE "
-                    + "(SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = ro.id AND a.group_id IN (%s)) "
-                    + "END, 0))";
-                String result = sql.formatted(gp, gp, gp, gp);
-                for (int i = 0; i < 4; i++) {
-                    for (Integer g : groups) {
-                        params.add(g);
-                    }
-                }
-                return result;
-            } else {
-                for (Integer g : groups) {
-                    params.add(g);
-                }
-                return "(SELECT COALESCE(MAX(a.permission), 0) FROM resource_acl a WHERE a.resource_id = ro.id AND a.group_id IN ( " + gp + " ))";
-            }
-        }
-
-        /**
-          * Builds a single effective permission expression and adds it to WHERE.
-          * For RDF-star: checks ACL on the triple term resource itself (where ACL entries are created).
-          * For non-RDF-star: simple scalar subquery on the resource.
-          * Compares the effective permission against requiredPerm.
-          */
-         public void addPermColumns(Set<Integer> groups, StringBuilder whereSql, List<Object> whereParams, int requiredPerm, boolean edit) {
-             String effectivePerm;
-
-             if (rdfStarEnabled) {
-                 if (!isSPL) {
-                     // SPO: MIN(subject triple term ACL, object triple term ACL)
-                     String sPerm = buildSubjectPermissionExpr(groups, whereParams);
-                     String oPerm = buildObjectPermissionExpr(groups, whereParams);
-                     effectivePerm = "MIN(" + sPerm + ", " + oPerm + ")";
-                 } else {
-                     // SPL: subject triple term ACL only
-                     effectivePerm = buildSubjectPermissionExpr(groups, whereParams);
-                 }
-             } else {
-                 effectivePerm = buildSubjectPermissionExpr(groups, whereParams);
-             }
-
-             whereSql.append("AND (").append(effectivePerm).append(" >= ").append(requiredPerm).append(") ");
-         }
-
-        /**
-         * Generates a SQL expression for the effective subject permission.
-         * For RDF-star: uses triple-term logic (MIN of inner resource permissions).
-         * For non-RDF-star: simple scalar subquery on rs.id.
-         */
-        public String buildSubjectPermissionExpr(String groupPlaceholders) {
-            if (rdfStarEnabled) {
-                return """
-                    CASE
-                        WHEN rspo_s.id IS NOT NULL THEN
-                            COALESCE((SELECT MIN(s_inner.permission, o_inner.permission) FROM resource_acl s_inner, resource_acl o_inner
-                             WHERE s_inner.resource_id = rspo_s.s AND s_inner.group_id IN ( %s )
-                             AND o_inner.resource_id = rspo_s.o AND o_inner.group_id IN ( %s )), 0)
-                        WHEN rspl_s.id IS NOT NULL THEN
-                            COALESCE((SELECT MAX(a.permission) FROM resource_acl a
-                             WHERE a.resource_id = rspl_s.s AND a.group_id IN ( %s )), 0)
-                        ELSE
-                            COALESCE((SELECT MAX(a.permission) FROM resource_acl a
-                             WHERE a.resource_id = rs.id AND a.group_id IN ( %s )), 0)
-                    END
-                    """.formatted(groupPlaceholders, groupPlaceholders, groupPlaceholders, groupPlaceholders);
-            } else {
-                return "COALESCE((SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = rs.id AND a.group_id IN ( " + groupPlaceholders + " )), 0)";
-            }
-        }
-
-        /**
-         * Generates a SQL expression for the effective object permission.
-         * For RDF-star: uses triple-term logic (MIN of inner resource permissions).
-         * For non-RDF-star: simple scalar subquery on ro.id.
-         */
-        public String buildObjectPermissionExpr(String groupPlaceholders) {
-            if (rdfStarEnabled) {
-                return """
-                    CASE
-                        WHEN rspo_o.id IS NOT NULL THEN
-                            COALESCE((SELECT MIN(s_inner.permission, o_inner.permission) FROM resource_acl s_inner, resource_acl o_inner
-                             WHERE s_inner.resource_id = rspo_o.s AND s_inner.group_id IN ( %s )
-                             AND o_inner.resource_id = rspo_o.o AND o_inner.group_id IN ( %s )), 0)
-                        WHEN rspl_o.id IS NOT NULL THEN
-                            COALESCE((SELECT MAX(a.permission) FROM resource_acl a
-                             WHERE a.resource_id = rspl_o.s AND a.group_id IN ( %s )), 0)
-                        ELSE
-                            COALESCE((SELECT MAX(a.permission) FROM resource_acl a
-                             WHERE a.resource_id = ro.id AND a.group_id IN ( %s )), 0)
-                    END
-                    """.formatted(groupPlaceholders, groupPlaceholders, groupPlaceholders, groupPlaceholders);
-            } else {
-                return "COALESCE((SELECT MAX(a.permission) FROM resource_acl a WHERE a.resource_id = ro.id AND a.group_id IN ( " + groupPlaceholders + " )), 0)";
-            }
         }
 
         public void addJoinClause(StringBuilder sql) {
@@ -1615,9 +1451,148 @@ public class SqliteAticGraph implements AticGraph {
             }
         }
 
-        public void addACLClause(StringBuilder sql) {
-            // No ACL LEFT JOINs needed - permissions come from scalar subqueries in addPermColumns()
-            // The resource_spo/resource_spl LEFT JOINs in addJoinClause() are still needed for triple term detection
+        /**
+         * Adds JOINs for resource_acl_effective (per-user projection). Each alias represents a different RDF-star expansion node.
+         */
+        public void addAclJoins(StringBuilder sql) {
+
+            sql.append("\n-- ====================== ACL JOINS ===========================\n");
+
+            // ================= SUBJECT =================
+            sql.append("""
+            LEFT JOIN resource_acl_effective ae_rs
+              ON ae_rs.resource_id = rs.id
+             AND ae_rs.user_id = ?
+        """);
+
+            // SPO subject expansion
+            sql.append("""
+            LEFT JOIN resource_acl_effective ae_rspo_ss
+              ON ae_rspo_ss.resource_id = rspo_s.s
+             AND ae_rspo_ss.user_id = ?
+
+            LEFT JOIN resource_acl_effective ae_rspo_so
+              ON ae_rspo_so.resource_id = rspo_s.o
+             AND ae_rspo_so.user_id = ?
+        """);
+
+            // SPL subject expansion
+            sql.append("""
+            LEFT JOIN resource_acl_effective ae_rspl_s
+              ON ae_rspl_s.resource_id = rspl_s.s
+             AND ae_rspl_s.user_id = ?
+        """);
+
+            // ================= OBJECT =================
+            if (!isSPL) {
+                sql.append("""
+            LEFT JOIN resource_acl_effective ae_ro
+              ON ae_ro.resource_id = ro.id
+             AND ae_ro.user_id = ?
+        """);
+
+                // SPO object expansion
+                sql.append("""
+            LEFT JOIN resource_acl_effective ae_rspo_os
+              ON ae_rspo_os.resource_id = rspo_o.s
+             AND ae_rspo_os.user_id = ?
+
+            LEFT JOIN resource_acl_effective ae_rspo_oo
+              ON ae_rspo_oo.resource_id = rspo_o.o
+             AND ae_rspo_oo.user_id = ?
+        """);
+
+                // SPL object expansion
+                sql.append("""
+            LEFT JOIN resource_acl_effective ae_rspl_o
+              ON ae_rspl_o.resource_id = rspl_o.s
+             AND ae_rspl_o.user_id = ?
+        """);
+            }
+        }
+
+        public void addAclParams(List<Object> params, Integer userId) {
+            for (int i = 0; i < (isSPL ? 4 : 8); i++) {
+                params.add(userId);
+            }
+        }
+
+        /**
+         * SUBJECT permission expression (JOIN-based)
+         */
+        private String buildSubjectPermissionExpr() {
+
+            if (rdfStarEnabled) {
+                return """
+                CASE
+                    WHEN rspo_s.id IS NOT NULL THEN
+                        MIN(
+                            COALESCE(ae_rspo_ss.permission, 0),
+                            COALESCE(ae_rspo_so.permission, 0)
+                        )
+
+                    WHEN rspl_s.id IS NOT NULL THEN
+                        COALESCE(ae_rspl_s.permission, 0)
+
+                    ELSE
+                        COALESCE(ae_rs.permission, 0)
+                END
+            """;
+            }
+
+            return "COALESCE(ae_rs.permission, 0)";
+        }
+
+        /**
+         * OBJECT permission expression (JOIN-based)
+         */
+        private String buildObjectPermissionExpr() {
+
+            if (isSPL) {
+                return "0";
+            }
+
+            if (rdfStarEnabled) {
+                return """
+                CASE
+                    WHEN rspo_o.id IS NOT NULL THEN
+                        MIN(
+                            COALESCE(ae_rspo_os.permission, 0),
+                            COALESCE(ae_rspo_oo.permission, 0)
+                        )
+
+                    WHEN rspl_o.id IS NOT NULL THEN
+                        COALESCE(ae_rspl_o.permission, 0)
+
+                    ELSE
+                        COALESCE(ae_ro.permission, 0)
+                END
+            """;
+            }
+
+            return "COALESCE(ae_ro.permission, 0)";
+        }
+
+        /**
+         * Final WHERE permission check
+         */
+        public void addPermClause(
+                StringBuilder whereSql
+        ) {
+
+            String subjectPerm = buildSubjectPermissionExpr();
+            String objectPerm = buildObjectPermissionExpr();
+
+            String effective;
+
+            if (isSPL) {
+                effective = subjectPerm;
+            } else {
+                effective = "MIN(" + subjectPerm + ", " + objectPerm + ")";
+            }
+
+            whereSql.append("\n-- ================ ACL WHERE ================\n");
+            whereSql.append(" AND (").append(effective).append(" >= ? ) ");
         }
     }
 
@@ -1975,41 +1950,6 @@ public class SqliteAticGraph implements AticGraph {
 
     }
 
-    private record QueryKey(
-            String method,
-            boolean subjId,
-            boolean subjTripleS,
-            boolean subjTripleP,
-            boolean subjTripleO,
-            boolean subjTripleLex,
-            boolean subjTripleLang,
-            boolean subjTripleDt,
-            boolean subjIsTriple,
-            boolean predId,
-            boolean objId,
-            boolean objTripleS,
-            boolean objTripleP,
-            boolean objTripleO,
-            boolean objTripleLex,
-            boolean objTripleLang,
-            boolean objTripleDt,
-            boolean objIsTriple,
-            boolean litLex,
-            boolean litLang,
-            boolean litDt,
-            boolean isSPL,
-            boolean hasLimit,
-            boolean hasOffset,
-            boolean orderBy,
-            boolean edit,
-            boolean enableAC,
-            boolean rdfStarEnabled,
-            int groups,
-            int graphs
-            ) {
-
-    }
-
     //used in find, contains and size
     private QueryWithParams buildQuery(String method, boolean isSPL, String prefixQuery, String postfixQuery, Node s, Node p, Node o,
             Integer limit,
@@ -2028,8 +1968,9 @@ public class SqliteAticGraph implements AticGraph {
 
         boolean enableAC = !datasetGraph.isAdmin(ctx);
         GraphFilter graphFilter = new GraphFilter(isSPL);
-        GroupFilter groupFilter = new GroupFilter(ctx);
-        Joiner joiner = new Joiner(isSPL, rdfStarEnabled);
+        //GroupFilter groupFilter = new GroupFilter(ctx);
+        //Joiner joiner = new Joiner(isSPL, rdfStarEnabled);
+        JoinerV2 joinerV2 = new JoinerV2(isSPL, rdfStarEnabled);
 
         QueryKey queryKey = new QueryKey(
                 method,
@@ -2085,7 +2026,7 @@ public class SqliteAticGraph implements AticGraph {
             }
 
             if (enableAC) {
-                groupFilter.appendClause(sql);
+                //groupFilter.appendClause(sql);
 
                 //special case: it also starts with "WITH" so it it just a comma we need to add
                 if (sql.length() > 0 && selectClause.trim().toLowerCase().startsWith("with")) {
@@ -2102,24 +2043,24 @@ public class SqliteAticGraph implements AticGraph {
 
             sql.append("FROM ").append(tableName).append("\n");
 
-            joiner.addJoinClause(sql);
+            joinerV2.addJoinClause(sql);
 
             if (enableAC) {
-                joiner.addACLClause(sql);
+                joinerV2.addAclJoins(sql);
             }
-            sql.append("WHERE  ").append(graphFilter.graphClause).append(" ");
 
+            //WHERE part
+            sql.append("WHERE  ");
+
+            //e.g. spog.g = 2
+            sql.append(graphFilter.graphClause).append(" ");
+
+            //e.g. AND spog.s = 336
             resolver.appendClauses(sql);
 
-            // 1. Graph clause params (WHERE clause appears next)
-            params.addAll(graphFilter.graphIds);
-
-            // 2. Resolver params (WHERE clause appears next)
-            resolver.addParams(params);
-
+            //e.g. AND MIN( ...
             if (enableAC) {
-                int requiredPerm = edit ? Permission.REFER.getCode() : Permission.READ.getCode();
-                joiner.addPermColumns(groupFilter.getGroups(), sql, params, requiredPerm, edit);
+                joinerV2.addPermClause(sql);
             }
 
             // deterministic ordering for pagination
@@ -2140,14 +2081,25 @@ public class SqliteAticGraph implements AticGraph {
             sqlString = sql.toString();
 
             queryCache.put(queryKey, sqlString);
-        } else {
-            // SQL was cached - still need to build params in correct order
-            params.addAll(graphFilter.graphIds);
-            resolver.addParams(params);
-            if (enableAC) {
-                int requiredPerm = edit ? Permission.REFER.getCode() : Permission.READ.getCode();
-                joiner.addPermColumns(groupFilter.getGroups(), new StringBuilder(), params, requiredPerm, edit);
-            }
+        }
+
+        //==================================================
+        //params (for cached and not cached queries)
+        // 1. user id in join for resource_acl_effective
+        if (enableAC) {
+            joinerV2.addAclParams(params, ctx.getUserId());
+        }
+
+        // 1. Graph clause params (WHERE clause appears next)
+        params.addAll(graphFilter.graphIds);
+
+        // 2. Resolver params (WHERE clause appears next)
+        resolver.addParams(params);
+
+        if (enableAC) {
+            //for the where part: >= ?
+            int requiredPerm = edit ? Permission.REFER.getCode() : Permission.READ.getCode();
+            params.add(requiredPerm);
         }
 
         if (limit != null) {
@@ -3154,11 +3106,9 @@ public class SqliteAticGraph implements AticGraph {
     }
 
     //getter & setter =======================================
-
     /**
-     * Builds a minimal SELECT clause without RDF-star columns.
-     * Used when rdfStarEnabled is false to avoid materializing triple expansion columns.
-     * The column indices match the mapper in findSPO/findSPL.
+     * Builds a minimal SELECT clause without RDF-star columns. Used when rdfStarEnabled is false to avoid materializing triple expansion columns. The column
+     * indices match the mapper in findSPO/findSPL.
      */
     private String buildMinimalSelectClause(boolean isSPL, String originalPrefixQuery) {
         // If the prefixQuery is not a full column list (e.g., EXISTS, COUNT, WITH), return as-is

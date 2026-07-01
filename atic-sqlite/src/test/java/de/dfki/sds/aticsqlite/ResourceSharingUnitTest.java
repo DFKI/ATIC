@@ -86,6 +86,14 @@ public class ResourceSharingUnitTest {
             dataGroup = dataset.getGroup("data", InvocationContext.EMPTY);
         });
 
+        Txn.executeWrite(dataset, () -> {
+            dataset.assignUserToGroup("alice", "phoenix", InvocationContext.EMPTY);
+            dataset.assignUserToGroup("bob", "phoenix", InvocationContext.EMPTY);
+            dataset.assignUserToGroup("charlie", "phoenix", InvocationContext.EMPTY);
+            dataset.assignUserToGroup("david", "data", InvocationContext.EMPTY);
+            dataset.assignUserToGroup("eve", "data", InvocationContext.EMPTY);
+        });
+        
         aliceCtx = new InvocationContext.Builder()
                 .userId(alice.getId())
                 .primaryGroupId(alice.getPrimaryGroup().getId())
@@ -776,6 +784,8 @@ public class ResourceSharingUnitTest {
             );
         });
 
+        Util.dumpAclState(dataset, "after alice shared read to phoenix");
+        
         // ---------------------------------------
         // 4) Bob reads → sees triple
         // ---------------------------------------
