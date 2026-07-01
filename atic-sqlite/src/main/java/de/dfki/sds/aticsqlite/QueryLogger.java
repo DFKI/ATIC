@@ -50,18 +50,22 @@ public class QueryLogger {
             // Get or create query_id
             long queryId = getOrCreateQueryId(sql);
 
-            // Insert into query_log
+            String durationText = formatDuration(duration);
+            String expandedSql = expandSql(sql, params);
+
             db.write(
-                    "INSERT INTO query_log(query_id, user_id, start_time, end_time, duration, scope, num_results, params) "
-                    + "VALUES(?, ?, ?, ?, ?, ?, ?, ?);",
+                    "INSERT INTO query_log(query_id, user_id, start_time, end_time, duration, duration_text, scope, num_results, params, sql_expanded) "
+                    + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                     queryId,
                     userId,
                     start,
                     end,
                     duration,
+                    durationText,
                     scope,
                     numResults,
-                    paramsJson
+                    paramsJson,
+                    expandedSql
             );
 
             // Commit transaction
@@ -72,6 +76,47 @@ public class QueryLogger {
         } finally {
             db.end();
         }
+    }
+
+    private static String formatDuration(long nanos) {
+        long minutes = nanos / 60_000_000_000L;
+        long seconds = (nanos % 60_000_000_000L) / 1_000_000_000L;
+        long millis = (nanos % 1_000_000_000L) / 1_000_000L;
+
+        return String.format("%02d:%02d:%03d", minutes, seconds, millis);
+    }
+
+    private String expandSql(String sql, Object[] params) {
+        if (params == null || params.length == 0) {
+            return sql;
+        }
+
+        StringBuilder out = new StringBuilder();
+        int p = 0;
+
+        for (int i = 0; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+
+            if (c == '?' && p < params.length) {
+                out.append(toSqlLiteral(params[p++]));
+            } else {
+                out.append(c);
+            }
+        }
+
+        return out.toString();
+    }
+
+    private String toSqlLiteral(Object value) {
+        if (value == null) {
+            return "NULL";
+        }
+        if (value instanceof Number || value instanceof Boolean) {
+            return value.toString();
+        }
+
+        String s = value.toString().replace("'", "''");
+        return "'" + s + "'";
     }
 
 // Convert parameters to JSON array string
@@ -110,7 +155,7 @@ public class QueryLogger {
     public void enable(String dbFilePath) {
         File f = new File(dbFilePath);
         File parent = f.getParentFile();
-        if(parent != null) {
+        if (parent != null) {
             parent.mkdirs();
         }
         DatabaseOptions options
