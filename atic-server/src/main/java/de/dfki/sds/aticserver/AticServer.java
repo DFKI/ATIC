@@ -700,7 +700,7 @@ public class AticServer {
                 } else {
                     datasetGraph.shareResources(items, groupUris, permission, ictx);
                 }
-                ctx.status(201).json(Map.of("success", true));
+                ctx.status(204);//.json(Map.of("success", true));
             } else {
                 if (mode.equals("graph")) {
                     datasetGraph.unshareGraphs(items, groupUris, ictx);

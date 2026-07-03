@@ -97,6 +97,10 @@ public class InvocationContext {
                 + '}';
     }
 
+    public static Builder builder() {
+        return new Builder();
+    }
+    
     // -------- Builder --------
     public static class Builder {
 

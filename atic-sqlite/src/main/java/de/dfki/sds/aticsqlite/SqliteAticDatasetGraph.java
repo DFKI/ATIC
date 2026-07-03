@@ -2,6 +2,7 @@ package de.dfki.sds.aticsqlite;
 
 import burp.model.TriplesMap;
 import burp.parse.Parse;
+import de.dfki.sds.atic.ac.Agent;
 import de.dfki.sds.atic.ac.Group;
 import de.dfki.sds.atic.ac.Permission;
 import de.dfki.sds.atic.ac.PermissionDeniedException;
@@ -10,11 +11,14 @@ import de.dfki.sds.atic.ac.PrincipalPermission;
 import de.dfki.sds.atic.ac.SharingManagement;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
+import de.dfki.sds.atic.agent.JobWorker;
+import de.dfki.sds.atic.agent.MessageWithAttachmentsJob;
 import de.dfki.sds.atic.api.IdAndUri;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticsqlite.agent.AgentSessionManager;
 import edu.lehigh.swat.bench.uba.Generator;
 import edu.lehigh.swat.bench.uba.StreamRDFWriter;
 import java.io.File;
@@ -124,6 +128,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     private RDFPatchEmitterTransactional rdfPatchEmitter;
 
+    private AgentSessionManager agentSessionManager;
+
     /**
      * The admin {@link User} object, loaded during bootstrap.
      */
@@ -159,6 +165,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         this.bnode2uri = new HashMap<>();
         this.graphMap = new HashMap<>();
         this.rdfPatchEmitter = new RDFPatchEmitterTransactional();
+        this.agentSessionManager = new AgentSessionManager();
         this.capabilities = capabilities;
         if (mainListener != null) {
             this.rdfPatchEmitter.addListener(mainListener);
@@ -183,7 +190,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 throw new RuntimeException("Failed to bootstrap tables", ex);
             }
         });
-        
+
         this.executeWrite(() -> {
             try {
                 bootstrapResourceAclEffective();
@@ -589,28 +596,34 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     @Override
     public User getUser(String username, InvocationContext ctx) {
-        String sql
-                = """
-            SELECT
-                u.id        AS user_id,
-                u.uri       AS user_uri,
-                u.username,
-                u.password,
-                u.firstname,
-                u.lastname,
-                u.email,
-                g.id        AS primary_group_id,
-                g.groupname AS primary_group_name,
-                g.uri       AS primary_group_uri
-            FROM user u
-            LEFT JOIN "group" g ON g.user_id = u.id
-            WHERE u.username = ?
-            """;
+
+        String sql = """
+        SELECT
+            u.id        AS user_id,
+            u.uri       AS user_uri,
+            u.username,
+            u.password,
+            u.firstname,
+            u.lastname,
+            u.email,
+            u.is_agent,
+            u.agent_factory,
+            u.agent_config,
+            g.id        AS primary_group_id,
+            g.groupname AS primary_group_name,
+            g.uri       AS primary_group_uri
+        FROM user u
+        LEFT JOIN "group" g ON g.user_id = u.id
+        WHERE u.username = ?
+        """;
 
         try {
             return db.read(sql, rs -> mapUser(rs, username), username);
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to load user: " + username, e);
+            throw new RuntimeException(
+                    "Failed to load user: " + username,
+                    e
+            );
         }
     }
 
@@ -633,6 +646,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             u.firstname,
             u.lastname,
             u.email,
+            u.is_agent,
+            u.agent_factory,
+            u.agent_config,
             g.id        AS primary_group_id,
             g.groupname AS primary_group_name,
             g.uri       AS primary_group_uri
@@ -644,7 +660,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         try {
             return db.read(sql, rs -> mapUser(rs, userId), userId);
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to load user: " + userId, e);
+            throw new RuntimeException(
+                    "Failed to load user: " + userId,
+                    e
+            );
         }
     }
 
@@ -810,10 +829,29 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         List<Group> groups = loadUserGroups(userId);
 
         // ensure primary group is included
-        final Group pg = primaryGroup;
+        final Group finalPrimaryGroup = primaryGroup;
         if (primaryGroup != null
-                && groups.stream().noneMatch(g -> g.getId() == pg.getId())) {
+                && groups.stream().noneMatch(g -> g.getId() == finalPrimaryGroup.getId())) {
             groups.add(primaryGroup);
+        }
+
+        boolean isAgent = rs.getBoolean("is_agent");
+
+        if (isAgent) {
+
+            return new Agent(
+                    userId,
+                    rs.getString("user_uri"),
+                    rs.getString("username"),
+                    primaryGroup,
+                    groups,
+                    rs.getString("firstname"),
+                    rs.getString("lastname"),
+                    rs.getString("email"),
+                    rs.getString("password"),
+                    rs.getString("agent_factory"),
+                    rs.getString("agent_config")
+            );
         }
 
         return new User(
@@ -1179,6 +1217,218 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    //agents =================================================
+    @Override
+    public void enableAgent(
+            String username,
+            String factory,
+            JSONObject config,
+            InvocationContext ctx) {
+
+        requireAdmin(ctx);
+
+        try {
+
+            Boolean exists = db.read(
+                    "SELECT EXISTS(SELECT 1 FROM user WHERE username = ?)",
+                    rs -> {
+                        rs.next();
+                        return rs.getInt(1) == 1;
+                    },
+                    username
+            );
+
+            if (exists == null || !exists) {
+                throw new IllegalArgumentException(
+                        "User not found: " + username
+                );
+            }
+
+            Boolean alreadyAgent = db.read(
+                    "SELECT is_agent FROM user WHERE username = ?",
+                    rs -> rs.next() && rs.getBoolean(1),
+                    username
+            );
+
+            if (Boolean.TRUE.equals(alreadyAgent)) {
+                throw new IllegalStateException(
+                        "User is already an agent: " + username
+                );
+            }
+
+            db.write(
+                    """
+                UPDATE user
+                SET
+                    is_agent = 1,
+                    agent_factory = ?,
+                    agent_config = ?
+                WHERE username = ?
+                """,
+                    factory,
+                    config == null ? null : config.toString(),
+                    username
+            );
+
+        } catch (SQLException e) {
+            throw new RuntimeException(
+                    "Failed to enable agent for user: " + username,
+                    e
+            );
+        }
+    }
+
+    @Override
+    public void disableAgent(
+            String username,
+            InvocationContext ctx) {
+
+        requireAdmin(ctx);
+
+        try {
+
+            Boolean exists = db.read(
+                    "SELECT EXISTS(SELECT 1 FROM user WHERE username = ?)",
+                    rs -> {
+                        rs.next();
+                        return rs.getInt(1) == 1;
+                    },
+                    username
+            );
+
+            if (exists == null || !exists) {
+                throw new IllegalArgumentException(
+                        "User not found: " + username
+                );
+            }
+
+            Boolean isAgent = db.read(
+                    "SELECT is_agent FROM user WHERE username = ?",
+                    rs -> rs.next() && rs.getBoolean(1),
+                    username
+            );
+
+            if (!Boolean.TRUE.equals(isAgent)) {
+                return; // already disabled
+            }
+
+            db.write(
+                    """
+                UPDATE user
+                SET
+                    is_agent = 0,
+                    agent_factory = NULL,
+                    agent_config = NULL
+                WHERE username = ?
+                """,
+                    username
+            );
+
+            agentSessionManager.closeSessionsForAgent(username);
+
+        } catch (SQLException e) {
+            throw new RuntimeException(
+                    "Failed to disable agent for user: " + username,
+                    e
+            );
+        }
+    }
+
+    private List<User> resolveTargetUsers(Set<String> groupUris) {
+
+        try {
+            if (groupUris.isEmpty()) {
+                return List.of();
+            }
+
+            String placeholders = groupUris.stream()
+                    .map(x -> "?")
+                    .collect(Collectors.joining(","));
+
+            String sql
+                    = """
+            SELECT
+                u.id,
+                u.uri,
+                u.username,
+                u.password,
+                u.firstname,
+                u.lastname,
+                u.email,
+                u.is_agent,
+                u.agent_factory,
+                u.agent_config,
+
+                g.id,
+                g.groupname,
+                g.uri
+            FROM "group" g
+            JOIN user u
+                ON u.id = g.user_id
+            WHERE g.uri IN (%s)
+            """.formatted(placeholders);
+
+            return db.read(
+                    sql,
+                    rs -> {
+
+                        List<User> users = new ArrayList<>();
+
+                        while (rs.next()) {
+
+                            Group primaryGroup = new Group(
+                                    rs.getInt(11),
+                                    rs.getString(12),
+                                    rs.getString(13)
+                            );
+
+                            boolean isAgent = rs.getBoolean("is_agent");
+
+                            User user;
+
+                            if (isAgent) {
+
+                                user = new Agent(
+                                        rs.getInt("id"),
+                                        rs.getString("uri"),
+                                        rs.getString("username"),
+                                        primaryGroup,
+                                        List.of(),
+                                        rs.getString("firstname"),
+                                        rs.getString("lastname"),
+                                        rs.getString("email"),
+                                        rs.getString("password"),
+                                        rs.getString("agent_factory"),
+                                        rs.getString("agent_config")
+                                );
+
+                            } else {
+
+                                user = new User(
+                                        rs.getInt("id"),
+                                        rs.getString("uri"),
+                                        rs.getString("username"),
+                                        primaryGroup,
+                                        List.of(),
+                                        rs.getString("firstname"),
+                                        rs.getString("lastname"),
+                                        rs.getString("email"),
+                                        rs.getString("password")
+                                );
+                            }
+
+                            users.add(user);
+                        }
+
+                        return users;
+                    },
+                    groupUris.toArray()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Error when target users is read", e);
+        }
+    }
+
     //sharing ===============================================================
     /**
      * Grants the specified permission on one or more graphs to one or more groups. Performs upsert on {@code graph_acl} entries. The caller must have at least
@@ -1194,6 +1444,79 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             Set<String> graphUris,
             Set<String> groupUris,
             Permission permission,
+            InvocationContext ctx
+    ) {
+        this.shareGraphs(graphUris, groupUris, permission, null, createURN("session"), ctx);
+    }
+
+    /**
+     * Revokes permission grants on graphs that were granted by the caller's primary group. Requires ADMIN permission on each graph. Cannot unshare oneself.
+     *
+     * @param graphUris the URIs of the graphs to unshare
+     * @param groupUris the URIs of the groups to revoke permission from
+     * @param ctx the invocation context containing caller information
+     */
+    @Override
+    public void unshareGraphs(
+            Set<String> graphUris,
+            Set<String> groupUris,
+            InvocationContext ctx
+    ) {
+        this.unshareGraphs(graphUris, groupUris, null, createURN("session"), ctx);
+    }
+
+    /**
+     * Grants the specified permission on one or more resources to one or more groups. Performs upsert on {@code resource_acl} entries. The caller must have at
+     * least the requested permission on each resource.
+     *
+     * @param resourceUris the URIs of the resources to share
+     * @param groupUris the URIs of the groups to grant permission to
+     * @param permission the permission to grant
+     * @param ctx the invocation context containing caller information
+     */
+    @Override
+    public void shareResources(
+            Set<String> resourceUris,
+            Set<String> groupUris,
+            Permission permission,
+            InvocationContext ctx
+    ) {
+        this.shareResources(resourceUris, groupUris, permission, null, createURN("session"), ctx);
+    }
+
+    /**
+     * Revokes permission grants on resources that were granted by the caller's primary group. Requires ADMIN permission on each resource. Cannot unshare
+     * oneself.
+     *
+     * @param resourceUris the URIs of the resources to unshare
+     * @param groupUris the URIs of the groups to revoke permission from
+     * @param ctx the invocation context containing caller information
+     */
+    @Override
+    public void unshareResources(
+            Set<String> resourceUris,
+            Set<String> groupUris,
+            InvocationContext ctx
+    ) {
+        this.unshareResources(resourceUris, groupUris, null, createURN("session"), ctx);
+    }
+
+    /**
+     * Grants the specified permission on one or more graphs to one or more groups. Performs upsert on {@code graph_acl} entries. The caller must have at least
+     * the requested permission on each graph.
+     *
+     * @param graphUris the URIs of the graphs to share
+     * @param groupUris the URIs of the groups to grant permission to
+     * @param permission the permission to grant
+     * @param message optional message
+     * @param ctx the invocation context containing caller information
+     */
+    @Override
+    public void shareGraphs(
+            Set<String> graphUris,
+            Set<String> groupUris,
+            Permission permission,
+            String message, String sessionId,
             InvocationContext ctx
     ) {
 
@@ -1414,12 +1737,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      *
      * @param graphUris the URIs of the graphs to unshare
      * @param groupUris the URIs of the groups to revoke permission from
+     * @param message optional message
      * @param ctx the invocation context containing caller information
      */
     @Override
     public void unshareGraphs(
             Set<String> graphUris,
             Set<String> groupUris,
+            String message, String sessionId,
             InvocationContext ctx
     ) {
 
@@ -1570,6 +1895,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      * @param resourceUris the URIs of the resources to share
      * @param groupUris the URIs of the groups to grant permission to
      * @param permission the permission to grant
+     * @param message optional message
      * @param ctx the invocation context containing caller information
      */
     @Override
@@ -1577,10 +1903,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             Set<String> resourceUris,
             Set<String> groupUris,
             Permission permission,
+            String message, String sessionId,
             InvocationContext ctx
     ) {
 
         boolean enableAC = !isAdmin(ctx);
+
+        Set<Node> nodes = new HashSet<>();
 
         for (String resourceUri : resourceUris) {
             try {
@@ -1774,6 +2103,17 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                         e
                 );
             }
+
+            nodes.add(NodeFactory.createURI(resourceUri));
+        }
+
+        List<User> targetUsers = resolveTargetUsers(groupUris);
+
+        List<Agent> agents = targetUsers.stream().filter(u -> u.isAgent()).map(u -> (Agent) u).collect(Collectors.toList());
+
+        for (Agent agent : agents) {
+            JobWorker jobWorker = agentSessionManager.addSession(sessionId, agent, this);
+            jobWorker.submit(MessageWithAttachmentsJob.builder(message).nodes(nodes).build());
         }
     }
 
@@ -1783,12 +2123,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      *
      * @param resourceUris the URIs of the resources to unshare
      * @param groupUris the URIs of the groups to revoke permission from
+     * @param message optional message
      * @param ctx the invocation context containing caller information
      */
     @Override
     public void unshareResources(
             Set<String> resourceUris,
             Set<String> groupUris,
+            String message, String sessionId,
             InvocationContext ctx
     ) {
 
@@ -3487,6 +3829,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         //TODO better close impementation later: closed should be checked in all methods
         virtualGraphMap.clear();
 
+        agentSessionManager.close();
+
         closed = true;
     }
 
@@ -3612,6 +3956,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         rdfPatchEmitter.removeListener(listener);
     }
 
+
     //==========================================================
     //getter
     /**
@@ -3640,6 +3985,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     /*package*/ RDFPatchEmitterTransactional getRDFPatchEmitter() {
         return rdfPatchEmitter;
+    }
+
+    public AgentSessionManager getAgentSessionManager() {
+        return agentSessionManager;
     }
 
     //==========================================================

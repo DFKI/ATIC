@@ -6,5 +6,9 @@ CREATE TABLE IF NOT EXISTS user (
     password TEXT NOT NULL,
     firstname TEXT,
     lastname TEXT,
-    email TEXT
+    email TEXT,
+
+    is_agent BOOLEAN NOT NULL DEFAULT 0,
+    agent_factory TEXT,
+    agent_config TEXT
 );

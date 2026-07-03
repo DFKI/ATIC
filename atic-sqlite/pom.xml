@@ -94,6 +94,24 @@
             <artifactId>BURP</artifactId>
             <version>0.1.2</version>
         </dependency>
+        
+        <!-- Agents -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>1.17.1</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-ollama</artifactId>
+            <version>1.17.1</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+            <version>1.17.1</version>
+        </dependency>
+        
     </dependencies>
     
     <build>

@@ -143,5 +143,7 @@ public class User implements Principal {
         return map;
     }
 
-    
+    public boolean isAgent() {
+        return false;
+    }
 }

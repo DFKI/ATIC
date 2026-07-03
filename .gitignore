@@ -13,3 +13,4 @@ nbactions.xml
 /atic-sqlite-tdb2tests/target/
 /atic-sqlite-jmh/target/
 *.versionsBackup
+/atic-sqlite/nbproject/
