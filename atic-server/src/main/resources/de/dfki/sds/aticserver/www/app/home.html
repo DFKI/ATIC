@@ -18,24 +18,34 @@
     <body>
         <div class="container py-4" id="app">
 
-            <div class="row">
+            <div class="row align-items-center">
+                <div class="col d-flex align-items-center m-2">
+                    <h2 class="mb-0">Home</h2>
+                </div>
 
+                <div class="col-auto ms-auto me-2" v-if="user">
+                    <span class="me-2" :title="user.username">
+                        <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                    </span>
+                    <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <br/>
+
+            <div class="row">
                 <div class="col-lg-6">
-                    
-                    <h2>Home</h2>
-                    
-                    <br/>
-                    
+
                     <h4>Management</h4>
                     <ul>
                         <li><a href="reg.html" target="_blank">Registration</a></li>
                         <li><a href="changepw.html" target="_blank">Change Password</a></li>
+                        <li><a href="users.html" target="_blank">Users</a></li>
                         <li><a href="querylogger-demo.html" target="_blank">Query Logger</a></li>
                         <li><a href="/about" target="_blank">About</a></li>
                     </ul>
-                    
-                    
-                    
+
+
                     <h4>Demos</h4>
                     <ul>
                         <li><a href="graph-demo.html" target="_blank">Graph</a></li>
@@ -44,7 +54,7 @@
                         <li><a href="upload-demo.html" target="_blank">Upload</a></li>
                         <li><a href="rml-demo.html" target="_blank">RML</a></li>
                     </ul>
-                    
+
                     <h4>Services</h4>
                     <ul>
                         <li><a href="/sparql" target="_blank">SPARQL</a></li>
@@ -67,32 +77,29 @@
 
 
         <script>
-        //axios settings
-        let basePath = window.location.pathname;
-        if (basePath.endsWith('/')) {
-            basePath = basePath.slice(0, -1);
-        }
-        // remove last segment if it ends with .html
-        basePath = basePath.replace(/\/[^/]+\.html$/, '');
-        if (basePath === '') {
-            basePath = '/';
-        }
-        axios.defaults.baseURL = basePath;
-        console.log("axios baseURL is " + basePath);
-
         const {createApp} = Vue;
 
         createApp({
             data() {
                 return {
-                    error_msg: ""
+                    error_msg: "",
+                    user: null
                 };
             },
             created() {
-
+                this.getAuthMe();
             },
             methods: {
-                
+                getAuthMe() {
+                    axios.get('/auth/me').then(response => {
+                        this.user = response.data;
+                    });
+                },
+                postLogout() {
+                    axios.post('/auth/logout').then(response => {
+                        window.location.href = response.data.redirect;
+                    });
+                }
             }
         }).mount('#app');
         </script>

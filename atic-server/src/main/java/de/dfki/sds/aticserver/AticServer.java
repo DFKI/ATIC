@@ -317,9 +317,13 @@ public class AticServer {
         app.post("/querylogger:enable", this::postQueryLoggerEnable);
         app.post("/querylogger:disable", this::postQueryLoggerDisable);
 
+        app.post("/agent:enable", this::postAgentEnable);
+        app.post("/agent:disable", this::postAgentDisable);
+
         app.post("/upload", this::postUpload);
 
         app.get("/user", this::getQueryUser);
+        app.get("/users", this::getUsers);
         app.get("/principal", this::getQueryPrincipal);
 
         app.get("/vkg/{uri}/**", this::handleVirtualGraphRequest);
@@ -780,6 +784,23 @@ public class AticServer {
 
         List<User> users = datasetGraph.calculateRead(() -> {
             return datasetGraph.searchUsers(query, ictx);
+        });
+
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (User user : users) {
+            result.add(user.toMap());
+        }
+
+        ctx.json(Map.of("users", result));
+    }
+
+    private void getUsers(Context ctx) {
+
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        List<User> users = datasetGraph.calculateRead(() -> {
+            return datasetGraph.getAllUsers(ictx);
         });
 
         List<Map<String, Object>> result = new ArrayList<>();
@@ -1279,6 +1300,28 @@ public class AticServer {
     private void postQueryLoggerDisable(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
         datasetGraph.disableQueryLogger(ictx);
+    }
+
+    private void postAgentEnable(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        JSONObject body = new JSONObject(ctx.body());
+        String username = body.getString("username");
+        String factory = body.getString("factory");
+        JSONObject config = body.optJSONObject("config");
+        datasetGraph.executeWrite(() -> {
+            datasetGraph.enableAgent(username, factory, config, ictx);
+        });
+        ctx.json(Map.of("success", true));
+    }
+
+    private void postAgentDisable(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        JSONObject body = new JSONObject(ctx.body());
+        String username = body.getString("username");
+        datasetGraph.executeWrite(() -> {
+            datasetGraph.disableAgent(username, ictx);
+        });
+        ctx.json(Map.of("success", true));
     }
 
     //---------------------------------------

@@ -889,6 +889,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 u.firstname,
                 u.lastname,
                 u.email,
+                u.is_agent,
+                u.agent_factory,
+                u.agent_config,
                 g.id        AS primary_group_id,
                 g.groupname AS primary_group_name,
                 g.uri       AS primary_group_uri
@@ -897,7 +900,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             WHERE LOWER(u.username) LIKE ?
                OR LOWER(u.firstname) LIKE ?
                OR LOWER(u.lastname) LIKE ?
-            ORDER BY u.username
+             ORDER BY LOWER(u.username)
             """;
 
         try {
@@ -923,17 +926,42 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                                 );
                             }
 
-                            results.add(new User(
-                                    userId,
-                                    rs.getString("user_uri"),
-                                    rs.getString("username"),
-                                    primaryGroup,
-                                    new ArrayList<>(), // TODO groups fill later
-                                    rs.getString("firstname"),
-                                    rs.getString("lastname"),
-                                    rs.getString("email"),
-                                    rs.getString("password")
-                            ));
+                            List<Group> groups = loadUserGroups(userId);
+                            final Group finalPrimaryGroup = primaryGroup;
+                            if (primaryGroup != null && groups.stream().noneMatch(g -> g.getId() == finalPrimaryGroup.getId())) {
+                                groups.add(primaryGroup);
+                            }
+                            groups.sort(Comparator.comparing(Group::getGroupname, String.CASE_INSENSITIVE_ORDER));
+
+                            boolean isAgent = rs.getBoolean("is_agent");
+
+                            if (isAgent) {
+                                results.add(new Agent(
+                                        userId,
+                                        rs.getString("user_uri"),
+                                        rs.getString("username"),
+                                        primaryGroup,
+                                        groups,
+                                        rs.getString("firstname"),
+                                        rs.getString("lastname"),
+                                        rs.getString("email"),
+                                        rs.getString("password"),
+                                        rs.getString("agent_factory"),
+                                        rs.getString("agent_config")
+                                ));
+                            } else {
+                                results.add(new User(
+                                        userId,
+                                        rs.getString("user_uri"),
+                                        rs.getString("username"),
+                                        primaryGroup,
+                                        groups,
+                                        rs.getString("firstname"),
+                                        rs.getString("lastname"),
+                                        rs.getString("email"),
+                                        rs.getString("password")
+                                ));
+                            }
                         }
 
                         return results;
@@ -945,6 +973,78 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         } catch (SQLException e) {
             throw new RuntimeException("Failed to search for users with query: " + query, e);
+        }
+    }
+
+    /**
+     * Returns all users from the database, including their primary group and agent status.
+     *
+     * @param ctx the invocation context containing caller information
+     * @return a list of all {@link User} objects (including agents)
+     */
+    public List<User> getAllUsers(InvocationContext ctx) {
+
+        requireAdmin(ctx);
+
+        String sql
+                = """
+            SELECT
+                u.id        AS user_id,
+                u.uri       AS user_uri,
+                u.username,
+                u.password,
+                u.firstname,
+                u.lastname,
+                u.email,
+                u.is_agent,
+                u.agent_factory,
+                u.agent_config,
+                g.id        AS primary_group_id,
+                g.groupname AS primary_group_name,
+                g.uri       AS primary_group_uri
+            FROM user u
+            LEFT JOIN "group" g ON g.user_id = u.id
+            ORDER BY LOWER(u.username)
+            """;
+
+        try {
+            return db.read(sql, rs -> {
+                List<User> results = new ArrayList<>();
+                while (rs.next()) {
+                    int userId = rs.getInt("user_id");
+                    Group primaryGroup = null;
+                    int pgId = rs.getInt("primary_group_id");
+                    if (!rs.wasNull()) {
+                        primaryGroup = new Group(pgId, rs.getString("primary_group_uri"), rs.getString("primary_group_name"));
+                    }
+                    List<Group> groups = loadUserGroups(userId);
+                    final Group finalPrimaryGroup = primaryGroup;
+                    if (primaryGroup != null && groups.stream().noneMatch(g -> g.getId() == finalPrimaryGroup.getId())) {
+                        groups.add(primaryGroup);
+                    }
+                    groups.sort(Comparator.comparing(Group::getGroupname, String.CASE_INSENSITIVE_ORDER));
+                    boolean isAgent = rs.getBoolean("is_agent");
+                    if (isAgent) {
+                        results.add(new Agent(
+                                userId, rs.getString("user_uri"), rs.getString("username"),
+                                primaryGroup, groups,
+                                rs.getString("firstname"), rs.getString("lastname"),
+                                rs.getString("email"), rs.getString("password"),
+                                rs.getString("agent_factory"), rs.getString("agent_config")
+                        ));
+                    } else {
+                        results.add(new User(
+                                userId, rs.getString("user_uri"), rs.getString("username"),
+                                primaryGroup, groups,
+                                rs.getString("firstname"), rs.getString("lastname"),
+                                rs.getString("email"), rs.getString("password")
+                        ));
+                    }
+                }
+                return results;
+            });
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to get all users", e);
         }
     }
 
