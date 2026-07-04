@@ -146,4 +146,27 @@ public class User implements Principal {
     public boolean isAgent() {
         return false;
     }
+    
+    public Agent asAgent() {
+        if(!isAgent()) 
+            throw new IllegalStateException("Not an agent");
+        return (Agent) this;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("User{");
+        sb.append("id=").append(id);
+        sb.append(", uri=").append(uri);
+        sb.append(", username=").append(username);
+        sb.append(", primaryGroup=").append(primaryGroup);
+        sb.append(", groups=").append(groups);
+        sb.append(", firstname=").append(firstname);
+        sb.append(", lastname=").append(lastname);
+        sb.append(", email=").append(email);
+        sb.append('}');
+        return sb.toString();
+    }
+    
 }

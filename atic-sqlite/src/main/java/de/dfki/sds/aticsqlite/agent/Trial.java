@@ -1,8 +1,5 @@
 package de.dfki.sds.aticsqlite.agent;
 
-import de.dfki.sds.atic.agent.AgentProgram;
-import de.dfki.sds.atic.agent.JobWorker;
-import de.dfki.sds.atic.agent.MessageWithAttachmentsJob;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.service.AiServices;
@@ -16,7 +13,7 @@ import java.nio.file.Path;
 public class Trial {
 
     public static void main(String[] args) throws Exception {
-        agentJobWorkerTest();
+        //agentJobWorkerTest();
     }
 
     private static void chatModelTest() throws IOException {
@@ -63,6 +60,7 @@ public class Trial {
         System.out.println(resp);
     }
     
+    /*
     private static void agentJobWorkerTest() throws Exception {
         AgentProgram agent = job -> {
             if (job instanceof MessageWithAttachmentsJob messageJob) {
@@ -72,10 +70,11 @@ public class Trial {
 
         try (JobWorker worker = new JobWorker(agent)) {
 
-            worker.submit(MessageWithAttachmentsJob.builder("Hello").build());
-            worker.submit(MessageWithAttachmentsJob.builder("World").build());
+            worker.submit(MessageWithAttachmentsJob.builder(null, "Hello").build());
+            worker.submit(MessageWithAttachmentsJob.builder(null, "World").build());
 
             Thread.sleep(1000);
         }
     }
+    */
 }

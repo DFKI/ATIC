@@ -1,9 +1,11 @@
 package de.dfki.sds.aticsqlite.agent;
 
 import de.dfki.sds.atic.ac.Agent;
+import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.agent.AgentProgram;
-import de.dfki.sds.atic.agent.JobWorker;
+import de.dfki.sds.atic.agent.MessageWorker;
 import de.dfki.sds.atic.agent.Session;
+import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -18,7 +20,8 @@ public class AgentSessionManager implements AutoCloseable {
 
     private record SessionKey(
             String sessionId,
-            String agentUsername
+            String agentUsername,
+            int userId
             ) {
 
     }
@@ -36,16 +39,19 @@ public class AgentSessionManager implements AutoCloseable {
         this.expirationDuration = expirationDuration;
     }
 
-    public JobWorker addSession(String sessionId, Agent agent, SqliteAticDatasetGraph parent) {
+    //=============================================
+    
+    public Session addSession(User principal, String sessionId, Agent agent, SqliteAticDatasetGraph parent, InvocationContext ctx) {
 
         removeExpiredSessions();
 
         SessionKey key = new SessionKey(
                 sessionId,
-                agent.getUsername()
+                agent.getUsername(),
+                ctx.getUserId()
         );
 
-        if (containsSession(sessionId, agent.getUsername())) {
+        if (containsSession(sessionId, agent.getUsername(), ctx)) {
             throw new IllegalStateException(
                     "Session already exists for sessionId="
                     + sessionId
@@ -55,28 +61,33 @@ public class AgentSessionManager implements AutoCloseable {
         }
 
         Instant expiresAt = Instant.now().plus(expirationDuration);
-
-        JobWorker jobWorker = new JobWorker(loadAgent(agent, parent));
-
+        
         Session session = new Session(
+                principal,
                 sessionId,
-                jobWorker,
+                agent,
                 expiresAt
         );
+        
+        AgentProgram agentProgram = loadAgent(agent, session, parent);
+        
+        MessageWorker worker = new MessageWorker(agentProgram);
+        
+        session.setWorker(worker);
 
         sessions.put(key, session);
 
-        jobWorker.start();
+        worker.start();
 
-        return jobWorker;
+        return session;
     }
 
-    public Session getSession(String sessionId, String agentUsername) {
+    public Session getSession(String sessionId, String agentUsername, InvocationContext ctx) {
 
         removeExpiredSessions();
 
         Session session = sessions.get(
-                new SessionKey(sessionId, agentUsername)
+                new SessionKey(sessionId, agentUsername, ctx.getUserId())
         );
 
         if (session != null) {
@@ -88,30 +99,19 @@ public class AgentSessionManager implements AutoCloseable {
         return session;
     }
 
-    public Session getSession(String sessionId, Agent agent) {
-        return getSession(
-                sessionId,
-                agent.getUsername()
-        );
-    }
-
-    public boolean containsSession(
-            String sessionId,
-            String agentUsername) {
+    public boolean containsSession(String sessionId, String agentUsername, InvocationContext ctx) {
 
         removeExpiredSessions();
 
         return sessions.containsKey(
-                new SessionKey(sessionId, agentUsername)
+                new SessionKey(sessionId, agentUsername, ctx.getUserId())
         );
     }
 
-    public void removeSession(
-            String sessionId,
-            String agentUsername) {
+    public void removeSession(String sessionId, String agentUsername, InvocationContext ctx) {
 
         Session removed = sessions.remove(
-                new SessionKey(sessionId, agentUsername)
+                new SessionKey(sessionId, agentUsername, ctx.getUserId())
         );
 
         if (removed != null) {
@@ -119,13 +119,27 @@ public class AgentSessionManager implements AutoCloseable {
         }
     }
 
-    public List<Session> listSessions() {
+    public List<Session> listSessions(InvocationContext ctx) {
 
         removeExpiredSessions();
 
-        return List.copyOf(sessions.values());
+        return sessions.values()
+                .stream()
+                .filter(session -> session.getPrincipal().getId() == ctx.getUserId())
+                .toList();
     }
 
+    public Session getOrAddSession(User principal, String sessionId, Agent agent, SqliteAticDatasetGraph parent, InvocationContext ctx) {
+        Session session;
+        if(this.containsSession(sessionId, agent.getUsername(), ctx)) {
+            session = this.getSession(sessionId, agent.getUsername(), ctx);
+        } else {
+            session = this.addSession(principal, sessionId, agent, parent, ctx);
+        }
+        return session;
+    }
+    
+    //=============================================
     public void closeSessionsForAgent(String agentUsername) {
 
         sessions.entrySet().removeIf(entry -> {
@@ -178,7 +192,7 @@ public class AgentSessionManager implements AutoCloseable {
         sessions.clear();
     }
 
-    private AgentProgram loadAgent(Agent agent, SqliteAticDatasetGraph parent) {
+    private AgentProgram loadAgent(Agent agent, Session session, SqliteAticDatasetGraph parent) {
 
         String factoryMethodPath = agent.getFactory();
         JSONObject config = new JSONObject(agent.getConfig());
@@ -198,7 +212,7 @@ public class AgentSessionManager implements AutoCloseable {
 
             Class<?> factoryClass = Class.forName(className);
 
-            factoryMethod = factoryClass.getMethod(methodName, Agent.class, String.class, SqliteAticDatasetGraph.class);
+            factoryMethod = factoryClass.getMethod(methodName, Agent.class, String.class, Session.class, SqliteAticDatasetGraph.class);
 
         } catch (NoSuchMethodException ex) {
             throw new IllegalArgumentException(
@@ -218,7 +232,7 @@ public class AgentSessionManager implements AutoCloseable {
         // invoke factory method
         // ------------------------------------------------
         try {
-            Object result = factoryMethod.invoke(null, agent, config.toString(4), parent);
+            Object result = factoryMethod.invoke(null, agent, config.toString(4), session, parent);
 
             if (!(result instanceof AgentProgram)) {
                 throw new IllegalStateException(

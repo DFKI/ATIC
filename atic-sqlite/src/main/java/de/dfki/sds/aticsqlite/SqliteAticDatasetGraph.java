@@ -11,8 +11,9 @@ import de.dfki.sds.atic.ac.PrincipalPermission;
 import de.dfki.sds.atic.ac.SharingManagement;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
-import de.dfki.sds.atic.agent.JobWorker;
-import de.dfki.sds.atic.agent.MessageWithAttachmentsJob;
+import de.dfki.sds.atic.agent.Message;
+import de.dfki.sds.atic.agent.RdfNodesAttachment;
+import de.dfki.sds.atic.agent.Session;
 import de.dfki.sds.atic.api.IdAndUri;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.AticGraph;
@@ -2111,9 +2112,16 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         List<Agent> agents = targetUsers.stream().filter(u -> u.isAgent()).map(u -> (Agent) u).collect(Collectors.toList());
 
+        User principal = this.getUser(ctx.getUserId(), InvocationContext.EMPTY);
+        
         for (Agent agent : agents) {
-            JobWorker jobWorker = agentSessionManager.addSession(sessionId, agent, this);
-            jobWorker.submit(MessageWithAttachmentsJob.builder(message).nodes(nodes).build());
+            Session session = agentSessionManager.getOrAddSession(principal, sessionId, agent, this, ctx);
+            
+            session.submit(
+                    Message.builder(principal, message, Message.TEXT_PLAIN)
+                            .attachment(new RdfNodesAttachment(nodes))
+                            .build()
+            );
         }
     }
 

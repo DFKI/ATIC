@@ -39,7 +39,7 @@ public final class JobWorker implements AutoCloseable {
                 }
 
                 try {
-                    agent.process(job);
+                    //agent.process(job);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
