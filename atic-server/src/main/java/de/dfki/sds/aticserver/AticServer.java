@@ -3,12 +3,16 @@ package de.dfki.sds.aticserver;
 import com.apicatalog.jsonld.JsonLd;
 import com.apicatalog.jsonld.document.JsonDocument;
 import com.auth0.jwt.exceptions.JWTVerificationException;
+import de.dfki.sds.atic.ac.Agent;
 import de.dfki.sds.atic.ac.Group;
 import de.dfki.sds.atic.ac.Permission;
 import de.dfki.sds.atic.ac.PermissionDeniedException;
 import de.dfki.sds.atic.ac.Principal;
 import de.dfki.sds.atic.ac.PrincipalPermission;
 import de.dfki.sds.atic.ac.User;
+import de.dfki.sds.atic.agent.Message;
+import de.dfki.sds.atic.agent.Session;
+import de.dfki.sds.atic.agent.SessionListener;
 import de.dfki.sds.atic.conf.ConfigLoader;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
@@ -30,6 +34,7 @@ import io.javalin.http.HandlerType;
 import io.javalin.http.HttpStatus;
 import io.javalin.http.UnauthorizedResponse;
 import io.javalin.http.UploadedFile;
+import io.javalin.http.sse.SseClient;
 import io.javalin.http.staticfiles.Location;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
@@ -57,6 +62,7 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 import java.util.stream.Collectors;
@@ -236,12 +242,12 @@ public class AticServer {
             LOGGER.warning("CDCE folder not found: " + cdceFolder.getAbsolutePath());
             return;
         }
-        
+
         String resourcePath = "/de/dfki/sds/aticserver/cdce/";
         List<String> resourceNames = List.of("rml-project.yml");
-        for(String resourceName : resourceNames) {
+        for (String resourceName : resourceNames) {
             LOGGER.info("Load CDCE config from resources: " + resourceName);
-            
+
             ConfigDrivenCrudEndpoints cdce = new ConfigDrivenCrudEndpoints(resourcePath + resourceName);
             cdce.register(app, config.cdceEndpointPath, getDatasetGraph());
         }
@@ -311,14 +317,22 @@ public class AticServer {
         app.get("/graph", this::getGraph);
         app.post("/graph", this::postGraph);
         app.delete("/graph/{uri}", this::deleteGraph);
-        
+
         app.post("/rml/execution", this::postRmlExecution);
-        
+
         app.post("/querylogger:enable", this::postQueryLoggerEnable);
         app.post("/querylogger:disable", this::postQueryLoggerDisable);
 
         app.post("/agent:enable", this::postAgentEnable);
         app.post("/agent:disable", this::postAgentDisable);
+
+        app.post("/session", this::postSessionAdd);
+        app.post("/session/{agentUsername}/{sessionId}/messages", this::postSessionMessage);
+        app.sse("/session/{agentUsername}/{sessionId}/stream", this::sessionStream);
+        app.get("/session", this::getSessionList);
+        app.get("/session/{agentUsername}/{sessionId}", this::getSessionGet);
+        app.delete("/session/{agentUsername}/{sessionId}", this::postSessionRemove);
+        app.put("/session/{agentUsername}/{sessionId}/title", this::putSessionTitle);
 
         app.post("/upload", this::postUpload);
 
@@ -611,14 +625,13 @@ public class AticServer {
 
     //------------------------------------------
     //rml
-    
     private void postRmlExecution(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
         JSONObject body = new JSONObject(ctx.body());
-        
+
         //if no graph is given, we assume default graph
         String graphNameStr = body.optString("graph", Quad.defaultGraphIRI.getURI());
-        
+
         String projectStr = body.optString("project", null);
         if (projectStr == null || projectStr.isBlank()) {
             ctx.status(400).json(Map.of(
@@ -627,22 +640,22 @@ public class AticServer {
             ));
             return;
         }
-        
+
         Node rmlProjectGraph = NodeFactory.createURI(graphNameStr);
         Node rmlProjectResource = NodeFactory.createURI(projectStr);
         int bufferSize = body.optInt("bufferSize", 100_000);
-        
+
         //never throws, will add stacktracke to rmlProjectResource
-        synchronized(this) {
+        synchronized (this) {
             datasetGraph.executeWrite(() -> {
                 datasetGraph.runRML(rmlProjectGraph, rmlProjectResource, bufferSize, ictx);
             });
         }
-        
+
         //because everything is attached to rmlProjectResource in RDF graph
         ctx.status(HttpStatus.NO_CONTENT);
     }
-    
+
     //-------------------------------------------
     //share
     private void postShareGraphs(Context ctx) {
@@ -1286,17 +1299,16 @@ public class AticServer {
 
         ctx.status(200).result("Upload successful");
     }
-    
+
     //-------------------------------------
     //query logger
-    
     private void postQueryLoggerEnable(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
         JSONObject body = new JSONObject(ctx.body());
         String path = body.getString("path");
         datasetGraph.enableQueryLogger(path, ictx);
     }
-    
+
     private void postQueryLoggerDisable(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
         datasetGraph.disableQueryLogger(ictx);
@@ -1321,6 +1333,179 @@ public class AticServer {
         datasetGraph.executeWrite(() -> {
             datasetGraph.disableAgent(username, ictx);
         });
+        ctx.json(Map.of("success", true));
+    }
+
+    private void postSessionAdd(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        JSONObject body = new JSONObject(ctx.body());
+        String sessionId = body.getString("sessionId");
+        String agentUsername = body.getString("agentUsername");
+
+        User principal = Txn.calculateRead(datasetGraph, () -> datasetGraph.getUser(ictx.getUserId(), ictx));
+        Agent agent = Txn.calculateRead(datasetGraph, () -> datasetGraph.getUser(agentUsername, ictx).asAgent());
+
+        Session session = datasetGraph.getAgentSessionManager().addSession(principal, sessionId, agent, datasetGraph, ictx);
+        ctx.json(sessionToMap(session));
+    }
+
+    private void postSessionMessage(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        String agentUsername = ctx.pathParam("agentUsername");
+        String sessionId = ctx.pathParam("sessionId");
+        JSONObject body = new JSONObject(ctx.body());
+        String messageText = body.getString("message");
+
+        Session session = datasetGraph.getAgentSessionManager().getSession(sessionId, agentUsername, ictx);
+        if (session == null) {
+            ctx.status(404).json(Map.of("error", "Session not found"));
+            return;
+        }
+
+        User principal = Txn.calculateRead(datasetGraph, () -> datasetGraph.getUser(ictx.getUserId(), ictx));
+        Message msg = Message.plainText(principal, messageText);
+        session.submit(msg);
+
+        ctx.json(Map.of("success", true));
+    }
+
+    private void sessionStreamTest(SseClient client) {
+        
+        
+    }
+    
+    private void sessionStream(SseClient client) {
+
+        Context ctx = client.ctx();
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        String agentUsername = ctx.pathParam("agentUsername");
+        String sessionId = ctx.pathParam("sessionId");
+
+        Session session
+                = datasetGraph.getAgentSessionManager()
+                        .getSession(sessionId, agentUsername, ictx);
+        
+        if (session == null) {
+            client.close();
+            return;
+        }
+
+        // initial replay
+        for (Message m : session.getMessages()) {
+            client.sendEvent("message", new JSONObject(sessionToMessageMap(m)).toString());
+        }
+        for (LogRecord r : session.getLogRecords()) {
+            client.sendEvent("log", new JSONObject().put("message", r.getMessage()).toString());
+        }
+
+        SessionListener listener = new SessionListener() {
+
+            @Override
+            public void onMessage(Session session, Message message) {
+                client.sendEvent("message",new JSONObject(sessionToMessageMap(message)).toString());
+            }
+
+            @Override
+            public void onMessageProcessingStarted(Session session, Message message) {
+                client.sendEvent("started", new JSONObject(sessionToMessageMap(message)).toString());
+            }
+
+            @Override
+            public void onMessageProcessingFinished(Session session, Message message) {
+                client.sendEvent("finished", new JSONObject(sessionToMessageMap(message)).toString());
+            }
+
+            @Override
+            public void onLog(Session session, LogRecord record) {
+                client.sendEvent("log", new JSONObject().put("message", record.getMessage()).toString());
+            }
+
+            @Override
+            public void onError(Session session, Throwable error) {
+                client.sendEvent("error", error.getMessage());
+            }
+
+            @Override
+            public void onClosed(Session session) {
+                client.sendEvent("closed", session.getSessionId());
+                client.close();
+            }
+        };
+
+        session.addListener(listener);
+
+        client.onClose(() -> session.removeListener(listener));
+        
+        client.keepAlive();
+    }
+
+    private Map<String, Object> sessionToMessageMap(Message m) {
+        return Map.of(
+                "sender", m.sender().getUsername(),
+                "timestamp", m.timestamp().toString(),
+                "content", m.content(),
+                "contentType", m.contentType()
+        );
+    }
+
+    private void getSessionList(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        List<Session> sessions = datasetGraph.getAgentSessionManager().listSessions(ictx);
+        ctx.json(Map.of("sessions", sessions.stream().map(this::sessionToMap).toList()));
+    }
+
+    private void getSessionGet(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        String agentUsername = ctx.pathParam("agentUsername");
+        String sessionId = ctx.pathParam("sessionId");
+
+        Session session = datasetGraph.getAgentSessionManager().getSession(sessionId, agentUsername, ictx);
+        if (session == null) {
+            ctx.status(404).json(Map.of("error", "Session not found"));
+            return;
+        }
+        ctx.json(sessionToMap(session));
+    }
+
+    private void postSessionRemove(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        String agentUsername = ctx.pathParam("agentUsername");
+        String sessionId = ctx.pathParam("sessionId");
+
+        datasetGraph.getAgentSessionManager().removeSession(sessionId, agentUsername, ictx);
+        ctx.json(Map.of("success", true));
+    }
+
+    private Map<String, Object> sessionToMap(Session session) {
+        List<Map<String, Object>> messages = new ArrayList<>();
+        for (Message m : session.getMessages()) {
+            messages.add(sessionToMessageMap(m));
+        }
+        return Map.of(
+                "sessionId", session.getSessionId(),
+                "agentUsername", session.getAgent().getUsername(),
+                "agentFactory", session.getAgent().getFactory(),
+                "principalId", session.getPrincipal().getId(),
+                "principalUsername", session.getPrincipal().getUsername(),
+                "title", session.getTitle(),
+                "expiresAt", session.getExpiresAt().toString(),
+                "messages", messages
+        );
+    }
+
+    private void putSessionTitle(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        String agentUsername = ctx.pathParam("agentUsername");
+        String sessionId = ctx.pathParam("sessionId");
+        String title = ctx.body();
+
+        Session session = datasetGraph.getAgentSessionManager().getSession(sessionId, agentUsername, ictx);
+        if (session == null) {
+            ctx.status(404).json(Map.of("error", "Session not found"));
+            return;
+        }
+        session.setTitle(title);
         ctx.json(Map.of("success", true));
     }
 

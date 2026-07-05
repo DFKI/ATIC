@@ -4,13 +4,18 @@ import de.dfki.sds.atic.ac.Agent;
 import de.dfki.sds.atic.ac.Permission;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
+import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.Session;
+import de.dfki.sds.atic.agent.SessionListener;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticsqlite.agent.AgentSessionManager;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import java.util.logging.LogRecord;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.sparql.graph.GraphFactory;
@@ -20,6 +25,7 @@ import org.json.JSONObject;
 import org.junit.jupiter.api.Assertions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -156,7 +162,7 @@ public class AgentUnitTest {
         Assertions.assertEquals(sessionId, sessionA.getSessionId());
         Assertions.assertEquals(alice.getUsername(), sessionA.getAgent().getUsername());
         Assertions.assertEquals((int) bobCtx.getUserId(), sessionA.getPrincipal().getId());
-        
+
         await()
                 .atMost(5, SECONDS)
                 .untilAsserted(() -> assertEquals(2, sessionA.getMessages().size()));
@@ -191,5 +197,165 @@ public class AgentUnitTest {
         await()
                 .atMost(5, SECONDS)
                 .untilAsserted(() -> assertEquals(4, sessionB.getMessages().size()));
+    }
+
+    @Test
+    public void testSessionListenerEvents() {
+
+        Node graph = NodeFactory.createURI("urn:test:graph");
+
+        Node sBob = NodeFactory.createURI("urn:bob:s");
+        Node p = NodeFactory.createURI("urn:p");
+        Node oBob = NodeFactory.createLiteralString("bobValue");
+
+        AgentSessionManager manager = dataset.getAgentSessionManager();
+
+        List<Session> createdSessions = new CopyOnWriteArrayList<>();
+        List<Message> submittedMessages = new CopyOnWriteArrayList<>();
+        List<Message> startedMessages = new CopyOnWriteArrayList<>();
+        List<Message> finishedMessages = new CopyOnWriteArrayList<>();
+        List<Message> appendedMessages = new CopyOnWriteArrayList<>();
+        List<LogRecord> logRecords = new CopyOnWriteArrayList<>();
+        List<Throwable> errors = new CopyOnWriteArrayList<>();
+        List<Session> closedSessions = new CopyOnWriteArrayList<>();
+
+        SessionListener listener = new SessionListener() {
+
+            @Override
+            public void onSessionCreated(Session session) {
+                createdSessions.add(session);
+            }
+
+            @Override
+            public void onMessageSubmitted(
+                    Session session,
+                    Message message) {
+
+                submittedMessages.add(message);
+            }
+
+            @Override
+            public void onMessageProcessingStarted(
+                    Session session,
+                    Message message) {
+
+                startedMessages.add(message);
+            }
+
+            @Override
+            public void onMessageProcessingFinished(
+                    Session session,
+                    Message message) {
+
+                finishedMessages.add(message);
+            }
+
+            @Override
+            public void onMessage(
+                    Session session,
+                    Message message) {
+
+                appendedMessages.add(message);
+            }
+
+            @Override
+            public void onLog(
+                    Session session,
+                    LogRecord record) {
+
+                logRecords.add(record);
+            }
+
+            @Override
+            public void onError(
+                    Session session,
+                    Throwable error) {
+
+                errors.add(error);
+            }
+
+            @Override
+            public void onClosed(Session session) {
+                closedSessions.add(session);
+            }
+        };
+
+        manager.addListener(listener);
+
+        // ---------------------------------------
+        // Admin creates graph + shares EDIT
+        // ---------------------------------------
+        Txn.executeWrite(dataset, () -> {
+
+            dataset.addGraph(graph, GraphFactory.createDefaultGraph(), adminCtx);
+
+            dataset.shareGraphs(
+                    Set.of(graph.getURI()),
+                    Set.of(
+                            alice.getPrimaryGroup().getUri(),
+                            bob.getPrimaryGroup().getUri()
+                    ),
+                    Permission.EDIT,
+                    adminCtx
+            );
+        });
+
+        // ---------------------------------------
+        // Bob inserts triple
+        // ---------------------------------------
+        Txn.executeWrite(dataset, () -> {
+            dataset.add(graph, sBob, p, oBob, bobCtx);
+        });
+
+        String sessionId = UUID.randomUUID().toString();
+
+        // ---------------------------------------
+        // Bob starts a session
+        // ---------------------------------------
+        Txn.executeWrite(dataset, () -> {
+
+            dataset.shareResources(
+                    Set.of(sBob.getURI()),
+                    Set.of(alice.getPrimaryGroup().getUri()),
+                    Permission.READ,
+                    "listener test message",
+                    sessionId,
+                    bobCtx
+            );
+        });
+
+        await()
+                .atMost(5, SECONDS)
+                .untilAsserted(() -> {
+
+                    assertEquals(1, createdSessions.size());
+
+                    assertFalse(submittedMessages.isEmpty());
+
+                    assertFalse(startedMessages.isEmpty());
+
+                    assertFalse(finishedMessages.isEmpty());
+
+                    assertFalse(appendedMessages.isEmpty());
+
+                    assertFalse(logRecords.isEmpty());
+
+                    assertTrue(errors.isEmpty());
+                });
+
+        Session session = createdSessions.get(0);
+
+        manager.removeSession(
+                session.getSessionId(),
+                session.getAgent().getUsername(),
+                bobCtx
+        );
+
+        await()
+                .atMost(5, SECONDS)
+                .untilAsserted(()
+                        -> assertEquals(1, closedSessions.size()));
+
+        manager.removeListener(listener);
     }
 }

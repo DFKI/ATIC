@@ -18,9 +18,12 @@ public final class MessageWorker implements AutoCloseable {
 
     private volatile boolean running = true;
 
-    public MessageWorker(AgentProgram agent) {
+    private Session session;
+    
+    public MessageWorker(AgentProgram agent, Session session) {
 
         this.agent = agent;
+        this.session = session;
 
         this.workerThread = new Thread(
                 this::runLoop,
@@ -50,11 +53,16 @@ public final class MessageWorker implements AutoCloseable {
             try {
 
                 Message message = queue.take();
+                
+                session.notifyMessageProcessingStarted(message);
 
                 try {
                     agent.process(message);
+                    
+                    session.notifyMessageProcessingFinished(message); 
+                   
                 } catch (Exception e) {
-                    throw new RuntimeException(e);
+                    session.notifyError(e);
                 }
 
             } catch (InterruptedException e) {

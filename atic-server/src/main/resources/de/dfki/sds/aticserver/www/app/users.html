@@ -181,7 +181,7 @@ createApp({
             user: null,
             selectedAgent: null,
             agentFactory: '',
-            agentConfig: ''
+            agentConfig: '{}'
         };
     },
     computed: {
@@ -233,7 +233,7 @@ createApp({
         openEnableAgentModal(user) {
             this.selectedAgent = user;
             this.agentFactory = '';
-            this.agentConfig = '';
+            this.agentConfig = '{}';
             const modalInstance = new bootstrap.Modal(this.$refs.enable_agent_modal);
             modalInstance.show();
         },

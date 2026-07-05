@@ -37,12 +37,19 @@ public class DummyAgentProgram implements AgentProgram {
 
     @Override
     public void process(Message message) {
-        //System.out.println(message);
         
         //for technical logging
-        session.getLogger().info(message.toString());
+        session.getLogger().info("start with: " + message.toString());
         
-        session.append(Message.plainText(agent, "I received " + message.toString()));
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException ex) {
+            //ignore
+        }
+        
+        session.getLogger().info("done with: " + message.toString());
+        
+        session.append(Message.plainText(agent, "I processed " + message.toString()));
     }
     
 }

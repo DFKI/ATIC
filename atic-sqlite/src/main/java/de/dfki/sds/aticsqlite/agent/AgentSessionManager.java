@@ -3,8 +3,10 @@ package de.dfki.sds.aticsqlite.agent;
 import de.dfki.sds.atic.ac.Agent;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.agent.AgentProgram;
+import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.MessageWorker;
 import de.dfki.sds.atic.agent.Session;
+import de.dfki.sds.atic.agent.SessionListener;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import java.lang.reflect.InvocationTargetException;
@@ -14,9 +16,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
+import java.util.logging.LogRecord;
 import org.json.JSONObject;
 
-public class AgentSessionManager implements AutoCloseable {
+public class AgentSessionManager implements AutoCloseable, SessionListener {
+
+    private final List<SessionListener> listeners = new CopyOnWriteArrayList<>();
 
     private record SessionKey(
             String sessionId,
@@ -39,8 +46,174 @@ public class AgentSessionManager implements AutoCloseable {
         this.expirationDuration = expirationDuration;
     }
 
-    //=============================================
+    //===========================================
     
+    public void addListener(SessionListener listener) {
+        listeners.add(listener);
+    }
+
+    public void removeListener(SessionListener listener) {
+        listeners.remove(listener);
+    }
+
+    private void notifyListeners(Consumer<SessionListener> action) {
+
+        for (SessionListener listener : listeners) {
+            try {
+                action.accept(listener);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    private void notifySessionCreated(Session session) {
+        notifyListeners(listener
+                -> listener.onSessionCreated(session));
+    }
+
+    private void notifyMessageSubmitted(
+            Session session,
+            Message message) {
+
+        notifyListeners(listener
+                -> listener.onMessageSubmitted(
+                        session,
+                        message
+                ));
+    }
+
+    private void notifyMessageProcessingStarted(
+            Session session,
+            Message message) {
+
+        notifyListeners(listener
+                -> listener.onMessageProcessingStarted(
+                        session,
+                        message
+                ));
+    }
+
+    private void notifyMessageProcessingFinished(
+            Session session,
+            Message message) {
+
+        notifyListeners(listener
+                -> listener.onMessageProcessingFinished(
+                        session,
+                        message
+                ));
+    }
+
+    private void notifyMessage(
+            Session session,
+            Message message) {
+
+        notifyListeners(listener
+                -> listener.onMessage(
+                        session,
+                        message
+                ));
+    }
+
+    private void notifyLog(
+            Session session,
+            LogRecord record) {
+
+        notifyListeners(listener
+                -> listener.onLog(
+                        session,
+                        record
+                ));
+    }
+
+    private void notifyError(Session session, Throwable error) {
+        notifyListeners(listener
+                -> listener.onError(
+                        session,
+                        error
+                ));
+    }
+
+    void notifyClosed(Session session) {
+        notifyListeners(listener
+                -> listener.onClosed(session));
+    }
+
+    @Override
+    public void onMessage(
+            Session session,
+            Message message) {
+
+        notifyMessage(session, message);
+    }
+
+    @Override
+    public void onSessionCreated(Session session) {
+        notifySessionCreated(session);
+    }
+
+    @Override
+    public void onMessageSubmitted(
+            Session session,
+            Message message) {
+
+        notifyMessageSubmitted(
+                session,
+                message
+        );
+    }
+
+    @Override
+    public void onMessageProcessingStarted(
+            Session session,
+            Message message) {
+
+        notifyMessageProcessingStarted(
+                session,
+                message
+        );
+    }
+
+    @Override
+    public void onMessageProcessingFinished(
+            Session session,
+            Message message) {
+
+        notifyMessageProcessingFinished(
+                session,
+                message
+        );
+    }
+
+    @Override
+    public void onLog(
+            Session session,
+            LogRecord record) {
+
+        notifyLog(
+                session,
+                record
+        );
+    }
+
+    @Override
+    public void onError(
+            Session session,
+            Throwable error) {
+
+        notifyError(
+                session,
+                error
+        );
+    }
+
+    @Override
+    public void onClosed(Session session) {
+        notifyClosed(session);
+    }
+
+    //=============================================
     public Session addSession(User principal, String sessionId, Agent agent, SqliteAticDatasetGraph parent, InvocationContext ctx) {
 
         removeExpiredSessions();
@@ -61,23 +234,26 @@ public class AgentSessionManager implements AutoCloseable {
         }
 
         Instant expiresAt = Instant.now().plus(expirationDuration);
-        
+
         Session session = new Session(
                 principal,
                 sessionId,
                 agent,
                 expiresAt
         );
-        
+        session.addListener(this);
+
         AgentProgram agentProgram = loadAgent(agent, session, parent);
-        
-        MessageWorker worker = new MessageWorker(agentProgram);
-        
+
+        MessageWorker worker = new MessageWorker(agentProgram, session);
+
         session.setWorker(worker);
 
         sessions.put(key, session);
 
         worker.start();
+        
+        session.notifySessionCreated();
 
         return session;
     }
@@ -116,6 +292,7 @@ public class AgentSessionManager implements AutoCloseable {
 
         if (removed != null) {
             removed.getWorker().close();
+            removed.notifyClosed();
         }
     }
 
@@ -131,14 +308,14 @@ public class AgentSessionManager implements AutoCloseable {
 
     public Session getOrAddSession(User principal, String sessionId, Agent agent, SqliteAticDatasetGraph parent, InvocationContext ctx) {
         Session session;
-        if(this.containsSession(sessionId, agent.getUsername(), ctx)) {
+        if (this.containsSession(sessionId, agent.getUsername(), ctx)) {
             session = this.getSession(sessionId, agent.getUsername(), ctx);
         } else {
             session = this.addSession(principal, sessionId, agent, parent, ctx);
         }
         return session;
     }
-    
+
     //=============================================
     public void closeSessionsForAgent(String agentUsername) {
 

@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+        <script src="js/bootstrap.bundle.min.js"></script>
+        <script src="js/vue.global.prod.js"></script>
+        <script src="js/axios.min.js"></script>
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Agent Chat | Atic</title>
+        <style>
+            html, body, #app {
+                height: 100%;
+                overflow: hidden;
+            }
+            .sidebar {
+                width: 280px;
+                min-width: 280px;
+                background: #f5f5f5;
+                color: #333;
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+            }
+            .sidebar-header {
+                padding: 16px;
+                border-bottom: 1px solid #333;
+            }
+            .sidebar-header .btn {
+                width: 100%;
+                text-align: left;
+                justify-content: flex-start;
+            }
+            .sidebar-section {
+                padding: 8px 12px;
+                flex: 1;
+                overflow-y: auto;
+            }
+            .sidebar-section h6 {
+                font-size: 11px;
+                text-transform: uppercase;
+                color: #888;
+                padding: 4px 8px;
+                margin-bottom: 0;
+            }
+            .session-item {
+                padding: 8px 12px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 13px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                position: relative;
+                transition: background 0.15s;
+                background: transparent;
+                color: #333;
+            }
+            .session-item:hover {
+                background: #e0e0e0;
+                color: #000;
+            }
+            .session-item.active {
+                background: #d0d0d0;
+                color: #000;
+            }
+            .session-item .menu-btn {
+                display: none;
+                position: absolute;
+                right: 6px;
+                top: 50%;
+                transform: translateY(-50%);
+                background: none;
+                border: none;
+                color: #888;
+                cursor: pointer;
+                padding: 2px 6px;
+                border-radius: 4px;
+            }
+            .session-item:hover .menu-btn {
+                display: inline-block;
+            }
+            .session-item .menu-btn:hover {
+                color: #000;
+                background: #ccc;
+            }
+            .chat-area {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+                background: #f0f0f0;
+            }
+            .chat-header {
+                padding: 12px 24px;
+                background: #fff;
+                border-bottom: 1px solid #ddd;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .chat-messages {
+                flex: 1;
+                overflow-y: auto;
+                padding: 24px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            .message-wrapper {
+                width: 100%;
+                max-width: 800px;
+                margin-bottom: 16px;
+            }
+            .message-wrapper.user {
+                align-items: flex-end;
+                padding-right: 40px;
+            }
+            .message-wrapper.agent {
+                align-items: flex-start;
+            }
+            .message-bubble {
+                padding: 12px 16px;
+                border-radius: 12px;
+                font-size: 14px;
+                line-height: 1.5;
+                position: relative;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+            }
+            .message-bubble.user-msg {
+                background: #e0e0e0;
+                border-radius: 12px;
+                max-width: 75%;
+                align-self: flex-end;
+            }
+            .message-bubble.agent-msg {
+                background: #fff;
+                border-radius: 12px;
+                max-width: 800px;
+                width: 100%;
+                align-self: flex-start;
+            }
+            .message-bubble pre {
+                background: #f5f5f5;
+                padding: 8px 12px;
+                border-radius: 6px;
+                overflow-x: auto;
+                font-size: 13px;
+            }
+            .msg-actions {
+                opacity: 0;
+                transition: opacity 0.15s;
+            }
+            .message-wrapper:hover .msg-actions {
+                opacity: 1;
+            }
+            .chat-input-area {
+                padding: 16px 24px 16px;
+                background: #f0f0f0;
+                display: flex;
+                justify-content: center;
+                margin-top: auto;
+            }
+            .chat-input-wrapper {
+                width: 100%;
+                max-width: 800px;
+                position: relative;
+            }
+            .chat-input-wrapper textarea {
+                resize: none;
+                border: 1px solid #ccc;
+                border-radius: 12px;
+                padding: 12px 50px 12px 16px;
+                font-size: 14px;
+                min-height: 44px;
+                max-height: 200px;
+                width: 100%;
+                background: #fff;
+            }
+            .chat-input-wrapper .send-btn {
+                position: absolute;
+                right: 12px;
+                bottom: 8px;
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                border: none;
+                background: #0066cc;
+                color: #fff;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: background 0.15s;
+            }
+            .chat-input-wrapper .send-btn:hover {
+                background: #0052a3;
+            }
+            .chat-input-wrapper .send-btn:disabled {
+                background: #aaa;
+                cursor: not-allowed;
+            }
+            .chat-input-wrapper textarea:focus {
+                outline: none;
+                border-color: #0066cc;
+                box-shadow: 0 0 0 2px rgba(0,102,204,0.15);
+            }
+            .input-row {
+                display: flex;
+                gap: 8px;
+                margin-top: 8px;
+            }
+            .input-row .btn {
+                width: 44px;
+                height: 44px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .dropdown-menu {
+                font-size: 13px;
+            }
+            .rename-input {
+                font-size: 13px;
+                padding: 2px 6px;
+                width: 100%;
+                border: 1px solid #0066cc;
+                border-radius: 4px;
+            }
+            .empty-state {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                color: #888;
+            }
+            .empty-state i {
+                font-size: 48px;
+                margin-bottom: 16px;
+            }
+            .empty-state p {
+                font-size: 16px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container-fluid p-0" id="app">
+            <div class="row g-0">
+
+                <!-- Sidebar -->
+                <div class="col-auto sidebar">
+                    <div class="sidebar-header">
+                        <button class="btn btn-sm" @click="newChat" :disabled="agents.length === 0"
+                                style="background:transparent; border:none; color:#333; text-align:left; width:100%; padding:6px 8px; border-radius:6px; transition:background 0.15s;"
+                                onmouseover="this.style.background = '#e0e0e0'"
+                                onmouseout="this.style.background = 'transparent'">
+                            <i class="fa fa-plus me-2"></i> New chat
+                        </button>
+                    </div>
+                    <div class="sidebar-section">
+                        <h6>Recents</h6>
+                        <div v-for="s in recentSessions" :key="s.sessionId"
+                             class="session-item"
+                             :class="{ active: currentSession && currentSession.sessionId === s.sessionId }"
+                             @click="selectSession(s)">
+                            <span v-if="renamingId !== s.sessionId">
+                                <i class="fa fa-robot me-2" style="font-size:12px;"></i>
+                                {{ truncate(s.title, 24) }}
+                            </span>
+                            <input v-else v-model="renameTitle" class="rename-input"
+                                   @keyup.enter="renameSession(s)"
+                                   @keyup.escape="renamingId = null"
+                                   ref="renameInput" />
+                            <button class="menu-btn" @click.stop="showMenu = (showMenu === s.sessionId ? null : s.sessionId)">
+                                <i class="fa fa-ellipsis-v"></i>
+                            </button>
+                            <div v-if="showMenu === s.sessionId" class="dropdown-menu show"
+                                 style="position:absolute; left:100%; top:0; z-index:10;">
+                                <a class="dropdown-item" href="#" @click.prevent="startRename(s)">
+                                    <i class="fa fa-edit me-2"></i> Rename
+                                </a>
+                                <a class="dropdown-item text-danger" href="#" @click.prevent="deleteSession(s)">
+                                    <i class="fa fa-trash me-2"></i> Delete
+                                </a>
+                            </div>
+                        </div>
+                        <div v-if="recentSessions.length === 0" class="text-muted" style="font-size:13px; padding:8px;">
+                            No sessions yet
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Area -->
+                <div class="col chat-area">
+
+                    <div class="chat-header">
+                        <select class="form-select form-select-sm" v-model="selectedAgent" style="width:auto;">
+                            <option v-for="u in agents" :key="u.id" :value="u.username">
+                                {{ u.username }}
+                            </option>
+                        </select>
+                        <span v-if="currentSession" class="text-muted" style="font-size:13px;">
+                            <i class="fa fa-comments me-1"></i> {{ currentSession.title || 'Untitled' }}
+                        </span>
+                    </div>
+
+                    <div class="chat-messages" ref="chatMessages">
+                        <div v-if="!currentSession" class="empty-state">
+                            <i class="fa fa-robot"></i>
+                            <p>Select an agent and start a new chat</p>
+                        </div>
+                        <template v-if="currentSession">
+                            <div v-for="(msg, idx) in currentSession.messages" :key="idx"
+                                 class="message-wrapper"
+                                 :class="msg.sender === currentUser ? 'user' : 'agent'">
+                                <div class="message-bubble"
+                                     :class="msg.sender === currentUser ? 'user-msg' : 'agent-msg'">
+                                    <span v-if="msg.contentType === 'text/html'" v-html="msg.content"></span>
+                                    <span v-else>{{ msg.content }}</span>
+                                    <div class="msg-actions mt-1">
+                                        <button class="btn btn-sm btn-link text-muted p-0"
+                                                @click="copyMessage(msg.content)" title="Copy">
+                                            <i class="fa fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="isTyping" class="message-wrapper agent">
+                                <div class="message-bubble agent-msg">
+                                    <div class="d-flex gap-1">
+                                        <span class="spinner-border spinner-border-sm text-muted" role="status"></span>
+                                        <span class="text-muted" style="font-size:13px;">typing...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="chat-input-area" v-if="currentSession">
+                        <div class="chat-input-wrapper">
+                            <textarea v-model="inputText"
+                                      @keydown.enter.exact.prevent="sendMessage"
+                                      placeholder="Type a message..."
+                                      ref="inputArea"></textarea>
+                            <button class="send-btn" @click="sendMessage" :disabled="!inputText.trim()">
+                                <i class="fa fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal" id="errorModal" tabindex="-1" ref="error_modal">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Error</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-danger" role="alert">{{ error }}</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const {createApp} = Vue;
+            createApp({
+                data() {
+                    return {
+                        user: null,
+                        agents: [],
+
+                        currentSession: null,
+                        recentSessions: [],
+
+                        selectedAgent: '',
+
+                        inputText: '',
+                        isTyping: false,
+                        error: null,
+
+                        showMenu: null,
+                        renamingId: null,
+                        renameTitle: '',
+
+                        sseSource: null,
+                        sseConnected: false
+                    };
+                },
+                computed: {
+                    currentUser() {
+                        return this.user ? this.user.username : null;
+                    },
+                    messageCount() {
+                        if (!this.currentSession)
+                            return 0;
+                        return this.currentSession.messages.length;
+                    }
+                },
+                watch: {
+                    messageCount() {
+                        this.$nextTick(() => this.scrollToBottom());
+                    }
+                },
+                created() {
+                    axios.interceptors.response.use(
+                            response => response,
+                            error => {
+                                this.error = error.response?.data || error.message || 'Unknown error';
+                                const modal = new bootstrap.Modal(this.$refs.error_modal);
+                                modal.show();
+                                return Promise.reject(error);
+                            }
+                    );
+                    this.getAuthMe();
+                    this.loadAgents();
+                },
+                mounted() {
+                    this.$nextTick(() => {
+                        this.scrollToBottom();
+                    });
+                },
+                updated() {
+                    this.$nextTick(() => {
+                        this.scrollToBottom();
+                    });
+                },
+                methods: {
+                    truncate(str, len) {
+                        if (!str)
+                            return '';
+                        return str.length > len ? str.substring(0, len) + '...' : str;
+                    },
+                    getAuthMe() {
+                        axios.get('/auth/me').then(r => this.user = r.data);
+                    },
+                    loadAgents() {
+                        axios.get('/users').then(r => {
+                            this.agents = (r.data.users || []).filter(u => u.type === 'agent');
+                            if (this.agents.length > 0 && !this.selectedAgent) {
+                                this.selectedAgent = this.agents[0].username;
+                            }
+                        });
+                    },
+                    newChat() {
+                        const sessionId = 'session_' + Date.now();
+                        axios.post('/session', {
+                            sessionId: sessionId,
+                            agentUsername: this.selectedAgent
+                        }).then(r => {
+                            this.currentSession = r.data;
+                            this.recentSessions.unshift(r.data);
+                            this.inputText = '';
+                            this.connectSSE();
+                        });
+                    },
+                    selectSession(s) {
+                        this.currentSession = s;
+                        this.recentSessions = this.recentSessions.map(rs =>
+                            rs.sessionId === s.sessionId ? s : rs
+                        );
+                        this.connectSSE();
+                    },
+                    connectSSE() {
+
+                        this.disconnectSSE();
+
+                        if (!this.currentSession)
+                            return;
+
+                        const url =
+                                '/session/' +
+                                encodeURIComponent(this.currentSession.agentUsername) +
+                                '/' +
+                                encodeURIComponent(this.currentSession.sessionId) +
+                                '/stream';
+
+                        this.sseSource = new EventSource(url);
+
+                        this.sseConnected = false;
+
+                        // spinner state (true = agent is processing)
+                        this.currentSession.isProcessing = false;
+
+                        // ----------------------------------------
+                        // MESSAGE EVENT
+                        // ----------------------------------------
+                        this.sseSource.addEventListener("message", (event) => {
+                            try {
+                                const msg = JSON.parse(event.data);
+
+                                if (!this.currentSession)
+                                    return;
+
+                                this.currentSession.messages.push(msg);
+
+                            } catch (e) {
+                                console.error("SSE message parse error", e);
+                            }
+                        });
+
+                        // ----------------------------------------
+                        // LOG EVENT
+                        // ----------------------------------------
+                        this.sseSource.addEventListener("log", (event) => {
+                            try {
+                                const log = JSON.parse(event.data);
+
+                                if (!this.currentSession.logs) {
+                                    this.currentSession.logs = [];
+                                }
+
+                                this.currentSession.logs.push(log);
+
+                            } catch (e) {
+                                console.error("SSE log parse error", e);
+                            }
+                        });
+
+                        // ----------------------------------------
+                        // STARTED → show spinner
+                        // ----------------------------------------
+                        this.sseSource.addEventListener("started", () => {
+                            this.currentSession.isProcessing = true;
+                        });
+
+                        // ----------------------------------------
+                        // FINISHED → hide spinner
+                        // ----------------------------------------
+                        this.sseSource.addEventListener("finished", () => {
+                            this.currentSession.isProcessing = false;
+                        });
+
+                        // ----------------------------------------
+                        // OPEN
+                        // ----------------------------------------
+                        this.sseSource.onopen = () => {
+                            this.sseConnected = true;
+                        };
+
+                        // ----------------------------------------
+                        // ERROR
+                        // ----------------------------------------
+                        this.sseSource.onerror = (event) => {
+                            this.sseConnected = false;
+                        };
+                    },
+                    disconnectSSE() {
+                        if (this.sseSource) {
+                            this.sseSource.close();
+                            this.sseSource = null;
+                        }
+                    },
+                    sendMessage() {
+                        const text = this.inputText.trim();
+                        if (!text || !this.currentSession)
+                            return;
+                        const msg = {
+                            sender: this.currentUser,
+                            timestamp: new Date().toISOString(),
+                            content: text,
+                            contentType: 'text/plain'
+                        };
+                        this.inputText = '';
+                        this.isTyping = true;
+                        axios.post('/session/' + encodeURIComponent(this.currentSession.agentUsername) + '/' + encodeURIComponent(this.currentSession.sessionId) + '/messages', {
+                            message: text
+                        }).then(() => {
+                            this.isTyping = false;
+                        }).catch(() => {
+                            this.isTyping = false;
+                        });
+                    },
+                    copyMessage(content) {
+                        navigator.clipboard.writeText(content).then(() => {
+                            const btn = document.createElement('div');
+                            btn.className = 'alert alert-success alert-dismissible fade show position-fixed';
+                            btn.style.cssText = 'top:16px;right:16px;z-index:9999;';
+                            btn.innerHTML = '<i class="fa fa-check me-1"></i> Copied! <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                            document.body.appendChild(btn);
+                            setTimeout(() => btn.remove(), 2000);
+                        });
+                    },
+                    scrollToBottom() {
+                        const el = this.$refs.chatMessages;
+                        if (el)
+                            el.scrollTop = el.scrollHeight;
+                    },
+                    startRename(s) {
+                        this.showMenu = null;
+                        this.renamingId = s.sessionId;
+                        this.renameTitle = s.title || '';
+                        this.$nextTick(() => {
+                            const inp = this.$refs.renameInput;
+                            if (inp && inp[0])
+                                inp[0].focus();
+                        });
+                    },
+                    renameSession(s) {
+                        if (!this.renameTitle.trim())
+                            return;
+                        axios.put('/session/' + encodeURIComponent(s.agentUsername) + '/' + encodeURIComponent(s.sessionId) + '/title', this.renameTitle.trim())
+                                .then(() => {
+                                    s.title = this.renameTitle;
+                                    this.renamingId = null;
+                                });
+                    },
+                    deleteSession(s) {
+                        if (!confirm('Delete session?'))
+                            return;
+                        axios.delete('/session/' + encodeURIComponent(s.agentUsername) + '/' + encodeURIComponent(s.sessionId))
+                                .then(() => {
+                                    this.recentSessions = this.recentSessions.filter(rs => rs.sessionId !== s.sessionId);
+                                    if (this.currentSession && this.currentSession.sessionId === s.sessionId) {
+                                        this.currentSession = null;
+                                        this.disconnectSSE();
+                                    }
+                                });
+                    },
+                    loadRecents() {
+                        axios.get('/session').then(r => {
+                            this.recentSessions = r.data.sessions || [];
+                        });
+                    }
+                }
+            }).mount("#app");
+        </script>
+    </body>
+</html>
