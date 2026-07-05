@@ -10,7 +10,7 @@
         <script src="js/vue.global.prod.js"></script>
         <script src="js/axios.min.js"></script>
         <link rel="shortcut icon" href="favicon.ico">
-        <title>Agent Chat | Atic</title>
+        <title>Atic Agents | Atic</title>
         <style>
             html, body, #app {
                 height: 100%;
@@ -19,7 +19,7 @@
             .sidebar {
                 width: 280px;
                 min-width: 280px;
-                background: #f5f5f5;
+                background: #f9f9f9;
                 color: #333;
                 display: flex;
                 flex-direction: column;
@@ -38,11 +38,12 @@
                 padding: 8px 12px;
                 flex: 1;
                 overflow-y: auto;
+                overflow-x: visible;
             }
             .sidebar-section h6 {
-                font-size: 11px;
-                text-transform: uppercase;
-                color: #888;
+                font-size: 14px;
+                font-weight: bold;
+                color: black;
                 padding: 4px 8px;
                 margin-bottom: 0;
             }
@@ -52,7 +53,7 @@
                 cursor: pointer;
                 font-size: 13px;
                 white-space: nowrap;
-                overflow: hidden;
+                overflow: visible;
                 text-overflow: ellipsis;
                 position: relative;
                 transition: background 0.15s;
@@ -92,6 +93,14 @@
                 display: flex;
                 flex-direction: column;
                 height: 100vh;
+                background: #fcfcfc;
+            }
+            .session-dropdown-item {
+                padding: 10px 16px;
+                font-size: 14px;
+                cursor: pointer;
+            }
+            .session-dropdown-item:hover {
                 background: #f0f0f0;
             }
             .chat-header {
@@ -136,9 +145,10 @@
                 border-radius: 12px;
                 max-width: 75%;
                 align-self: flex-end;
+                padding-left: 24px;
             }
             .message-bubble.agent-msg {
-                background: #fff;
+                background: transparent;
                 border-radius: 12px;
                 max-width: 800px;
                 width: 100%;
@@ -256,36 +266,51 @@
                 <!-- Sidebar -->
                 <div class="col-auto sidebar">
                     <div class="sidebar-header">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                            <img src="img/atic-server.png" style="width:1em; height:1em; object-fit:contain;">
+                            <span style="font-size:16px; font-weight:bold;">Atic Agents</span>
+                        </div>
+                        <div style="margin-bottom:8px;">
+                            <div style="font-size:10px; color:#888; margin-bottom:4px;">
+                                <i class="fa fa-robot me-1"></i> Select Agent
+                            </div>
+                            <select class="form-select form-select-sm" v-model="selectedAgent" style="width:100%;" :disabled="agents.length === 0">
+                                <option v-for="u in agents" :key="u.id" :value="u.username">
+                                    {{ u.username }}
+                                </option>
+                            </select>
+                        </div>
                         <button class="btn btn-sm" @click="newChat" :disabled="agents.length === 0"
                                 style="background:transparent; border:none; color:#333; text-align:left; width:100%; padding:6px 8px; border-radius:6px; transition:background 0.15s;"
                                 onmouseover="this.style.background = '#e0e0e0'"
                                 onmouseout="this.style.background = 'transparent'">
-                            <i class="fa fa-plus me-2"></i> New chat
+                            <i class="fa fa-edit me-2"></i> New chat
                         </button>
                     </div>
-                    <div class="sidebar-section">
+                        <div class="sidebar-section" @click="showMenu = null">
                         <h6>Recents</h6>
                         <div v-for="s in recentSessions" :key="s.sessionId"
                              class="session-item"
                              :class="{ active: currentSession && currentSession.sessionId === s.sessionId }"
                              @click="selectSession(s)">
                             <span v-if="renamingId !== s.sessionId">
-                                <i class="fa fa-robot me-2" style="font-size:12px;"></i>
+                                <i class="fa fa-comments me-2" style="font-size:12px;"></i>
                                 {{ truncate(s.title, 24) }}
                             </span>
                             <input v-else v-model="renameTitle" class="rename-input"
                                    @keyup.enter="renameSession(s)"
                                    @keyup.escape="renamingId = null"
                                    ref="renameInput" />
-                            <button class="menu-btn" @click.stop="showMenu = (showMenu === s.sessionId ? null : s.sessionId)">
+                            <button class="menu-btn" @click.stop="toggleMenu(s, $event)" :data-session-id="s.sessionId">
                                 <i class="fa fa-ellipsis-v"></i>
                             </button>
-                            <div v-if="showMenu === s.sessionId" class="dropdown-menu show"
-                                 style="position:absolute; left:100%; top:0; z-index:10;">
-                                <a class="dropdown-item" href="#" @click.prevent="startRename(s)">
-                                    <i class="fa fa-edit me-2"></i> Rename
+                            <div v-if="showMenu === s.sessionId" class="session-dropdown"
+                                  :style="{ position: 'fixed', top: menuTop + 'px', left: menuLeft + 'px', zIndex: 10, background: '#fff', border: '1px solid #ddd', borderRadius: '6px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', minWidth: '140px', whiteSpace: 'nowrap' }"
+                                  @click.stop>
+                                <a class="dropdown-item session-dropdown-item" href="#" @click.prevent="startRename(s); showMenu = null">
+                                    <i class="fa fa-pen me-2"></i> Rename
                                 </a>
-                                <a class="dropdown-item text-danger" href="#" @click.prevent="deleteSession(s)">
+                                <a class="dropdown-item text-danger session-dropdown-item" href="#" @click.prevent="deleteSession(s); showMenu = null">
                                     <i class="fa fa-trash me-2"></i> Delete
                                 </a>
                             </div>
@@ -300,11 +325,6 @@
                 <div class="col chat-area">
 
                     <div class="chat-header">
-                        <select class="form-select form-select-sm" v-model="selectedAgent" style="width:auto;">
-                            <option v-for="u in agents" :key="u.id" :value="u.username">
-                                {{ u.username }}
-                            </option>
-                        </select>
                         <span v-if="currentSession" class="text-muted" style="font-size:13px;">
                             <i class="fa fa-comments me-1"></i> {{ currentSession.title || 'Untitled' }}
                         </span>
@@ -320,7 +340,7 @@
                                  class="message-wrapper"
                                  :class="msg.sender === currentUser ? 'user' : 'agent'">
                                 <div class="message-bubble"
-                                     :class="msg.sender === currentUser ? 'user-msg' : 'agent-msg'">
+                                     :class="msg.sender.type === 'user' ? 'user-msg' : 'agent-msg'">
                                     <span v-if="msg.contentType === 'text/html'" v-html="msg.content"></span>
                                     <span v-else>{{ msg.content }}</span>
                                     <div class="msg-actions mt-1">
@@ -331,12 +351,18 @@
                                     </div>
                                 </div>
                             </div>
-                            <div v-if="isTyping" class="message-wrapper agent">
+                            <div v-if="currentSession.isProcessing" class="message-wrapper agent">
                                 <div class="message-bubble agent-msg">
                                     <div class="d-flex gap-1">
                                         <span class="spinner-border spinner-border-sm text-muted" role="status"></span>
-                                        <span class="text-muted" style="font-size:13px;">typing...</span>
+                                        <span class="text-muted" style="font-size:13px;">processing...</span>
                                     </div>
+                                </div>
+                            </div>
+                            <div v-if="error" class="message-wrapper" style="width:100%; max-width:800px;">
+                                <div class="alert alert-danger m-0" role="alert" style="margin:0;">
+                                    <i class="fa fa-exclamation-triangle me-1"></i> {{ error }}
+                                    <button type="button" class="btn-close float-end p-0" style="font-size:0.6rem;" @click="error = null"></button>
                                 </div>
                             </div>
                         </template>
@@ -388,10 +414,12 @@
                         selectedAgent: '',
 
                         inputText: '',
-                        isTyping: false,
                         error: null,
 
                         showMenu: null,
+                        menuButton: null,
+                        menuTop: 0,
+                        menuLeft: 0,
                         renamingId: null,
                         renameTitle: '',
 
@@ -428,9 +456,36 @@
                     this.loadAgents();
                 },
                 mounted() {
+                    this.loadRecents();
                     this.$nextTick(() => {
                         this.scrollToBottom();
                     });
+                },
+                watch: {
+                    showMenu(val) {
+                        if (val) {
+                            this.$nextTick(() => {
+                                if (this.menuButton) {
+                                    const rect = this.menuButton.getBoundingClientRect();
+                                    this.menuTop = rect.bottom + 4;
+                                    this.menuLeft = rect.left;
+                                }
+                            });
+                            this._menuListener = (e) => {
+                                const menu = document.querySelector('.session-dropdown');
+                                if (menu && !menu.contains(e.target) && !e.target.closest('.menu-btn')) {
+                                    this.showMenu = null;
+                                }
+                            };
+                            document.addEventListener('click', this._menuListener);
+                        } else if (this._menuListener) {
+                            document.removeEventListener('click', this._menuListener);
+                            this._menuListener = null;
+                        }
+                    }
+                },
+                unmounted() {
+                    document.removeEventListener('click', this.closeMenu);
                 },
                 updated() {
                     this.$nextTick(() => {
@@ -438,6 +493,14 @@
                     });
                 },
                 methods: {
+                    toggleMenu(s, event) {
+                        if (this.showMenu === s.sessionId) {
+                            this.showMenu = null;
+                            return;
+                        }
+                        this.menuButton = event.currentTarget;
+                        this.showMenu = s.sessionId;
+                    },
                     truncate(str, len) {
                         if (!str)
                             return '';
@@ -447,8 +510,8 @@
                         axios.get('/auth/me').then(r => this.user = r.data);
                     },
                     loadAgents() {
-                        axios.get('/users').then(r => {
-                            this.agents = (r.data.users || []).filter(u => u.type === 'agent');
+                        axios.get('/agents').then(r => {
+                            this.agents = r.data.agents || [];
                             if (this.agents.length > 0 && !this.selectedAgent) {
                                 this.selectedAgent = this.agents[0].username;
                             }
@@ -468,6 +531,8 @@
                     },
                     selectSession(s) {
                         this.currentSession = s;
+                        this.currentSession.messages = [];
+                        this.currentSession.logs = [];
                         this.recentSessions = this.recentSessions.map(rs =>
                             rs.sessionId === s.sessionId ? s : rs
                         );
@@ -574,13 +639,8 @@
                             contentType: 'text/plain'
                         };
                         this.inputText = '';
-                        this.isTyping = true;
                         axios.post('/session/' + encodeURIComponent(this.currentSession.agentUsername) + '/' + encodeURIComponent(this.currentSession.sessionId) + '/messages', {
                             message: text
-                        }).then(() => {
-                            this.isTyping = false;
-                        }).catch(() => {
-                            this.isTyping = false;
                         });
                     },
                     copyMessage(content) {

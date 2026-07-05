@@ -338,6 +338,7 @@ public class AticServer {
 
         app.get("/user", this::getQueryUser);
         app.get("/users", this::getUsers);
+        app.get("/agents", this::getAgents);
         app.get("/principal", this::getQueryPrincipal);
 
         app.get("/vkg/{uri}/**", this::handleVirtualGraphRequest);
@@ -823,6 +824,23 @@ public class AticServer {
         }
 
         ctx.json(Map.of("users", result));
+    }
+    
+    private void getAgents(Context ctx) {
+
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        List<Agent> agents = datasetGraph.calculateRead(() -> {
+            return datasetGraph.getAllAgents(ictx);
+        });
+
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (Agent agent : agents) {
+            result.add(agent.toMap());
+        }
+
+        ctx.json(Map.of("agents", result));
     }
 
     private void getQueryPrincipal(Context ctx) {
@@ -1369,11 +1387,6 @@ public class AticServer {
         ctx.json(Map.of("success", true));
     }
 
-    private void sessionStreamTest(SseClient client) {
-        
-        
-    }
-    
     private void sessionStream(SseClient client) {
 
         Context ctx = client.ctx();
@@ -1393,7 +1406,7 @@ public class AticServer {
 
         // initial replay
         for (Message m : session.getMessages()) {
-            client.sendEvent("message", new JSONObject(sessionToMessageMap(m)).toString());
+            client.sendEvent("message", new JSONObject(messageToMap(m)).toString());
         }
         for (LogRecord r : session.getLogRecords()) {
             client.sendEvent("log", new JSONObject().put("message", r.getMessage()).toString());
@@ -1403,17 +1416,17 @@ public class AticServer {
 
             @Override
             public void onMessage(Session session, Message message) {
-                client.sendEvent("message",new JSONObject(sessionToMessageMap(message)).toString());
+                client.sendEvent("message",new JSONObject(messageToMap(message)).toString());
             }
 
             @Override
             public void onMessageProcessingStarted(Session session, Message message) {
-                client.sendEvent("started", new JSONObject(sessionToMessageMap(message)).toString());
+                client.sendEvent("started", new JSONObject(messageToMap(message)).toString());
             }
 
             @Override
             public void onMessageProcessingFinished(Session session, Message message) {
-                client.sendEvent("finished", new JSONObject(sessionToMessageMap(message)).toString());
+                client.sendEvent("finished", new JSONObject(messageToMap(message)).toString());
             }
 
             @Override
@@ -1440,15 +1453,19 @@ public class AticServer {
         client.keepAlive();
     }
 
-    private Map<String, Object> sessionToMessageMap(Message m) {
+    private Map<String, Object> messageToMap(Message m) {
         return Map.of(
-                "sender", m.sender().getUsername(),
+                "sender", m.sender().toMap(),
                 "timestamp", m.timestamp().toString(),
                 "content", m.content(),
                 "contentType", m.contentType()
         );
     }
 
+    private Map<String, Object> userToMap(User user) {
+        return user.toMap();
+    }
+    
     private void getSessionList(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
         List<Session> sessions = datasetGraph.getAgentSessionManager().listSessions(ictx);
@@ -1480,7 +1497,7 @@ public class AticServer {
     private Map<String, Object> sessionToMap(Session session) {
         List<Map<String, Object>> messages = new ArrayList<>();
         for (Message m : session.getMessages()) {
-            messages.add(sessionToMessageMap(m));
+            messages.add(messageToMap(m));
         }
         return Map.of(
                 "sessionId", session.getSessionId(),

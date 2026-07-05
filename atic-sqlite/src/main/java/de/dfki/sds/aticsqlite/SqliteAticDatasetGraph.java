@@ -976,6 +976,77 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         }
     }
 
+    private User mapUserOrAgent(java.sql.ResultSet rs) throws SQLException {
+
+        int userId = rs.getInt("user_id");
+
+        Group primaryGroup = null;
+
+        int pgId = rs.getInt("primary_group_id");
+
+        if (!rs.wasNull()) {
+            primaryGroup = new Group(
+                    pgId,
+                    rs.getString("primary_group_uri"),
+                    rs.getString("primary_group_name")
+            );
+        }
+
+        List<Group> groups = loadUserGroups(userId);
+
+        final Group finalPrimaryGroup = primaryGroup;
+
+        if (primaryGroup != null
+                && groups.stream().noneMatch(
+                        g -> g.getId() == finalPrimaryGroup.getId())) {
+
+            groups.add(primaryGroup);
+        }
+
+        groups.sort(
+                Comparator.comparing(
+                        Group::getGroupname,
+                        String.CASE_INSENSITIVE_ORDER
+                )
+        );
+
+        boolean isAgent = false;
+        try {
+            isAgent = rs.getBoolean("is_agent");
+        } catch (SQLException ignored) {
+            
+        }
+
+        if (isAgent) {
+
+            return new Agent(
+                    userId,
+                    rs.getString("user_uri"),
+                    rs.getString("username"),
+                    primaryGroup,
+                    groups,
+                    rs.getString("firstname"),
+                    rs.getString("lastname"),
+                    rs.getString("email"),
+                    rs.getString("password"),
+                    rs.getString("agent_factory"),
+                    rs.getString("agent_config")
+            );
+        }
+
+        return new User(
+                userId,
+                rs.getString("user_uri"),
+                rs.getString("username"),
+                primaryGroup,
+                groups,
+                rs.getString("firstname"),
+                rs.getString("lastname"),
+                rs.getString("email"),
+                rs.getString("password")
+        );
+    }
+
     /**
      * Returns all users from the database, including their primary group and agent status.
      *
@@ -986,65 +1057,80 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         requireAdmin(ctx);
 
-        String sql
-                = """
-            SELECT
-                u.id        AS user_id,
-                u.uri       AS user_uri,
-                u.username,
-                u.password,
-                u.firstname,
-                u.lastname,
-                u.email,
-                u.is_agent,
-                u.agent_factory,
-                u.agent_config,
-                g.id        AS primary_group_id,
-                g.groupname AS primary_group_name,
-                g.uri       AS primary_group_uri
-            FROM user u
-            LEFT JOIN "group" g ON g.user_id = u.id
-            ORDER BY LOWER(u.username)
-            """;
+        String sql = """
+        SELECT
+            u.id        AS user_id,
+            u.uri       AS user_uri,
+            u.username,
+            u.password,
+            u.firstname,
+            u.lastname,
+            u.email,
+            u.is_agent,
+            u.agent_factory,
+            u.agent_config,
+            g.id        AS primary_group_id,
+            g.groupname AS primary_group_name,
+            g.uri       AS primary_group_uri
+        FROM user u
+        LEFT JOIN "group" g ON g.user_id = u.id
+        ORDER BY LOWER(u.username)
+        """;
 
         try {
             return db.read(sql, rs -> {
+
                 List<User> results = new ArrayList<>();
+
                 while (rs.next()) {
-                    int userId = rs.getInt("user_id");
-                    Group primaryGroup = null;
-                    int pgId = rs.getInt("primary_group_id");
-                    if (!rs.wasNull()) {
-                        primaryGroup = new Group(pgId, rs.getString("primary_group_uri"), rs.getString("primary_group_name"));
-                    }
-                    List<Group> groups = loadUserGroups(userId);
-                    final Group finalPrimaryGroup = primaryGroup;
-                    if (primaryGroup != null && groups.stream().noneMatch(g -> g.getId() == finalPrimaryGroup.getId())) {
-                        groups.add(primaryGroup);
-                    }
-                    groups.sort(Comparator.comparing(Group::getGroupname, String.CASE_INSENSITIVE_ORDER));
-                    boolean isAgent = rs.getBoolean("is_agent");
-                    if (isAgent) {
-                        results.add(new Agent(
-                                userId, rs.getString("user_uri"), rs.getString("username"),
-                                primaryGroup, groups,
-                                rs.getString("firstname"), rs.getString("lastname"),
-                                rs.getString("email"), rs.getString("password"),
-                                rs.getString("agent_factory"), rs.getString("agent_config")
-                        ));
-                    } else {
-                        results.add(new User(
-                                userId, rs.getString("user_uri"), rs.getString("username"),
-                                primaryGroup, groups,
-                                rs.getString("firstname"), rs.getString("lastname"),
-                                rs.getString("email"), rs.getString("password")
-                        ));
-                    }
+                    results.add(mapUserOrAgent(rs));
                 }
+
                 return results;
             });
+
         } catch (SQLException e) {
             throw new RuntimeException("Failed to get all users", e);
+        }
+    }
+
+    public List<Agent> getAllAgents(InvocationContext ctx) {
+
+        String sql = """
+        SELECT
+            u.id        AS user_id,
+            u.uri       AS user_uri,
+            u.username,
+            u.password,
+            u.firstname,
+            u.lastname,
+            u.email,
+            u.agent_factory,
+            u.agent_config,
+            u.is_agent,
+            g.id        AS primary_group_id,
+            g.groupname AS primary_group_name,
+            g.uri       AS primary_group_uri
+        FROM user u
+        LEFT JOIN "group" g ON g.user_id = u.id
+        WHERE u.is_agent = 1
+        ORDER BY LOWER(u.username)
+        """;
+
+        try {
+            return db.read(sql, rs -> {
+
+                List<Agent> results = new ArrayList<>();
+
+                while (rs.next()) {
+                    results.add((Agent) mapUserOrAgent(rs));
+                }
+
+                return results;
+            });
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to get all agents", e);
         }
     }
 
@@ -2213,10 +2299,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         List<Agent> agents = targetUsers.stream().filter(u -> u.isAgent()).map(u -> (Agent) u).collect(Collectors.toList());
 
         User principal = this.getUser(ctx.getUserId(), InvocationContext.EMPTY);
-        
+
         for (Agent agent : agents) {
             Session session = agentSessionManager.getOrAddSession(principal, sessionId, agent, this, ctx);
-            
+
             session.submit(
                     Message.builder(principal, message, Message.TEXT_PLAIN)
                             .attachment(new RdfNodesAttachment(nodes))

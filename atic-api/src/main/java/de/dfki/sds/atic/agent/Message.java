@@ -18,7 +18,7 @@ public record Message(
     public static final String TEXT_MARKDOWN = "text/markdown";
     public static final String TEXT_HTML = "text/html";
 
-    public Message     {
+    public Message {
         Objects.requireNonNull(sender, "sender");
         Objects.requireNonNull(timestamp, "timestamp");
         Objects.requireNonNull(content, "content");
@@ -29,6 +29,21 @@ public record Message(
                 : List.copyOf(attachments);
     }
 
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Message{");
+        sb.append("sender=").append(sender.getUsername());
+        sb.append(", timestamp=").append(timestamp);
+        sb.append(", content=").append(content);
+        sb.append(", contentType=").append(contentType);
+        sb.append(", attachments=").append(attachments);
+        sb.append('}');
+        return sb.toString();
+    }
+
+    
+    
     public static Message plainText(User sender, String content) {
         return new Message(
                 sender,
