@@ -13,6 +13,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -303,6 +304,7 @@ public class AgentSessionManager implements AutoCloseable, SessionListener {
         return sessions.values()
                 .stream()
                 .filter(session -> session.getPrincipal().getId() == ctx.getUserId())
+                .sorted(Comparator.comparing(Session::getExpiresAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
 

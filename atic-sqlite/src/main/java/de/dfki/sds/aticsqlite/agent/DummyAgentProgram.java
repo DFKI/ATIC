@@ -41,6 +41,10 @@ public class DummyAgentProgram implements AgentProgram {
         //for technical logging
         session.getLogger().info("start with: " + message.toString());
         
+        if(message.content().toLowerCase().contains("error")) {
+            throw new RuntimeException("Here we simulate an exception");
+        }
+        
         try {
             Thread.sleep(3000);
         } catch (InterruptedException ex) {

@@ -24,10 +24,10 @@
                 display: flex;
                 flex-direction: column;
                 height: 100vh;
+                border-right: 1px solid #ececec;
             }
             .sidebar-header {
                 padding: 16px;
-                border-bottom: 1px solid #333;
             }
             .sidebar-header .btn {
                 width: 100%;
@@ -141,11 +141,11 @@
                 overflow-wrap: break-word;
             }
             .message-bubble.user-msg {
-                background: #e0e0e0;
+                background: #f3f3f3;
                 border-radius: 12px;
                 max-width: 75%;
                 align-self: flex-end;
-                padding-left: 24px;
+                margin-left: 20%;
             }
             .message-bubble.agent-msg {
                 background: transparent;
@@ -187,14 +187,14 @@
                 padding: 12px 50px 12px 16px;
                 font-size: 14px;
                 min-height: 44px;
-                max-height: 200px;
                 width: 100%;
                 background: #fff;
+                overflow-y: auto;
             }
             .chat-input-wrapper .send-btn {
                 position: absolute;
                 right: 12px;
-                bottom: 8px;
+                top: 8px;
                 width: 32px;
                 height: 32px;
                 border-radius: 50%;
@@ -328,6 +328,12 @@
                         <span v-if="currentSession" class="text-muted" style="font-size:13px;">
                             <i class="fa fa-comments me-1"></i> {{ currentSession.title || 'Untitled' }}
                         </span>
+                        <div class="ms-auto" v-if="user">
+                            <span class="me-2" :title="user.username">
+                                <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                            </span>
+                            <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                        </div>
                     </div>
 
                     <div class="chat-messages" ref="chatMessages">
@@ -360,9 +366,10 @@
                                 </div>
                             </div>
                             <div v-if="error" class="message-wrapper" style="width:100%; max-width:800px;">
-                                <div class="alert alert-danger m-0" role="alert" style="margin:0;">
+                                <div class="alert alert-danger m-0" role="alert" style="margin:0;" :title="error">
                                     <i class="fa fa-exclamation-triangle me-1"></i> {{ error }}
-                                    <button type="button" class="btn-close float-end p-0" style="font-size:0.6rem;" @click="error = null"></button>
+                                    <button type="button" class="btn-close float-end p-0" style="font-size:0.6rem;" @click="error = null; errorStacktrace = null"></button>
+                                    <pre v-if="errorStacktrace" style="margin-top:8px; margin-bottom:0; background:#f8f8f8; padding:8px; border-radius:4px; font-size:12px; white-space:pre-wrap; max-height:200px; overflow:auto;">{{ errorStacktrace }}</pre>
                                 </div>
                             </div>
                         </template>
@@ -372,7 +379,7 @@
                         <div class="chat-input-wrapper">
                             <textarea v-model="inputText"
                                       @keydown.enter.exact.prevent="sendMessage"
-                                      placeholder="Type a message..."
+                                      placeholder="Ask anything"
                                       ref="inputArea"></textarea>
                             <button class="send-btn" @click="sendMessage" :disabled="!inputText.trim()">
                                 <i class="fa fa-paper-plane"></i>
@@ -415,54 +422,51 @@
 
                         inputText: '',
                         error: null,
+                        errorStacktrace: null,
 
                         showMenu: null,
                         menuButton: null,
                         menuTop: 0,
                         menuLeft: 0,
-                        renamingId: null,
-                        renameTitle: '',
+                    textarea: null,
+                    renamingId: null,
+                    renameTitle: '',
 
-                        sseSource: null,
-                        sseConnected: false
-                    };
-                },
-                computed: {
-                    currentUser() {
-                        return this.user ? this.user.username : null;
-                    },
-                    messageCount() {
-                        if (!this.currentSession)
-                            return 0;
-                        return this.currentSession.messages.length;
-                    }
-                },
-                watch: {
-                    messageCount() {
-                        this.$nextTick(() => this.scrollToBottom());
-                    }
-                },
-                created() {
-                    axios.interceptors.response.use(
-                            response => response,
-                            error => {
-                                this.error = error.response?.data || error.message || 'Unknown error';
-                                const modal = new bootstrap.Modal(this.$refs.error_modal);
-                                modal.show();
-                                return Promise.reject(error);
-                            }
-                    );
-                    this.getAuthMe();
-                    this.loadAgents();
-                },
-                mounted() {
-                    this.loadRecents();
+                    sseSource: null,
+                    sseConnected: false,
+
+                    error: null,
+                    errorStacktrace: null,
+                };
+            },
+            created() {
+                axios.interceptors.response.use(
+                        response => response,
+                        error => {
+                            this.error = error.response?.data || error.message || 'Unknown error';
+                            const modal = new bootstrap.Modal(this.$refs.error_modal);
+                            modal.show();
+                            return Promise.reject(error);
+                        }
+                );
+                this.getAuthMe();
+                this.loadAgents();
+                this.loadRecents();
+                this.$nextTick(() => {
+                    this.scrollToBottom();
+                });
+            },
+            watch: {
+                inputText(val) {
                     this.$nextTick(() => {
-                        this.scrollToBottom();
+                        const ta = this.$refs.inputArea;
+                        if (ta) {
+                            ta.style.height = 'auto';
+                            ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+                        }
                     });
                 },
-                watch: {
-                    showMenu(val) {
+                showMenu(val) {
                         if (val) {
                             this.$nextTick(() => {
                                 if (this.menuButton) {
@@ -484,6 +488,7 @@
                         }
                     }
                 },
+                
                 unmounted() {
                     document.removeEventListener('click', this.closeMenu);
                 },
@@ -508,6 +513,11 @@
                     },
                     getAuthMe() {
                         axios.get('/auth/me').then(r => this.user = r.data);
+                    },
+                    postLogout() {
+                        axios.post('/auth/logout').then(r => {
+                            window.location.href = r.data.redirect;
+                        });
                     },
                     loadAgents() {
                         axios.get('/agents').then(r => {
@@ -618,9 +628,16 @@
                         // ----------------------------------------
                         // ERROR
                         // ----------------------------------------
-                        this.sseSource.onerror = (event) => {
+                        this.sseSource.addEventListener("error", (event) => {
                             this.sseConnected = false;
-                        };
+                            try {
+                                const err = JSON.parse(event.data);
+                                this.error = err.message || err.error || 'An error occurred';
+                                this.errorStacktrace = err.stacktrace || null;
+                            } catch {
+                                this.error = 'SSE connection error';
+                            }
+                        });
                     },
                     disconnectSSE() {
                         if (this.sseSource) {
@@ -632,6 +649,8 @@
                         const text = this.inputText.trim();
                         if (!text || !this.currentSession)
                             return;
+                        this.error = null;
+                        this.errorStacktrace = null;
                         const msg = {
                             sender: this.currentUser,
                             timestamp: new Date().toISOString(),
@@ -641,6 +660,8 @@
                         this.inputText = '';
                         axios.post('/session/' + encodeURIComponent(this.currentSession.agentUsername) + '/' + encodeURIComponent(this.currentSession.sessionId) + '/messages', {
                             message: text
+                        }).catch(() => {
+                            this.error = 'Failed to send message';
                         });
                     },
                     copyMessage(content) {

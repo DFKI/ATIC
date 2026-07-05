@@ -1436,7 +1436,12 @@ public class AticServer {
 
             @Override
             public void onError(Session session, Throwable error) {
-                client.sendEvent("error", error.getMessage());
+                client.sendEvent("error", 
+                        new JSONObject()
+                                .put("message", error.getMessage())
+                                .put("stacktrace", ExceptionUtils.getStackTrace(error))
+                                .toString()
+                );
             }
 
             @Override

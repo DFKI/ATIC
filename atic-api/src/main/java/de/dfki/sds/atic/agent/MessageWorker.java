@@ -62,6 +62,7 @@ public final class MessageWorker implements AutoCloseable {
                     session.notifyMessageProcessingFinished(message); 
                    
                 } catch (Exception e) {
+                    session.notifyMessageProcessingFinished(message); 
                     session.notifyError(e);
                 }
 
