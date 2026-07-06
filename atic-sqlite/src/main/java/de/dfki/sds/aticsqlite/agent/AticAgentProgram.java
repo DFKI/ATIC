@@ -1,5 +1,3 @@
-
-
 package de.dfki.sds.aticsqlite.agent;
 
 import de.dfki.sds.atic.ac.Agent;
@@ -10,6 +8,7 @@ import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.observability.api.event.AiServiceEvent;
 import dev.langchain4j.observability.api.listener.AiServiceCompletedListener;
 import dev.langchain4j.observability.api.listener.AiServiceErrorListener;
 import dev.langchain4j.observability.api.listener.AiServiceRequestIssuedListener;
@@ -26,13 +25,13 @@ import org.json.JSONObject;
  *
  */
 public class AticAgentProgram implements AgentProgram {
-    
+
     private Agent agent;
     private JSONObject config;
     private Session session;
     private SqliteAticDatasetGraph dataset;
     private InvocationContext ictx;
-    
+
     private AticAgentViaLangChain aticAgentViaLangChain;
 
     public AticAgentProgram(Agent agent, JSONObject config, Session session, SqliteAticDatasetGraph dataset) {
@@ -41,16 +40,16 @@ public class AticAgentProgram implements AgentProgram {
         this.session = session;
         this.dataset = dataset;
         this.ictx = new InvocationContext.Builder().fromUser(agent).build();
-        
+
         try {
             initLangChain();
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
     }
-    
+
     private void initLangChain() throws IOException {
-        
+
         //TODO later read from config env var and get key from env var
         Path tokenFile = Path.of(
                 System.getProperty("user.home"),
@@ -58,7 +57,7 @@ public class AticAgentProgram implements AgentProgram {
                 "openrouter.txt"
         );
         String apiKey = Files.readString(tokenFile).trim();
-        
+
         ChatModel model = OpenAiChatModel.builder()
                 .baseUrl("https://openrouter.ai/api/v1")
                 .apiKey(apiKey)
@@ -66,28 +65,26 @@ public class AticAgentProgram implements AgentProgram {
                 .build();
 
         //https://docs.langchain4j.dev/tutorials/observability/
-        
-        AiServiceStartedListener startedListener =
-                event -> session.getLogger().info(event.toString());
+        AiServiceStartedListener startedListener
+                = event -> session.getLogger().info(toString(event));
 
-        AiServiceRequestIssuedListener requestIssuedListener =
-                event -> session.getLogger().info(event.toString());
+        AiServiceRequestIssuedListener requestIssuedListener
+                = event -> session.getLogger().info(toString(event));
 
-        AiServiceResponseReceivedListener responseReceivedListener =
-                event -> session.getLogger().info(event.toString());
+        AiServiceResponseReceivedListener responseReceivedListener
+                = event -> session.getLogger().info(toString(event));
 
-        AiServiceErrorListener errorListener =
-                event -> session.getLogger().warning(event.toString());
+        AiServiceErrorListener errorListener
+                = event -> session.getLogger().warning(toString(event));
 
-        AiServiceCompletedListener completedListener =
-                event -> session.getLogger().info(event.toString());
+        AiServiceCompletedListener completedListener
+                = event -> session.getLogger().info(toString(event));
 
-        ToolExecutedEventListener toolExecutedListener =
-                event -> session.getLogger().info(event.toString());
-        
-        
+        ToolExecutedEventListener toolExecutedListener
+                = event -> session.getLogger().info(toString(event));
+
         AticDatasetGraphTools aticDatasetGraphTools = new AticDatasetGraphTools(dataset, ictx);
-        
+
         aticAgentViaLangChain = AiServices
                 .builder(AticAgentViaLangChain.class)
                 .chatModel(model)
@@ -100,7 +97,7 @@ public class AticAgentProgram implements AgentProgram {
                 .tools(aticDatasetGraphTools)
                 .build();
     }
-    
+
     //de.dfki.sds.aticsqlite.agent.AticAgentProgram.create
     public static AgentProgram create(Agent agent, String config, Session session, SqliteAticDatasetGraph dataset) {
         JSONObject configObj = new JSONObject(config);
@@ -109,12 +106,19 @@ public class AticAgentProgram implements AgentProgram {
 
     @Override
     public void process(Message message) {
-        
-        
+
         String answer = aticAgentViaLangChain.chat(message.content());
-        
+
         session.append(Message.plainText(agent, answer));
-        
+
     }
-    
+
+    private String toString(AiServiceEvent event) {
+        try {
+            //return ReflectionToStringBuilder.toString(event, new RecursiveToStringStyle(), false, false, true, AiServiceEvent.class);
+            return AgentUtils.toString(event);
+        } catch (Exception e) {
+            return e.getMessage();
+        }
+    }
 }

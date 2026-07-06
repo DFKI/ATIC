@@ -18,6 +18,7 @@ public class AticDatasetGraphTools {
     
     public AticDatasetGraphTools(SqliteAticDatasetGraph dataset, InvocationContext ictx) {
         this.dataset = dataset;
+        this.ictx = ictx;
     }
     
     @Tool("""

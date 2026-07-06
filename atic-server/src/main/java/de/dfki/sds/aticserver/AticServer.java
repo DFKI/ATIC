@@ -705,7 +705,7 @@ public class AticServer {
         for (int i = 0; i < groupArray.length(); i++) {
             groupUris.add(groupArray.getString(i));
         }
-        
+
         String message = json.optString("message", "");
         String sessionId = json.optString("sessionId", "session-" + UUID.randomUUID().toString());
 
@@ -718,7 +718,7 @@ public class AticServer {
                 Permission permission = Permission.valueOf(permStr);
 
                 if (mode.equals("graph")) {
-                    datasetGraph.shareGraphs(items, groupUris, permission, message, sessionId,  ictx);
+                    datasetGraph.shareGraphs(items, groupUris, permission, message, sessionId, ictx);
                 } else {
                     datasetGraph.shareResources(items, groupUris, permission, message, sessionId, ictx);
                 }
@@ -829,7 +829,7 @@ public class AticServer {
 
         ctx.json(Map.of("users", result));
     }
-    
+
     private void getAgents(Context ctx) {
 
         InvocationContext ictx = fromJavalinContext(ctx);
@@ -1402,7 +1402,7 @@ public class AticServer {
         Session session
                 = datasetGraph.getAgentSessionManager()
                         .getSession(sessionId, agentUsername, ictx);
-        
+
         if (session == null) {
             client.close();
             return;
@@ -1413,14 +1413,14 @@ public class AticServer {
             client.sendEvent("message", new JSONObject(messageToMap(m)).toString());
         }
         for (LogRecord r : session.getLogRecords()) {
-            client.sendEvent("log", new JSONObject().put("message", r.getMessage()).toString());
+            client.sendEvent("log", logRecordToJson(r).toString());
         }
 
         SessionListener listener = new SessionListener() {
 
             @Override
             public void onMessage(Session session, Message message) {
-                client.sendEvent("message",new JSONObject(messageToMap(message)).toString());
+                client.sendEvent("message", new JSONObject(messageToMap(message)).toString());
             }
 
             @Override
@@ -1435,12 +1435,12 @@ public class AticServer {
 
             @Override
             public void onLog(Session session, LogRecord record) {
-                client.sendEvent("log", new JSONObject().put("message", record.getMessage()).toString());
+                client.sendEvent("log", logRecordToJson(record).toString());
             }
 
             @Override
             public void onError(Session session, Throwable error) {
-                client.sendEvent("error", 
+                client.sendEvent("error",
                         new JSONObject()
                                 .put("message", error.getMessage())
                                 .put("stacktrace", ExceptionUtils.getStackTrace(error))
@@ -1458,8 +1458,54 @@ public class AticServer {
         session.addListener(listener);
 
         client.onClose(() -> session.removeListener(listener));
-        
+
         client.keepAlive();
+    }
+
+    private JSONObject logRecordToJson(LogRecord record) {
+
+        JSONObject json = new JSONObject();
+
+        json.put("sequenceNumber", record.getSequenceNumber());
+        json.put("instant", record.getInstant().toString());
+        json.put("millis", record.getMillis());
+
+        json.put("level", record.getLevel().getName());
+        json.put("loggerName", record.getLoggerName());
+
+        json.put("message", record.getMessage());
+
+        json.put("threadId", record.getLongThreadID());
+
+        json.put("sourceClassName", record.getSourceClassName());
+        json.put("sourceMethodName", record.getSourceMethodName());
+
+        json.put("resourceBundleName", record.getResourceBundleName());
+
+        if (record.getParameters() != null) {
+            JSONArray params = new JSONArray();
+
+            for (Object parameter : record.getParameters()) {
+                params.put(parameter);
+            }
+
+            json.put("parameters", params);
+        }
+
+        if (record.getThrown() != null) {
+
+            Throwable t = record.getThrown();
+
+            JSONObject thrown = new JSONObject();
+
+            thrown.put("type", t.getClass().getName());
+            thrown.put("message", t.getMessage());
+            thrown.put("stackTrace", ExceptionUtils.getStackTrace(t));
+
+            json.put("thrown", thrown);
+        }
+
+        return json;
     }
 
     private Map<String, Object> messageToMap(Message m) {
@@ -1474,7 +1520,7 @@ public class AticServer {
     private Map<String, Object> userToMap(User user) {
         return user.toMap();
     }
-    
+
     private void getSessionList(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
         List<Session> sessions = datasetGraph.getAgentSessionManager().listSessions(ictx);
