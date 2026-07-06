@@ -11,7 +11,7 @@ import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import org.json.JSONObject;
 
 /**
- *
+ * For testing.
  */
 public class DummyAgentProgram implements AgentProgram {
     

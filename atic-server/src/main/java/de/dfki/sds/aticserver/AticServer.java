@@ -59,6 +59,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
@@ -704,6 +705,9 @@ public class AticServer {
         for (int i = 0; i < groupArray.length(); i++) {
             groupUris.add(groupArray.getString(i));
         }
+        
+        String message = json.optString("message", "");
+        String sessionId = json.optString("sessionId", "session-" + UUID.randomUUID().toString());
 
         InvocationContext ictx = fromJavalinContext(ctx);
 
@@ -714,16 +718,16 @@ public class AticServer {
                 Permission permission = Permission.valueOf(permStr);
 
                 if (mode.equals("graph")) {
-                    datasetGraph.shareGraphs(items, groupUris, permission, ictx);
+                    datasetGraph.shareGraphs(items, groupUris, permission, message, sessionId,  ictx);
                 } else {
-                    datasetGraph.shareResources(items, groupUris, permission, ictx);
+                    datasetGraph.shareResources(items, groupUris, permission, message, sessionId, ictx);
                 }
                 ctx.status(204);//.json(Map.of("success", true));
             } else {
                 if (mode.equals("graph")) {
-                    datasetGraph.unshareGraphs(items, groupUris, ictx);
+                    datasetGraph.unshareGraphs(items, groupUris, message, sessionId, ictx);
                 } else {
-                    datasetGraph.unshareResources(items, groupUris, ictx);
+                    datasetGraph.unshareResources(items, groupUris, message, sessionId, ictx);
                 }
                 ctx.status(204);
             }
