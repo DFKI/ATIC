@@ -131,12 +131,14 @@ public class AgentUtils {
             return "null";
         }
 
-        // IMPORTANT: avoid huge graphs
+        
         String s = obj.toString();
 
+        /*
         if (s.length() > LIMIT) {
             return s.substring(0, LIMIT) + "...<truncated>";
         }
+        */
 
         return s;
     }
