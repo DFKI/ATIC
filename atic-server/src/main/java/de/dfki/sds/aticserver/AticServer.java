@@ -10,6 +10,7 @@ import de.dfki.sds.atic.ac.PermissionDeniedException;
 import de.dfki.sds.atic.ac.Principal;
 import de.dfki.sds.atic.ac.PrincipalPermission;
 import de.dfki.sds.atic.ac.User;
+import de.dfki.sds.atic.agent.Attachment;
 import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.Session;
 import de.dfki.sds.atic.agent.SessionListener;
@@ -55,6 +56,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1509,16 +1511,22 @@ public class AticServer {
     }
 
     private Map<String, Object> messageToMap(Message m) {
-        return Map.of(
-                "sender", m.sender().toMap(),
-                "timestamp", m.timestamp().toString(),
-                "content", m.content(),
-                "contentType", m.contentType()
-        );
-    }
 
-    private Map<String, Object> userToMap(User user) {
-        return user.toMap();
+        Map<String, Object> map = new LinkedHashMap<>();
+
+        map.put("sender", m.sender().toMap());
+        map.put("timestamp", m.timestamp().toString());
+        map.put("content", m.content());
+        map.put("contentType", m.contentType());
+        map.put(
+                "attachments",
+                m.attachments()
+                        .stream()
+                        .map(Attachment::toMap)
+                        .toList()
+        );
+
+        return map;
     }
 
     private void getSessionList(Context ctx) {

@@ -1,0 +1,11 @@
+name: Retrieval of graph URIs
+
+dataset: 01_dataset.trig
+
+agentClass: AticAgentProgram
+config:
+
+principalUsername: user
+agentUsername: agent
+
+messageContent: To which graphs do you have access?

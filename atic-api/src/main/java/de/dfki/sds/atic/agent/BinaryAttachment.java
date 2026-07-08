@@ -1,6 +1,7 @@
 package de.dfki.sds.atic.agent;
 
 import java.io.InputStream;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -8,7 +9,7 @@ public record BinaryAttachment(
         String filename,
         String contentType,
         Supplier<InputStream> inputStreamSupplier
-) implements Attachment {
+        ) implements Attachment {
 
     public BinaryAttachment {
         Objects.requireNonNull(filename, "filename");
@@ -18,5 +19,15 @@ public record BinaryAttachment(
 
     public InputStream openStream() {
         return inputStreamSupplier.get();
+    }
+
+    @Override
+    public Map<String, Object> toMap() {
+
+        return Map.of(
+                "type", "binary",
+                "filename", filename,
+                "contentType", contentType
+        );
     }
 }

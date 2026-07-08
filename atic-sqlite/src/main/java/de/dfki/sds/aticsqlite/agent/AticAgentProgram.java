@@ -8,6 +8,7 @@ import de.dfki.sds.atic.agent.Session;
 import de.dfki.sds.atic.agent.ToolCallAttachment;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.observability.api.event.AiServiceEvent;
@@ -50,7 +51,7 @@ public class AticAgentProgram implements AgentProgram {
     private MyToolExecutedEventListener myToolExecutedEventListener;
 
     private List<ToolCallAttachment> toolCallAttachments = new ArrayList<>();
-    
+
     private static final String systemMessage = """
 You are a helpful Resource Description Framework (RDF) assistant.
 
@@ -123,6 +124,7 @@ You are a helpful Resource Description Framework (RDF) assistant.
                 .builder(AticAgentViaLangChain.class)
                 .chatModel(model)
                 .systemMessage(systemMessage)
+                .chatMemory(MessageWindowChatMemory.withMaxMessages(10))
                 .registerListener(startedListener)
                 .registerListener(requestIssuedListener)
                 .registerListener(responseReceivedListener)
@@ -211,6 +213,7 @@ You are a helpful Resource Description Framework (RDF) assistant.
             String name,
             String arguments
             ) {
+
     }
 
     @Override
@@ -219,14 +222,25 @@ You are a helpful Resource Description Framework (RDF) assistant.
         aticDatasetGraphTools.reset();
         toolCallAttachments.clear();
 
-        String answer = aticAgentViaLangChain.chat(message.content());
+        StringBuilder messageSB = new StringBuilder();
+        messageSB.append(message.content());
+        messageSB.append("\n");
+        messageSB.append("\n");
+        if (!message.attachments().isEmpty()) {
+            messageSB.append("Attachments:\n");
+            for (Attachment attachment : message.attachments()) {
+                messageSB.append(" * ").append(attachment.toString()).append("\n");
+            }
+        }
+
+        String answer = aticAgentViaLangChain.chat(messageSB.toString());
 
         Message.Builder responseMessageBuilder = Message
                 .builder(agent, answer, Message.TEXT_PLAIN);
 
         //merge tool execution and potential error in one attachment
         merge(toolCallAttachments);
-        
+
         //attach tool calls
         for (Attachment attachment : toolCallAttachments) {
             responseMessageBuilder.attachment(attachment);

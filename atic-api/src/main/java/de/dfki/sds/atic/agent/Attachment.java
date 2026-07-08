@@ -2,6 +2,8 @@
 
 package de.dfki.sds.atic.agent;
 
+import java.util.Map;
+
 /**
  *
  */
@@ -11,4 +13,7 @@ public sealed interface Attachment
                 RdfNodesAttachment,
                 RdfGraphAttachment, 
                 ToolCallAttachment {
+    
+    Map<String, Object> toMap();
+    
 }

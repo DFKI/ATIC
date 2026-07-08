@@ -1,6 +1,7 @@
 package de.dfki.sds.aticsqlite.agent;
 
 import de.dfki.sds.atic.ac.Agent;
+import de.dfki.sds.atic.ac.Group;
 import de.dfki.sds.atic.ac.Permission;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
@@ -43,7 +44,7 @@ public class AgentEvaluation {
                         = new ArrayList<>(new BufferedReader(
                                 new InputStreamReader(in))
                                 .lines()
-                                .filter(s -> !s.isBlank())
+                                .filter(s -> !s.isBlank() && !s.trim().startsWith("#"))
                                 .sorted()
                                 .toList());
             }
@@ -109,14 +110,13 @@ public class AgentEvaluation {
                             ds
                     );
 
+            
+            Message userMessage = Message.plainText(session.getPrincipal(),messageContent);
+            session.append(userMessage);
+            
             long start = System.currentTimeMillis();
 
-            agentProgram.process(
-                    Message.plainText(
-                            session.getPrincipal(),
-                            messageContent
-                    )
-            );
+            agentProgram.process(userMessage);
 
             long duration = System.currentTimeMillis() - start;
 
@@ -271,8 +271,12 @@ public class AgentEvaluation {
                     resourceUris.add(quad.getObject().getURI());
                 }
             });
+            
+            Group everyoneGroup = ds.getGroup(UserGroupManagement.EVERYONE_GROUP, InvocationContext.EMPTY);
 
-            ds.shareGraphs(graphUris, Set.of(user.getShareUri(), agent.getShareUri()), Permission.EDIT, ictx);
+            //ds.shareGraphs(graphUris, Set.of(user.getShareUri(), agent.getShareUri()), Permission.EDIT, ictx);
+            
+            ds.shareGraphs(graphUris, Set.of(everyoneGroup.getShareUri()), Permission.EDIT, ictx);
             ds.shareResources(resourceUris, Set.of(user.getShareUri(), agent.getShareUri()), Permission.EDIT, ictx);
         });
     }

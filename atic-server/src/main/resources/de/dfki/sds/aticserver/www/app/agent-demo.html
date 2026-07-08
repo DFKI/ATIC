@@ -355,6 +355,63 @@
             .processing-label {
                 font-size: 13px;
             }
+
+            .attachment-list {
+                list-style: none;
+                padding: 0;
+                margin: 8px 0 0 0;
+            }
+            .attachment-item {
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                margin-bottom: 4px;
+                overflow: hidden;
+            }
+            .attachment-toggle {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                width: 100%;
+                background: #f8f8f8;
+                border: none;
+                padding: 6px 10px;
+                font-size: 13px;
+                text-align: left;
+                cursor: pointer;
+                color: #333;
+            }
+            .attachment-toggle:hover {
+                background: #f0f0f0;
+            }
+            .attachment-toggle i.fa-chevron-right {
+                transition: transform 0.15s;
+                font-size: 10px;
+                color: #888;
+            }
+            .attachment-toggle[aria-expanded="true"] i.fa-chevron-right {
+                transform: rotate(90deg);
+            }
+            .attachment-body {
+                padding: 6px 10px 8px 16px;
+            }
+            .attachment-body pre {
+                background: #f5f5f5;
+                color: #333;
+                padding: 8px 10px;
+                border-radius: 4px;
+                font-size: 12px;
+                max-height: 200px;
+                overflow: auto;
+                margin-bottom: 4px;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+            .attachment-label {
+                font-size: 11px;
+                color: #888;
+                margin-bottom: 2px;
+                margin-top: 4px;
+            }
         </style>
     </head>
     <template id="message-list-template">
@@ -380,6 +437,73 @@
                     <span v-else>
                         {{ msg.content }}
                     </span>
+
+                    <ul
+                        v-if="msg.attachments && msg.attachments.some(a => a.type === 'toolCall')"
+                        class="attachment-list">
+                        <li
+                            v-for="(att, aIdx) in msg.attachments.filter(a => a.type === 'toolCall')"
+                            :key="'a' + aIdx"
+                            class="attachment-item">
+                            <button
+                                class="attachment-toggle"
+                                data-bs-toggle="collapse"
+                                :data-bs-target="'#attBody' + aIdx"
+                                :aria-expanded="false"
+                                :id="'attHead' + aIdx">
+                                <i class="fa fa-chevron-right"></i>
+                                <i class="fa fa-wrench"></i>
+                                <span>{{ att.name }}</span>
+                            </button>
+                            <div
+                                :id="'attBody' + aIdx"
+                                class="collapse attachment-body"
+                                :aria-labelledby="'attHead' + aIdx">
+                                <div v-if="att.arguments">
+                                    <div class="attachment-label">Arguments</div>
+                                    <pre>{{ prettyPrintResult(att.arguments) }}</pre>
+                                </div>
+                                <div v-if="att.result">
+                                    <div class="attachment-label">Result</div>
+                                    <pre>{{ prettyPrintResult(att.result) }}</pre>
+                                </div>
+                                <div v-if="att.throwable">
+                                    <div class="attachment-label">Error</div>
+                                    <pre class="text-danger">{{ att.throwable }}</pre>
+                                </div>
+                            </div>
+                        </li>
+                    </ul>
+
+                    <ul
+                        v-if="msg.attachments && msg.attachments.some(a => a.type === 'rdfNodes')"
+                        class="attachment-list">
+                        <li
+                            v-for="(att, rIdx) in msg.attachments.filter(a => a.type === 'rdfNodes')"
+                            :key="'r' + rIdx"
+                            class="attachment-item">
+                            <button
+                                class="attachment-toggle"
+                                data-bs-toggle="collapse"
+                                :data-bs-target="'#rdfBody' + rIdx"
+                                :aria-expanded="false"
+                                :id="'rdfHead' + rIdx">
+                                <i class="fa fa-chevron-right"></i>
+                                <i class="fa fa-shapes"></i>
+                                <span>{{ att.nodes.length }} {{ att.nodes.length === 1 ? 'node' : 'nodes' }}</span>
+                            </button>
+                            <div
+                                :id="'rdfBody' + rIdx"
+                                class="collapse attachment-body"
+                                :aria-labelledby="'rdfHead' + rIdx">
+                                <ul class="mb-0" style="font-size:13px; padding-left:20px;">
+                                    <li v-for="(uri, uIdx) in att.nodes" :key="'u' + uIdx">
+                                        {{ uri }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                    </ul>
 
                     <div class="msg-actions mt-1">
                         <button
@@ -610,6 +734,13 @@
                         methods: {
                             onCopy(content) {
                                 this.$emit('on-copy', content);
+                            },
+            prettyPrintResult(text) {
+                                try {
+                                    return JSON.stringify(JSON.parse(text), null, 2);
+                                } catch {
+                                    return text;
+                                }
                             }
                         }
                     }
