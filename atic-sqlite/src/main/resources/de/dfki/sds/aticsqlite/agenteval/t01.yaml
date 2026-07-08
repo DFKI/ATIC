@@ -1,12 +1,11 @@
-name: test
-description: todo
+name: Knowledge retrieval with graph URI and subject URI 
 
 dataset: 01_dataset.trig
 
 agentClass: AticAgentProgram
-config: {  }
+config:
 
-principalUsername: userA
-agentUsername: agentB
+principalUsername: user
+agentUsername: agent
 
-messageContent: hi
+messageContent: In graph urn:graph:test what do you know about http://www.example.org/exampleDocument#Monica

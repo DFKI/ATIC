@@ -4,13 +4,17 @@ import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import org.apache.jena.datatypes.BaseDatatype;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.sparql.core.DatasetGraph;
 import org.apache.jena.sparql.core.Quad;
+import org.apache.jena.util.iterator.ExtendedIterator;
 
 /**
  *
@@ -19,6 +23,24 @@ public class AticDatasetGraphTools {
 
     private SqliteAticDatasetGraph dataset;
     private InvocationContext ictx;
+
+    private static final String DEFAULT_LIMIT = "25";
+
+    private static final Set<String> WILDCARDS = Set.of(
+            "*",
+            "/",
+            "?",
+            "any",
+            "all",
+            "null",
+            "none",
+            "wildcard"
+    );
+    
+    public static final String SKILL_TEXT = """
+When you need to query RDF data, use both tools: findResources and findLiterals. 
+At the beginning use a small value for limit, like 15 and increase when necessary.
+                                      """;
 
     public AticDatasetGraphTools(SqliteAticDatasetGraph dataset, InvocationContext ictx) {
         this.dataset = dataset;
@@ -29,11 +51,10 @@ public class AticDatasetGraphTools {
      * Resets the state.
      */
     public void reset() {
-        
+
     }
-    
+
     //============================================================
-    
     @Tool("""
     Returns the URIs of all graphs currently visible to the invoker.
     The result is a list of graph node URIs.
@@ -64,46 +85,52 @@ public class AticDatasetGraphTools {
             @P(
                     name = "graphUri",
                     description = "URI of the graph to search in. Null means search all visible graphs.",
-                    required = false
+                    required = false,
+                    defaultValue = ""
             ) String graphUri,
             @P(
                     name = "subjectUri",
                     description = "URI of the subject to match. Null means any subject.",
-                    required = false
+                    required = false,
+                    defaultValue = ""
             ) String subjectUri,
             @P(
                     name = "predicateUri",
                     description = "URI of the predicate to match. Null means any predicate.",
-                    required = false
+                    required = false,
+                    defaultValue = ""
             ) String predicateUri,
             @P(
                     name = "objectUri",
                     description = "URI of the object to match. Null means any object. Only URI objects are supported.",
-                    required = false
+                    required = false,
+                    defaultValue = ""
             ) String objectUri,
             @P(
                     name = "limit",
                     description = "Maximum number of matching quads to return.",
                     required = false,
-                    defaultValue = "100"
+                    defaultValue = DEFAULT_LIMIT
             ) int limit
     ) {
         List<QuadRecord> results = new ArrayList<>();
-
-        Node g = graphUri == null || graphUri.isBlank() ? Node.ANY : NodeFactory.createURI(graphUri);
-        Node s = subjectUri == null || subjectUri.isBlank() ? Node.ANY : NodeFactory.createURI(subjectUri);
-        Node p = predicateUri == null || predicateUri.isBlank() ? Node.ANY : NodeFactory.createURI(predicateUri);
-        Node o = objectUri == null || objectUri.isBlank() ? Node.ANY : NodeFactory.createURI(objectUri);
-
+        
         dataset.executeRead(() -> {
+            
+            Node g = toNodeOrAny(dataset, graphUri);
+            Node s = toNodeOrAny(dataset, subjectUri);
+            Node p = toNodeOrAny(dataset, predicateUri);
+            Node o = toNodeOrAny(dataset, objectUri);
 
-            Iterator<Quad> iter = dataset.find(g, s, p, o, ictx);
+            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.find(g, s, p, o, ictx);
 
-            int count = 0;
-
-            while (iter.hasNext() && count < limit) {
+            while (iter.hasNext() && results.size() < limit) {
 
                 Quad q = iter.next();
+                
+                if(q.getObject().isLiteral()) {
+                    continue;
+                }
 
                 results.add(new QuadRecord(
                         q.getGraph().toString(),
@@ -111,9 +138,9 @@ public class AticDatasetGraphTools {
                         q.getPredicate().toString(),
                         q.getObject().toString()
                 ));
-
-                count++;
             }
+
+            iter.close();
         });
 
         return results;
@@ -135,58 +162,50 @@ public class AticDatasetGraphTools {
             @P(
                     name = "graphUri",
                     description = "URI of the graph to search in. Null means search all visible graphs.",
-                    required = false
+                    required = false,
+                    defaultValue = ""
             ) String graphUri,
             @P(
                     name = "subjectUri",
                     description = "URI of the subject to match. Null means any subject.",
-                    required = false
+                    required = false,
+                    defaultValue = ""
             ) String subjectUri,
             @P(
                     name = "predicateUri",
                     description = "URI of the predicate to match. Null means any predicate.",
-                    required = false
+                    required = false,
+                    defaultValue = ""
             ) String predicateUri,
             @P(
                     name = "objectLex",
                     description = "Literal lexical value to match.",
-                    required = false
+                    required = false,
+                    defaultValue = ""
             ) String objectLex,
             @P(
                     name = "objectDatatypeUri",
                     description = "Datatype URI for a typed literal, e.g. http://www.w3.org/2001/XMLSchema#integer.",
-                    required = false
+                    required = false,
+                    defaultValue = ""
             ) String objectDatatypeUri,
             @P(
                     name = "objectLanguage",
                     description = "Language tag for a language-tagged literal, e.g. en or de.",
-                    required = false
+                    required = false,
+                    defaultValue = ""
             ) String objectLanguage,
             @P(
                     name = "limit",
                     description = "Maximum number of matching literals to return.",
                     required = false,
-                    defaultValue = "100"
+                    defaultValue = DEFAULT_LIMIT
             ) int limit
     ) {
         List<QuadRecord> results = new ArrayList<>();
 
-        Node g = graphUri == null || graphUri.isBlank() 
-                ? Node.ANY
-                : NodeFactory.createURI(graphUri);
-
-        Node s = subjectUri == null || subjectUri.isBlank() 
-                ? Node.ANY
-                : NodeFactory.createURI(subjectUri);
-
-        Node p = predicateUri == null || predicateUri.isBlank() 
-                ? Node.ANY
-                : NodeFactory.createURI(predicateUri);
-
         Node o = Node.ANY;
-
-        if (objectLex != null) {
-
+        if (objectLex != null && !objectLex.isBlank()) {
             if (objectLanguage != null && !objectLanguage.isBlank()) {
 
                 o = NodeFactory.createLiteralLang(
@@ -208,20 +227,15 @@ public class AticDatasetGraphTools {
         }
 
         Node finalObject = o;
-
         dataset.executeRead(() -> {
+            
+            Node g = toNodeOrAny(dataset, graphUri);
+            Node s = toNodeOrAny(dataset, subjectUri);
+            Node p = toNodeOrAny(dataset, predicateUri);
 
-            Iterator<Quad> iter = dataset.find(
-                    g,
-                    s,
-                    p,
-                    finalObject,
-                    ictx
-            );
+            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.find(g, s, p, finalObject, ictx);
 
-            int count = 0;
-
-            while (iter.hasNext() && count < limit) {
+            while (iter.hasNext() && results.size() < limit) {
 
                 Quad q = iter.next();
 
@@ -235,12 +249,47 @@ public class AticDatasetGraphTools {
                         q.getPredicate().toString(),
                         q.getObject().toString()
                 ));
-
-                count++;
             }
+
+            iter.close();
         });
 
         return results;
+    }
+
+
+    private static Node toNodeOrAny(DatasetGraph dsg, String value) {
+        if (value == null) {
+            return Node.ANY;
+        }
+
+        value = value.trim();
+
+        if (value.isEmpty() || WILDCARDS.contains(value.toLowerCase())) {
+            return Node.ANY;
+        }
+
+        // CURIE?
+        int colon = value.indexOf(':');
+        if (colon > 0) {
+            String expanded = dsg.prefixes().expand(value);
+
+            if (expanded != null && !expanded.equals(value)) {
+                return NodeFactory.createURI(expanded);
+            }
+        }
+        
+        // Absolute URI?
+        try {
+            URI uri = new URI(value);
+            if (uri.isAbsolute()) {
+                return NodeFactory.createURI(value);
+            }
+        } catch (URISyntaxException ignored) {
+            
+        }
+
+        return Node.ANY;
     }
 
     public record QuadRecord(

@@ -37,7 +37,12 @@ public record Message(
         sb.append(", timestamp=").append(timestamp);
         sb.append(", content=").append(content);
         sb.append(", contentType=").append(contentType);
-        sb.append(", attachments=").append(attachments);
+        sb.append(", attachments=\n");
+        
+        for(Attachment attachment : attachments) {
+            sb.append(attachment).append("\n");
+        }
+        
         sb.append('}');
         return sb.toString();
     }

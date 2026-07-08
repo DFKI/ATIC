@@ -9,5 +9,6 @@ public sealed interface Attachment
         permits LinkAttachment,
                 BinaryAttachment,
                 RdfNodesAttachment,
-                RdfGraphAttachment {
+                RdfGraphAttachment, 
+                ToolCallAttachment {
 }

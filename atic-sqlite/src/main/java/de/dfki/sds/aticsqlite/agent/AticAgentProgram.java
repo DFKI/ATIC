@@ -2,8 +2,10 @@ package de.dfki.sds.aticsqlite.agent;
 
 import de.dfki.sds.atic.ac.Agent;
 import de.dfki.sds.atic.agent.AgentProgram;
+import de.dfki.sds.atic.agent.Attachment;
 import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.Session;
+import de.dfki.sds.atic.agent.ToolCallAttachment;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import dev.langchain4j.model.chat.ChatModel;
@@ -17,9 +19,17 @@ import dev.langchain4j.observability.api.listener.AiServiceResponseReceivedListe
 import dev.langchain4j.observability.api.listener.AiServiceStartedListener;
 import dev.langchain4j.observability.api.listener.ToolExecutedEventListener;
 import dev.langchain4j.service.AiServices;
+import dev.langchain4j.service.tool.ToolArgumentsErrorHandler;
+import dev.langchain4j.service.tool.ToolErrorContext;
+import dev.langchain4j.service.tool.ToolErrorHandlerResult;
+import dev.langchain4j.service.tool.ToolExecutionErrorHandler;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.json.JSONObject;
 
 /**
@@ -34,10 +44,17 @@ public class AticAgentProgram implements AgentProgram {
     private InvocationContext ictx;
 
     private AticAgentViaLangChain aticAgentViaLangChain;
-    
+
     private AticDatasetGraphTools aticDatasetGraphTools;
-    
+
     private MyToolExecutedEventListener myToolExecutedEventListener;
+
+    private List<ToolCallAttachment> toolCallAttachments = new ArrayList<>();
+    
+    private static final String systemMessage = """
+You are a helpful Resource Description Framework (RDF) assistant.
+
+""" + AticDatasetGraphTools.SKILL_TEXT;
 
     public AticAgentProgram(Agent agent, JSONObject config, Session session, SqliteAticDatasetGraph dataset) {
         this.agent = agent;
@@ -66,7 +83,9 @@ public class AticAgentProgram implements AgentProgram {
         ChatModel model = OpenAiChatModel.builder()
                 .baseUrl("https://openrouter.ai/api/v1")
                 .apiKey(apiKey)
-                .modelName("openai/gpt-4.1")
+                .modelName("openai/gpt-4o-mini")
+                //.modelName("openai/gpt-4.1")
+                //.modelName("openai/gpt-5.5-pro")
                 .build();
 
         //https://docs.langchain4j.dev/tutorials/observability/
@@ -88,13 +107,22 @@ public class AticAgentProgram implements AgentProgram {
         ToolExecutedEventListener toolExecutedListener
                 = event -> session.getLogger().info(toString(event));
 
+        ToolExecutionErrorHandler toolExecutionErrorHandler = (Throwable thrwbl, ToolErrorContext tec) -> {
+            return handleError(thrwbl, tec, "execution");
+        };
+
+        ToolArgumentsErrorHandler toolArgumentsErrorHandler = (Throwable thrwbl, ToolErrorContext tec) -> {
+            return handleError(thrwbl, tec, "arguments");
+        };
+
         aticDatasetGraphTools = new AticDatasetGraphTools(dataset, ictx);
-        
+
         myToolExecutedEventListener = new MyToolExecutedEventListener();
 
         aticAgentViaLangChain = AiServices
                 .builder(AticAgentViaLangChain.class)
                 .chatModel(model)
+                .systemMessage(systemMessage)
                 .registerListener(startedListener)
                 .registerListener(requestIssuedListener)
                 .registerListener(responseReceivedListener)
@@ -102,6 +130,8 @@ public class AticAgentProgram implements AgentProgram {
                 .registerListener(completedListener)
                 .registerListener(toolExecutedListener)
                 .registerListener(myToolExecutedEventListener)
+                .toolExecutionErrorHandler(toolExecutionErrorHandler)
+                .toolArgumentsErrorHandler(toolArgumentsErrorHandler)
                 .tools(aticDatasetGraphTools)
                 .build();
     }
@@ -112,36 +142,101 @@ public class AticAgentProgram implements AgentProgram {
         return new AticAgentProgram(agent, configObj, session, dataset);
     }
 
-    
+    //we collect all tool errors as attachments
+    private ToolErrorHandlerResult handleError(Throwable thrwbl, ToolErrorContext tec, String mode) {
+        //handleError is called first on exception
+        ToolCallAttachment toolCallAttachment = new ToolCallAttachment(
+                tec.toolExecutionRequest().name(),
+                tec.toolExecutionRequest().arguments(), //this is a json object as string
+                null,
+                thrwbl
+        );
+        toolCallAttachments.add(toolCallAttachment);
+        return ToolErrorHandlerResult.text("An error occured:\n" + thrwbl.getClass().toString() + ": " + thrwbl.getMessage());
+    }
+
+    //we collect all tool executions as attachments
     private class MyToolExecutedEventListener implements ToolExecutedEventListener {
 
-        public void reset() {
-            
-        }
-        
         @Override
         public void onEvent(ToolExecutedEvent event) {
-            event.request().name();
-            
-            int a = 0;
+            //onEvent is called second on exception
+            ToolCallAttachment toolCallAttachment = new ToolCallAttachment(
+                    event.request().name(),
+                    event.request().arguments(), //this is a json object as string
+                    event.resultText(),
+                    null
+            );
+            toolCallAttachments.add(toolCallAttachment);
         }
-        
     }
-    
+
+    private void merge(List<ToolCallAttachment> attachments) {
+
+        Map<MergeKey, ToolCallAttachment> merged = new LinkedHashMap<>();
+
+        for (ToolCallAttachment attachment : attachments) {
+
+            MergeKey key = new MergeKey(
+                    attachment.name(),
+                    attachment.arguments()
+            );
+
+            ToolCallAttachment existing = merged.get(key);
+
+            if (existing == null) {
+
+                merged.put(key, attachment);
+
+            } else {
+
+                merged.put(key, new ToolCallAttachment(
+                        attachment.name(),
+                        attachment.arguments(),
+                        existing.result() != null
+                        ? existing.result()
+                        : attachment.result(),
+                        existing.throwable() != null
+                        ? existing.throwable()
+                        : attachment.throwable()
+                ));
+            }
+        }
+
+        attachments.clear();
+        attachments.addAll(merged.values());
+    }
+
+    private record MergeKey(
+            String name,
+            String arguments
+            ) {
+    }
+
     @Override
     public void process(Message message) {
-        
+
         aticDatasetGraphTools.reset();
-        myToolExecutedEventListener.reset();
+        toolCallAttachments.clear();
 
         String answer = aticAgentViaLangChain.chat(message.content());
 
-        session.append(Message.plainText(agent, answer));
+        Message.Builder responseMessageBuilder = Message
+                .builder(agent, answer, Message.TEXT_PLAIN);
+
+        //merge tool execution and potential error in one attachment
+        merge(toolCallAttachments);
+        
+        //attach tool calls
+        for (Attachment attachment : toolCallAttachments) {
+            responseMessageBuilder.attachment(attachment);
+        }
+
+        session.append(responseMessageBuilder.build());
     }
 
     private String toString(AiServiceEvent event) {
         try {
-            //return ReflectionToStringBuilder.toString(event, new RecursiveToStringStyle(), false, false, true, AiServiceEvent.class);
             return AgentUtils.toString(event);
         } catch (Exception e) {
             return e.getMessage();

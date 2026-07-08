@@ -80,21 +80,20 @@ public class AgentEvaluation {
     }
 
     public void runSingle(String packagePath, String yamlFilename) {
-
         try {
             JSONObject evalSetting = loadEvaluationSetting(packagePath, yamlFilename);
 
             SessionAndData sessionAndData = setupSessionAndData(evalSetting);
             Session session = sessionAndData.session();
             SqliteAticDatasetGraph ds = sessionAndData.dataset();
-            
+
             //settings
             String agentClass = evalSetting.getString("agentClass");
             String messageContent = evalSetting.getString("messageContent");
             JSONObject config = evalSetting.optJSONObject("config");
 
             //load program 
-            Class<?> clazz = Class.forName("de.dfki.sds.aticsqlite.agent."+ agentClass);
+            Class<?> clazz = Class.forName("de.dfki.sds.aticsqlite.agent." + agentClass);
             Constructor<?> ctor
                     = clazz.getConstructor(
                             Agent.class,
@@ -119,16 +118,9 @@ public class AgentEvaluation {
                     )
             );
 
-            long duration
-                    = System.currentTimeMillis() - start;
+            long duration = System.currentTimeMillis() - start;
 
-            System.out.println(
-                    toString(
-                            yamlFilename,
-                            session,
-                            duration
-                    )
-            );
+            System.out.println(toString(evalSetting, session, duration));
 
         } catch (Exception e) {
             throw new RuntimeException(
@@ -153,7 +145,7 @@ public class AgentEvaluation {
         }
         return root;
     }
-    
+
     private SessionAndData setupSessionAndData(JSONObject evalSetting) {
         try {
 
@@ -165,40 +157,16 @@ public class AgentEvaluation {
             SqliteAticDatasetGraph ds = (SqliteAticDatasetGraph) AticFactory.createTxn();
 
             ds.executeWrite(() -> {
-
                 try {
-                    ds.addUser(
-                            "",
-                            "",
-                            "",
-                            principalUsername,
-                            InvocationContext.EMPTY
-                    );
-
-                } catch (Exception ignore) {
+                    ds.addUser("", "", "", principalUsername, InvocationContext.EMPTY);
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
                 }
 
                 try {
-                    ds.addUser(
-                            "",
-                            "",
-                            "",
-                            agentUsername,
-                            InvocationContext.EMPTY
-                    );
-
-                } catch (Exception ignore) {
-                }
-
-                try {
-                    ds.enableAgent(
-                            agentUsername,
-                            SqliteAticDatasetGraph.AGENT_NULL_FACTORY,
-                            new JSONObject(),
-                            InvocationContext.EMPTY
-                    );
-
-                } catch (Exception ignore) {
+                    ds.addUser("", "", "", agentUsername, InvocationContext.EMPTY);
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
                 }
             });
 
@@ -209,8 +177,8 @@ public class AgentEvaluation {
                     )
             );
 
-            Agent agent = ds.calculateRead(()
-                    -> (Agent) ds.getUser(
+            User agentAsUser = ds.calculateRead(()
+                    -> ds.getUser(
                             agentUsername,
                             InvocationContext.EMPTY
                     )
@@ -219,16 +187,38 @@ public class AgentEvaluation {
             //prepare and share data
             String datasetTrig = evalSetting.optString("dataset", null);
             if (datasetTrig != null && !datasetTrig.isBlank()) {
-                loadDatasetTrig(evalSetting.getString("packagePath"),datasetTrig, ds, principal, agent);
+                loadDatasetTrig(evalSetting.getString("packagePath"), datasetTrig, ds, principal, agentAsUser);
             }
-            
+
+            //enableAgent to get as Agent
+            ds.executeWrite(() -> {
+                try {
+                    ds.enableAgent(
+                            agentUsername,
+                            "", //no need to fill it because we manage session and AgentProgram
+                            new JSONObject(),
+                            InvocationContext.EMPTY
+                    );
+
+                } catch (Exception ignore) {
+                }
+            });
+
+            //we need this for session
+            Agent agent = ds.calculateRead(()
+                    -> (Agent) ds.getUser(
+                            agentUsername,
+                            InvocationContext.EMPTY
+                    )
+            );
+
             Session session = new Session(
                     principal,
                     sessionId,
                     agent,
                     Instant.EPOCH
             );
-            
+
             return new SessionAndData(session, ds);
 
         } catch (Exception e) {
@@ -239,18 +229,13 @@ public class AgentEvaluation {
             );
         }
     }
-    
-    private void loadDatasetTrig(
-            String packagePath,
-            String filenameTrig,
-            SqliteAticDatasetGraph ds,
-            User user,
-            Agent agent) {
+
+    private void loadDatasetTrig(String packagePath, String filenameTrig, SqliteAticDatasetGraph ds, User user, User agent) {
         User adminUser = ds.calculateRead(() -> {
             return ds.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
         });
         InvocationContext ictx = new InvocationContext.Builder().fromUser(adminUser).build();
-        
+
         Path trig = Path.of(packagePath, filenameTrig);
 
         try (InputStream in = getClass().getResourceAsStream(trig.toString())) {
@@ -271,64 +256,70 @@ public class AgentEvaluation {
                     e
             );
         }
-        
+
         ds.executeWrite(() -> {
-            
+
             Set<String> graphUris = new HashSet<>();
             ds.listGraphNodes().forEachRemaining(graph -> {
                 graphUris.add(graph.getURI());
             });
-            
+
             Set<String> resourceUris = new HashSet<>();
             ds.find(Node.ANY, Node.ANY, Node.ANY, Node.ANY, ictx).forEachRemaining(quad -> {
                 resourceUris.add(quad.getSubject().getURI());
-                if(!quad.getObject().isLiteral()) {
+                if (!quad.getObject().isLiteral()) {
                     resourceUris.add(quad.getObject().getURI());
                 }
             });
-            
+
             ds.shareGraphs(graphUris, Set.of(user.getShareUri(), agent.getShareUri()), Permission.EDIT, ictx);
             ds.shareResources(resourceUris, Set.of(user.getShareUri(), agent.getShareUri()), Permission.EDIT, ictx);
         });
     }
 
-    private String toString(
-            String yamlFilename,
-            Session session,
-            long durationMillis) {
+    private String toString(JSONObject evalSetting, Session session, long durationMillis) {
 
-        StringBuilder sb
-                = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
 
         sb.append("\n");
-        sb.append("Evaluation\n");
+        sb.append("Result\n");
         sb.append("----------------------------------------\n");
         sb.append("File      : ")
-                .append(yamlFilename)
+                .append(evalSetting.get("yamlFilename"))
                 .append("\n");
-        sb.append("Session   : ")
-                .append(session.getSessionId())
+        sb.append("Name      : ")
+                .append(evalSetting.get("name"))
                 .append("\n");
-        sb.append("Agent     : ")
-                .append(session.getAgent().getUsername())
+        sb.append("Dataset   : ")
+                .append(evalSetting.get("dataset"))
                 .append("\n");
+        sb.append("AgentClass: ")
+                .append(evalSetting.get("agentClass"))
+                .append("\n");
+        
+        //result
+        sb.append("Duration  : ")
+                .append(durationMillis)
+                .append(" ms\n");
         sb.append("Messages  : ")
                 .append(session.getMessages().size())
                 .append("\n");
         sb.append("Logs      : ")
                 .append(session.getLogRecords().size())
                 .append("\n");
-        sb.append("Duration  : ")
-                .append(durationMillis)
-                .append(" ms\n");
+        
+        sb.append("Messages  :\n");
+        for(Message message : session.getMessages()) {
+            sb.append(message.toString()).append("\n");
+        }
 
         return sb.toString();
     }
 
     public record SessionAndData(Session session, SqliteAticDatasetGraph dataset) {
-    
+
     }
-    
+
     public static void main(String[] args) {
         AgentEvaluation agentEvaluation = new AgentEvaluation();
         agentEvaluation.runAll("/de/dfki/sds/aticsqlite/agenteval", "evaluations.txt");

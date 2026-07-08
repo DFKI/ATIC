@@ -1,5 +1,3 @@
-
-
 package de.dfki.sds.atic.agent;
 
 import java.util.Objects;
