@@ -25,6 +25,15 @@ public class AticDatasetGraphTools {
         this.ictx = ictx;
     }
 
+    /**
+     * Resets the state.
+     */
+    public void reset() {
+        
+    }
+    
+    //============================================================
+    
     @Tool("""
     Returns the URIs of all graphs currently visible to the invoker.
     The result is a list of graph node URIs.

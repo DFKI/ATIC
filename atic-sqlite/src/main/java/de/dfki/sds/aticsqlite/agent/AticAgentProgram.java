@@ -9,6 +9,7 @@ import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.observability.api.event.AiServiceEvent;
+import dev.langchain4j.observability.api.event.ToolExecutedEvent;
 import dev.langchain4j.observability.api.listener.AiServiceCompletedListener;
 import dev.langchain4j.observability.api.listener.AiServiceErrorListener;
 import dev.langchain4j.observability.api.listener.AiServiceRequestIssuedListener;
@@ -33,6 +34,10 @@ public class AticAgentProgram implements AgentProgram {
     private InvocationContext ictx;
 
     private AticAgentViaLangChain aticAgentViaLangChain;
+    
+    private AticDatasetGraphTools aticDatasetGraphTools;
+    
+    private MyToolExecutedEventListener myToolExecutedEventListener;
 
     public AticAgentProgram(Agent agent, JSONObject config, Session session, SqliteAticDatasetGraph dataset) {
         this.agent = agent;
@@ -83,7 +88,9 @@ public class AticAgentProgram implements AgentProgram {
         ToolExecutedEventListener toolExecutedListener
                 = event -> session.getLogger().info(toString(event));
 
-        AticDatasetGraphTools aticDatasetGraphTools = new AticDatasetGraphTools(dataset, ictx);
+        aticDatasetGraphTools = new AticDatasetGraphTools(dataset, ictx);
+        
+        myToolExecutedEventListener = new MyToolExecutedEventListener();
 
         aticAgentViaLangChain = AiServices
                 .builder(AticAgentViaLangChain.class)
@@ -94,6 +101,7 @@ public class AticAgentProgram implements AgentProgram {
                 .registerListener(errorListener)
                 .registerListener(completedListener)
                 .registerListener(toolExecutedListener)
+                .registerListener(myToolExecutedEventListener)
                 .tools(aticDatasetGraphTools)
                 .build();
     }
@@ -104,8 +112,27 @@ public class AticAgentProgram implements AgentProgram {
         return new AticAgentProgram(agent, configObj, session, dataset);
     }
 
+    
+    private class MyToolExecutedEventListener implements ToolExecutedEventListener {
+
+        public void reset() {
+            
+        }
+        
+        @Override
+        public void onEvent(ToolExecutedEvent event) {
+            event.request().name();
+            
+            int a = 0;
+        }
+        
+    }
+    
     @Override
     public void process(Message message) {
+        
+        aticDatasetGraphTools.reset();
+        myToolExecutedEventListener.reset();
 
         String answer = aticAgentViaLangChain.chat(message.content());
 

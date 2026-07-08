@@ -358,7 +358,7 @@
         </style>
     </head>
     <template id="message-list-template">
-        <div v-if="session">
+        <div v-if="session" style="width: 100%; max-width: 800px;">
             <div
                 v-for="(msg, idx) in session.messages"
                 :key="'m' + idx"
