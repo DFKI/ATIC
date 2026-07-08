@@ -137,7 +137,6 @@ public class AticAgentProgram implements AgentProgram {
         String answer = aticAgentViaLangChain.chat(message.content());
 
         session.append(Message.plainText(agent, answer));
-
     }
 
     private String toString(AiServiceEvent event) {

@@ -1,0 +1,12 @@
+name: test
+description: todo
+
+dataset: 01_dataset.trig
+
+agentClass: AticAgentProgram
+config: {  }
+
+principalUsername: userA
+agentUsername: agentB
+
+messageContent: hi

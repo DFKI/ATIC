@@ -1,7 +1,5 @@
 package de.dfki.sds.aticsqlite;
 
-import burp.model.TriplesMap;
-import burp.parse.Parse;
 import de.dfki.sds.atic.ac.Agent;
 import de.dfki.sds.atic.ac.Group;
 import de.dfki.sds.atic.ac.Permission;
@@ -79,6 +77,11 @@ import org.mindrot.jbcrypt.BCrypt;
  */
 public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManagement, SharingManagement {
 
+    /**
+     * Use this null factory to state that the agent should not be initalized.
+     */
+    public static final String AGENT_NULL_FACTORY = "<null>";
+    
     /**
      * Symbol key storing the absolute path of the SQLite database folder in the Jena {@link Context}.
      */
@@ -2301,6 +2304,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         User principal = this.getUser(ctx.getUserId(), InvocationContext.EMPTY);
 
         for (Agent agent : agents) {
+            if(agent.getFactory().equals(AGENT_NULL_FACTORY)) {
+                continue;
+            }
+            
             Session session = agentSessionManager.getOrAddSession(principal, sessionId, agent, this, ctx);
 
             session.submit(
