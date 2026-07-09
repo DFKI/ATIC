@@ -2301,6 +2301,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         User principal = this.getUser(ctx.getUserId(), InvocationContext.EMPTY);
 
         for (Agent agent : agents) {
+            //no message, no prompt
+            if(message == null || message.isBlank()) {
+                continue;
+            }
+            
             Session session = agentSessionManager.getOrAddSession(principal, sessionId, agent, this, ctx);
 
             session.submit(

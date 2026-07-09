@@ -16,7 +16,6 @@ import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
-import org.apache.jena.rdfpatch.changes.RDFChangesCollector;
 import org.apache.jena.sparql.core.DatasetGraph;
 import org.apache.jena.sparql.core.DatasetGraphFactory;
 import org.apache.jena.sparql.core.Quad;
@@ -53,7 +52,7 @@ The current state of the RDF patch can be seen with inspectRDFPatch.
                                       """;
 
     private DatasetGraph foundQuadsDatasetGraph;
-    private RDFChangesCollector collector;
+    private RDFChangesDistinctCollector collector;
 
     public AticDatasetGraphTools(SqliteAticDatasetGraph dataset, InvocationContext ictx) {
         this.dataset = dataset;
@@ -66,9 +65,7 @@ The current state of the RDF patch can be seen with inspectRDFPatch.
      */
     public void reset() {
         foundQuadsDatasetGraph = DatasetGraphFactory.createGeneral();
-        collector = new RDFChangesCollector();
-        //RDFChangesCollector.RDFPatchStored stored = (RDFChangesCollector.RDFPatchStored) collector.getRDFPatch();
-        //stored.getActions()
+        collector = new RDFChangesDistinctCollector();
     }
 
     //============================================================
@@ -450,9 +447,7 @@ The current state of the RDF patch can be seen with inspectRDFPatch.
     }
     
     public boolean hasRDFPatch() {
-        return !((RDFChangesCollector.RDFPatchStored) collector.getRDFPatch())
-                .getActions()
-                .isEmpty();
+        return !collector.isEmpty();
     }
 
 }

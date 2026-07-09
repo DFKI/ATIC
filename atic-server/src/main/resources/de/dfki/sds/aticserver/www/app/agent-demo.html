@@ -546,9 +546,14 @@
                                         v-html="rdfPatchHtml(att.content)">
                                     </div>
 
-                                    <button class="btn btn-sm btn-success mt-2" @click="applyPatch(att.content)">
-                                        <i class="fa fa-check me-1"></i> Apply
-                                    </button>
+                                    <div class="mt-2">
+                                        <button v-if="!isPatchApplied(aIdx)" class="btn btn-sm btn-success" @click="applyPatch(att.content, aIdx)">
+                                            <i class="fa fa-check me-1"></i> Apply
+                                        </button>
+                                        <button v-else class="btn btn-sm btn-warning" @click="undoPatch(att.content, aIdx)">
+                                            <i class="fa fa-undo me-1"></i> Undo
+                                        </button>
+                                    </div>
                                 </div>
                             </li>
                         </template>
@@ -696,11 +701,11 @@
 
                         <!-- Messages -->
                         <div v-if="showLogs" ref="chatMessages" class="chat-pane chat-pane-left">
-                            <message-list :session="currentSession" :current-user="currentUser" :error="error" :error-stacktrace="errorStacktrace" @on-copy="copyMessage" @on-apply-patch="applyPatch"></message-list>
+                            <message-list :session="currentSession" :current-user="currentUser" :error="error" :error-stacktrace="errorStacktrace" @on-copy="copyMessage" @clear-error="clearError"></message-list>
                         </div>
 
                         <div v-else ref="chatMessages" class="chat-messages">
-                            <message-list :session="currentSession" :current-user="currentUser" :error="error" :error-stacktrace="errorStacktrace" @on-copy="copyMessage" @on-apply-patch="applyPatch"></message-list>
+                            <message-list :session="currentSession" :current-user="currentUser" :error="error" :error-stacktrace="errorStacktrace" @on-copy="copyMessage" @clear-error="clearError"></message-list>
                         </div>
 
                         <!-- Logs -->
@@ -779,10 +784,26 @@
                     'message-list': {
                         props: ['session', 'currentUser', 'error', 'errorStacktrace'],
                         template: '#message-list-template',
-                        emits: ['on-copy', 'on-apply-patch'],
+                        emits: ['on-copy', 'on-apply-patch', 'on-undo-patch', 'clear-error', 'on-patch-success', 'on-patch-undo-success'],
+                        data() {
+                            return {
+                                appliedPatches: []
+                            };
+                        },
                         methods: {
                             onCopy(content) {
                                 this.$emit('on-copy', content);
+                            },
+                            isPatchApplied(aIdx) {
+                                return this.appliedPatches.includes(aIdx);
+                            },
+                            markApplied(aIdx) {
+                                if (!this.appliedPatches.includes(aIdx)) {
+                                    this.appliedPatches.push(aIdx);
+                                }
+                            },
+                            markRemoved(aIdx) {
+                                this.appliedPatches = this.appliedPatches.filter(i => i !== aIdx);
                             },
                             prettyPrintResult(text) {
                                 try {
@@ -804,8 +825,35 @@
                                     return `<div class="${cls}">${esc(line)}</div>`;
                                 }).join('');
                             },
-                            applyPatch(content) {
-                                this.$emit('on-apply-patch', content);
+                            applyPatch(content, aIdx) {
+                                axios.patch('/dataset', content, {headers: {'Content-Type': 'text/plain'}})
+                                .then(() => {
+                                    this.markApplied(aIdx);
+                                    const btn = document.createElement('div');
+                                    btn.className = 'alert alert-success alert-dismissible fade show position-fixed';
+                                    btn.style.cssText = 'top:16px;right:16px;z-index:9999;';
+                                    btn.innerHTML = '<i class="fa fa-check me-1"></i> Applied! <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                                    document.body.appendChild(btn);
+                                    setTimeout(() => btn.remove(), 2000);
+                                })
+                                .catch(() => {
+                                    this.error = 'Failed to apply patch';
+                                });
+                            },
+                            undoPatch(content, aIdx) {
+                                axios.patch('/dataset', content, {headers: {'Content-Type': 'text/plain'}, params: {undo: true}})
+                                .then(() => {
+                                    this.markRemoved(aIdx);
+                                    const btn = document.createElement('div');
+                                    btn.className = 'alert alert-success alert-dismissible fade show position-fixed';
+                                    btn.style.cssText = 'top:16px;right:16px;z-index:9999;';
+                                    btn.innerHTML = '<i class="fa fa-check me-1"></i> Undo! <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                                    document.body.appendChild(btn);
+                                    setTimeout(() => btn.remove(), 2000);
+                                })
+                                .catch(() => {
+                                    this.error = 'Failed to undo patch';
+                                });
                             }
                         }
                     }
@@ -814,6 +862,9 @@
                     axios.interceptors.response.use(
                             response => response,
                             error => {
+                                if (error.response && error.response.status === 204) {
+                                    return Promise.resolve(error.response);
+                                }
                                 this.error = error.response?.data || error.message || 'Unknown error';
                                 const modal = new bootstrap.Modal(this.$refs.error_modal);
                                 modal.show();
@@ -973,6 +1024,8 @@
                         this.currentSession = s;
                         this.currentSession.messages = [];
                         this.currentSession.logs = [];
+                        this.error = null;
+                        this.errorStacktrace = null;
                         this.recentSessions = this.recentSessions.map(rs =>
                             rs.sessionId === s.sessionId ? s : rs
                         );
@@ -1104,19 +1157,9 @@
                             setTimeout(() => btn.remove(), 2000);
                         });
                     },
-                    applyPatch(content) {
-                        axios.patch('/dataset', content, {headers: {'Content-Type': 'text/plain'}})
-                                .then(() => {
-                                    const btn = document.createElement('div');
-                                    btn.className = 'alert alert-success alert-dismissible fade show position-fixed';
-                                    btn.style.cssText = 'top:16px;right:16px;z-index:9999;';
-                                    btn.innerHTML = '<i class="fa fa-check me-1"></i> Applied! <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-                                    document.body.appendChild(btn);
-                                    setTimeout(() => btn.remove(), 2000);
-                                })
-                                .catch(() => {
-                                    this.error = 'Failed to apply patch';
-                                });
+                    clearError() {
+                        this.error = null;
+                        this.errorStacktrace = null;
                     },
                     scrollToBottom() {
                         const el = this.$refs.chatMessages;

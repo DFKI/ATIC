@@ -105,6 +105,7 @@
 
                             <i v-if="principal.type === 'user'" class="fa fa-user me-2"></i>
                             <i v-else-if="principal.type === 'group'" class="fa fa-users me-2"></i>
+                            <i v-else-if="principal.type === 'agent'" class="fa fa-robot me-2"></i>
                             {{ principal.label }}
                         </li>
                     </ul>
@@ -116,6 +117,7 @@
                               :key="idx">
                             <i v-if="p.type === 'user'" class="fa fa-user me-2"></i>
                             <i v-else-if="p.type === 'group'" class="fa fa-users me-2"></i>
+                            <i v-else-if="p.type === 'agent'" class="fa fa-robot me-2"></i>
                             {{ p.label }}
                             <button type="button"
                                     class="btn-close btn-close-white btn-sm"
