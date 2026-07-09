@@ -69,6 +69,7 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 import java.util.stream.Collectors;
+import org.apache.commons.io.input.ReaderInputStream;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
@@ -86,6 +87,7 @@ import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.TxnType;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdfpatch.RDFPatch;
+import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.rdfpatch.changes.RDFChangesBase;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
@@ -307,6 +309,8 @@ public class AticServer {
         // SPARQL update endpoint
         app.post("/update", this::handleSparqlUpdate);
 
+        app.patch("/dataset", this::patchDataset);
+
         //Share/Unshare Graphs
         app.post("/graph/share", this::postShareGraphs);
         app.delete("/graph/share", this::deleteShareGraphs);
@@ -362,7 +366,7 @@ public class AticServer {
     private void getAbout(Context ctx) throws IOException {
         StringBuilder sb = new StringBuilder();
         sb.append(Main.ASCII_LOGO).append("\n");
-        sb.append(VersionUtil.getVersion()).append("\n");
+        sb.append(Utils.getVersion()).append("\n");
         sb.append("https://github.com/DFKI/ATIC").append("\n\n");
         sb.append("Instance Name: ").append(config.instanceName).append("\n");
         ctx.contentType(ContentType.TEXT_PLAIN);
@@ -1064,6 +1068,34 @@ public class AticServer {
         }
     }
 
+    //-----------------------------------------
+    //patch
+    private void patchDataset(Context ctx) throws IOException {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        boolean undo = ctx.queryParamMap().containsKey("undo")
+                && !"false".equalsIgnoreCase(ctx.queryParam("undo"));
+
+        RDFPatch patch = RDFPatchOps.read(
+                new ReaderInputStream.Builder()
+                        .setReader(new StringReader(ctx.body()))
+                        .setCharset(StandardCharsets.UTF_8)
+                        .get());
+
+        if (undo) {
+            patch = Utils.invertPatch(patch);
+        }
+
+        RDFPatch finalPatch = patch;
+
+        datasetGraph.executeWrite(() -> {
+            datasetGraph.apply(finalPatch, ictx);
+        });
+
+        ctx.status(HttpStatus.NO_CONTENT);
+    }
+
+    
     //-----------------------------------------
     //vkg
     private void handleVirtualGraphRequest(Context ctx) {

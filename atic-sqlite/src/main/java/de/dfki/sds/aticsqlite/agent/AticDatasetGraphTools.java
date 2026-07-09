@@ -386,9 +386,11 @@ The current state of the RDF patch can be seen with inspectRDFPatch.
     public String inspectRDFPatch() {
         RDFPatch patch = collector.getRDFPatch();
         StringBuilder sb = new StringBuilder();
-        sb.append(RDFPatchOps.summary(patch));
-        sb.append("\n");
-        sb.append(RDFPatchOps.str(patch));
+        if(hasRDFPatch()) {
+            sb.append(RDFPatchOps.str(patch));
+        } else {
+            sb.append("Patch is empty. No modifications were made yet.");
+        }
         return sb.toString();
     }
 

@@ -11,7 +11,7 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
         System.out.println(ASCII_LOGO);
-        System.out.println(VersionUtil.getVersion());
+        System.out.println(Utils.getVersion());
         
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error");
         

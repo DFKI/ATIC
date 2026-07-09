@@ -412,6 +412,17 @@
                 margin-bottom: 2px;
                 margin-top: 4px;
             }
+
+            .rdf-patch-body {
+                font-family: monospace;
+                white-space: normal;
+                word-break: break-word;
+            }
+            .rdf-patch-body > div {
+                line-height: 1.2;
+                margin: 0;
+                padding: 0 4px;
+            }
         </style>
     </head>
     <template id="message-list-template">
@@ -439,99 +450,108 @@
                     </span>
 
                     <ul
-                        v-if="msg.attachments && msg.attachments.some(a => a.type === 'toolCall')"
+                        v-if="msg.attachments && msg.attachments.length > 0"
                         class="attachment-list">
-                        <li
-                            v-for="(att, aIdx) in msg.attachments.filter(a => a.type === 'toolCall')"
-                            :key="'a' + aIdx"
-                            class="attachment-item">
-                            <button
-                                class="attachment-toggle"
-                                data-bs-toggle="collapse"
-                                :data-bs-target="'#attBody' + aIdx"
-                                :aria-expanded="false"
-                                :id="'attHead' + aIdx">
-                                <i class="fa fa-chevron-right"></i>
-                                <i class="fa fa-wrench"></i>
-                                <span>{{ att.name }}</span>
-                                <span v-if="att.throwable" class="ms-auto text-danger">
-                                    <i class="fa fa-exclamation-triangle"></i>
-                                </span>
-                            </button>
-                            <div
-                                :id="'attBody' + aIdx"
-                                class="collapse attachment-body"
-                                :aria-labelledby="'attHead' + aIdx">
-                                <div v-if="att.arguments">
-                                    <div class="attachment-label">Arguments</div>
-                                    <pre>{{ prettyPrintResult(att.arguments) }}</pre>
+                        <template v-for="(att, aIdx) in msg.attachments" :key="'a' + aIdx">
+                            <li v-if="att.type === 'toolCall'" class="attachment-item">
+                                <button
+                                    class="attachment-toggle"
+                                    data-bs-toggle="collapse"
+                                    :data-bs-target="'#attBody' + aIdx"
+                                    :aria-expanded="false"
+                                    :id="'attHead' + aIdx">
+                                    <i class="fa fa-chevron-right"></i>
+                                    <i class="fa fa-wrench"></i>
+                                    <span>{{ att.name }}</span>
+                                    <span v-if="att.throwable" class="ms-auto text-danger">
+                                        <i class="fa fa-exclamation-triangle"></i>
+                                    </span>
+                                </button>
+                                <div
+                                    :id="'attBody' + aIdx"
+                                    class="collapse attachment-body"
+                                    :aria-labelledby="'attHead' + aIdx">
+                                    <div v-if="att.arguments">
+                                        <div class="attachment-label">Arguments</div>
+                                        <pre>{{ prettyPrintResult(att.arguments) }}</pre>
+                                    </div>
+                                    <div v-if="att.result">
+                                        <div class="attachment-label">Result</div>
+                                        <pre>{{ prettyPrintResult(att.result) }}</pre>
+                                    </div>
+                                    <div v-if="att.throwable">
+                                        <div class="attachment-label">Error</div>
+                                        <pre>{{ att.throwable }}</pre>
+                                    </div>
                                 </div>
-                                <div v-if="att.result">
-                                    <div class="attachment-label">Result</div>
-                                    <pre>{{ prettyPrintResult(att.result) }}</pre>
+                            </li>
+                            <li v-else-if="att.type === 'rdfNodes'" class="attachment-item">
+                                <button
+                                    class="attachment-toggle"
+                                    data-bs-toggle="collapse"
+                                    :data-bs-target="'#rdfBody' + aIdx"
+                                    :aria-expanded="false"
+                                    :id="'rdfHead' + aIdx">
+                                    <i class="fa fa-chevron-right"></i>
+                                    <i class="fa fa-sitemap"></i>
+                                    <span>{{ att.nodes.length }} {{ att.nodes.length === 1 ? 'node' : 'nodes' }}</span>
+                                </button>
+                                <div
+                                    :id="'rdfBody' + aIdx"
+                                    class="collapse attachment-body"
+                                    :aria-labelledby="'rdfHead' + aIdx">
+                                    <ul class="mb-0" style="font-size:13px; padding-left:20px;">
+                                        <li v-for="(uri, uIdx) in att.nodes" :key="'u' + uIdx">
+                                            {{ uri }}
+                                        </li>
+                                    </ul>
                                 </div>
-                                <div v-if="att.throwable">
-                                    <div class="attachment-label">Error</div>
-                                    <pre>{{ att.throwable }}</pre>
+                            </li>
+                            <li v-else-if="att.type === 'rdfDataset'" class="attachment-item">
+                                <button
+                                    class="attachment-toggle"
+                                    data-bs-toggle="collapse"
+                                    :data-bs-target="'#rdfDataSetBody' + aIdx"
+                                    :aria-expanded="false"
+                                    :id="'rdfDataSetHead' + aIdx">
+                                    <i class="fa fa-chevron-right"></i>
+                                    <i class="fa fa-project-diagram"></i>
+                                    <span>{{ att.graphs }} {{ att.graphs === 1 ? 'graph' : 'graphs' }}, {{ att.triples }} {{ att.triples === 1 ? 'triple' : 'triples' }}</span>
+                                </button>
+                                <div
+                                    :id="'rdfDataSetBody' + aIdx"
+                                    class="collapse attachment-body"
+                                    :aria-labelledby="'rdfDataSetHead' + aIdx">
+                                    <pre>{{ att.content }}</pre>
                                 </div>
-                            </div>
-                        </li>
-                    </ul>
+                            </li>
+                            <li v-else-if="att.type === 'rdfPatch'" class="attachment-item">
+                                <button
+                                    class="attachment-toggle"
+                                    data-bs-toggle="collapse"
+                                    :data-bs-target="'#rdfPatchBody' + aIdx"
+                                    :aria-expanded="false"
+                                    :id="'rdfPatchHead' + aIdx">
+                                    <i class="fa fa-chevron-right"></i>
+                                    <i class="fa fa-code-branch"></i>
+                                    <span>{{ att.additions }} {{ att.additions === 1 ? 'addition' : 'additions' }}, {{ att.removals }} {{ att.removals === 1 ? 'removal' : 'removals' }}</span>
+                                </button>
+                                <div
+                                    :id="'rdfPatchBody' + aIdx"
+                                    class="collapse attachment-body"
+                                    :aria-labelledby="'rdfPatchHead' + aIdx">
 
-                    <ul
-                        v-if="msg.attachments && msg.attachments.some(a => a.type === 'rdfNodes')"
-                        class="attachment-list">
-                        <li
-                            v-for="(att, rIdx) in msg.attachments.filter(a => a.type === 'rdfNodes')"
-                            :key="'r' + rIdx"
-                            class="attachment-item">
-                            <button
-                                class="attachment-toggle"
-                                data-bs-toggle="collapse"
-                                :data-bs-target="'#rdfBody' + rIdx"
-                                :aria-expanded="false"
-                                :id="'rdfHead' + rIdx">
-                                <i class="fa fa-chevron-right"></i>
-                                <i class="fa fa-shapes"></i>
-                                <span>{{ att.nodes.length }} {{ att.nodes.length === 1 ? 'node' : 'nodes' }}</span>
-                            </button>
-                            <div
-                                :id="'rdfBody' + rIdx"
-                                class="collapse attachment-body"
-                                :aria-labelledby="'rdfHead' + rIdx">
-                                <ul class="mb-0" style="font-size:13px; padding-left:20px;">
-                                    <li v-for="(uri, uIdx) in att.nodes" :key="'u' + uIdx">
-                                        {{ uri }}
-                                    </li>
-                                </ul>
-                            </div>
-                        </li>
-                    </ul>
+                                    <div 
+                                        class="rdf-patch-body"
+                                        v-html="rdfPatchHtml(att.content)">
+                                    </div>
 
-                    <ul
-                        v-if="msg.attachments && msg.attachments.some(a => a.type === 'rdfDataset')"
-                        class="attachment-list">
-                        <li
-                            v-for="(att, dIdx) in msg.attachments.filter(a => a.type === 'rdfDataset')"
-                            :key="'d' + dIdx"
-                            class="attachment-item">
-                            <button
-                                class="attachment-toggle"
-                                data-bs-toggle="collapse"
-                                :data-bs-target="'#rdfDataSetBody' + dIdx"
-                                :aria-expanded="false"
-                                :id="'rdfDataSetHead' + dIdx">
-                                <i class="fa fa-chevron-right"></i>
-                                <i class="fa fa-project-diagram"></i>
-                                <span>{{ att.graphs }} {{ att.graphs === 1 ? 'graph' : 'graphs' }}, {{ att.triples }} {{ att.triples === 1 ? 'triple' : 'triples' }}</span>
-                            </button>
-                            <div
-                                :id="'rdfDataSetBody' + dIdx"
-                                class="collapse attachment-body"
-                                :aria-labelledby="'rdfDataSetHead' + dIdx">
-                                <pre>{{ att.content }}</pre>
-                            </div>
-                        </li>
+                                    <button class="btn btn-sm btn-success mt-2" @click="applyPatch(att.content)">
+                                        <i class="fa fa-check me-1"></i> Apply
+                                    </button>
+                                </div>
+                            </li>
+                        </template>
                     </ul>
 
                     <div class="msg-actions mt-1">
@@ -676,11 +696,11 @@
 
                         <!-- Messages -->
                         <div v-if="showLogs" ref="chatMessages" class="chat-pane chat-pane-left">
-                            <message-list :session="currentSession" :current-user="currentUser" :error="error" :error-stacktrace="errorStacktrace" @on-copy="copyMessage"></message-list>
+                            <message-list :session="currentSession" :current-user="currentUser" :error="error" :error-stacktrace="errorStacktrace" @on-copy="copyMessage" @on-apply-patch="applyPatch"></message-list>
                         </div>
 
                         <div v-else ref="chatMessages" class="chat-messages">
-                            <message-list :session="currentSession" :current-user="currentUser" :error="error" :error-stacktrace="errorStacktrace" @on-copy="copyMessage"></message-list>
+                            <message-list :session="currentSession" :current-user="currentUser" :error="error" :error-stacktrace="errorStacktrace" @on-copy="copyMessage" @on-apply-patch="applyPatch"></message-list>
                         </div>
 
                         <!-- Logs -->
@@ -759,17 +779,33 @@
                     'message-list': {
                         props: ['session', 'currentUser', 'error', 'errorStacktrace'],
                         template: '#message-list-template',
-                        emits: ['on-copy'],
+                        emits: ['on-copy', 'on-apply-patch'],
                         methods: {
                             onCopy(content) {
                                 this.$emit('on-copy', content);
                             },
-            prettyPrintResult(text) {
+                            prettyPrintResult(text) {
                                 try {
                                     return JSON.stringify(JSON.parse(text), null, 2);
                                 } catch {
                                     return text;
                                 }
+                            },
+                            rdfPatchHtml(content) {
+                                const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+                                return content.split('\n').map(line => {
+                                    const cls = line.startsWith('D')
+                                            ? 'bg-danger-subtle'
+                                            : line.startsWith('A')
+                                            ? 'bg-success-subtle'
+                                            : '';
+
+                                    return `<div class="${cls}">${esc(line)}</div>`;
+                                }).join('');
+                            },
+                            applyPatch(content) {
+                                this.$emit('on-apply-patch', content);
                             }
                         }
                     }
@@ -1067,6 +1103,20 @@
                             document.body.appendChild(btn);
                             setTimeout(() => btn.remove(), 2000);
                         });
+                    },
+                    applyPatch(content) {
+                        axios.patch('/dataset', content, {headers: {'Content-Type': 'text/plain'}})
+                                .then(() => {
+                                    const btn = document.createElement('div');
+                                    btn.className = 'alert alert-success alert-dismissible fade show position-fixed';
+                                    btn.style.cssText = 'top:16px;right:16px;z-index:9999;';
+                                    btn.innerHTML = '<i class="fa fa-check me-1"></i> Applied! <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                                    document.body.appendChild(btn);
+                                    setTimeout(() => btn.remove(), 2000);
+                                })
+                                .catch(() => {
+                                    this.error = 'Failed to apply patch';
+                                });
                     },
                     scrollToBottom() {
                         const el = this.$refs.chatMessages;

@@ -32,8 +32,10 @@ public record RdfPatchAttachment(
         Map<String, Object> map = new LinkedHashMap<>();
 
         map.put("type", "rdfPatch");
-        map.put("summary", RDFPatchOps.summary(patch));
         map.put("content", RDFPatchOps.str(patch));
+        
+        map.put("additions", 0);
+        map.put("removals", 0);
 
         //detailed actions
         List<Map<String, Object>> actions = new ArrayList<>();
@@ -51,6 +53,8 @@ public record RdfPatchAttachment(
                 action.put("subject", q.s.toString());
                 action.put("predicate", q.p.toString());
                 action.put("object", q.o.toString());
+                
+                map.put("additions", (int) map.get("additions") + 1);
 
             } else if (item instanceof DeleteQuad q) {
 
@@ -59,6 +63,8 @@ public record RdfPatchAttachment(
                 action.put("subject", q.s.toString());
                 action.put("predicate", q.p.toString());
                 action.put("object", q.o.toString());
+                
+                map.put("removals", (int) map.get("removals") + 1);
 
             } else if (item instanceof AddPrefix p) {
 
