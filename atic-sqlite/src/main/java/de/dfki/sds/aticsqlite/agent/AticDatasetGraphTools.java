@@ -46,9 +46,9 @@ public class AticDatasetGraphTools {
 When you need to query RDF data, use both tools: findResources and findLiterals. 
 At the beginning use a small value for limit, like 15 and increase when necessary.
                                             
-When the user wants you to change RDF data use modifyLiteralQuad.
-If the graph is unknown assume default graph with URI `urn:x-arq:DefaultGraph`.
-The current state of the RDF patch can be seen with inspectRDFPatch.
+When the user wants you to change RDF data use modifyLiteralQuad for object literals and modifyResourceQuad for object resources.
+If the graph is unknown, assume default graph with URI `urn:x-arq:DefaultGraph`.
+The current state of the RDF patch during processing can be inspected with inspectRDFPatch.
                                       """;
 
     private DatasetGraph foundQuadsDatasetGraph;
@@ -280,6 +280,82 @@ The current state of the RDF patch can be seen with inspectRDFPatch.
         REMOVE
     }
 
+    @Tool("""
+    Records an operation on a resource RDF quad in the internal RDF patch.
+
+    Use operation=ADD to add the quad to the patch.
+    Use operation=REMOVE to remove the quad in the patch.
+
+    The graph, subject, predicate and object must be URIs.
+
+    This tool only records the operation in the internal patch. It does not immediately modify the dataset.
+    """)
+    public void modifyResourceQuad(
+            @P(
+                    name = "operation",
+                    description = "Either ADD or REMOVE."
+            ) PatchOperation operation,
+            @P(
+                    name = "graphUri",
+                    description = "URI of the graph.",
+                    required = true
+            ) String graphUri,
+            @P(
+                    name = "subjectUri",
+                    description = "URI of the subject.",
+                    required = true
+            ) String subjectUri,
+            @P(
+                    name = "predicateUri",
+                    description = "URI of the predicate.",
+                    required = true
+            ) String predicateUri,
+            @P(
+                    name = "objectUri",
+                    description = "URI of the object.",
+                    required = true
+            ) String objectUri
+    ) {
+        dataset.executeRead(() -> {
+
+            Node g = toNodeOrAny(dataset, graphUri);
+            Node s = toNodeOrAny(dataset, subjectUri);
+            Node p = toNodeOrAny(dataset, predicateUri);
+            Node o = toNodeOrAny(dataset, objectUri);
+
+            if (g.equals(Node.ANY)) {
+                throw new IllegalArgumentException("Provide a valid graph URI.");
+            }
+            if (s.equals(Node.ANY)) {
+                throw new IllegalArgumentException("Provide a valid subject URI.");
+            }
+            if (p.equals(Node.ANY)) {
+                throw new IllegalArgumentException("Provide a valid predicate URI.");
+            }
+            if (o.equals(Node.ANY)) {
+                throw new IllegalArgumentException("Provide a valid object URI.");
+            }
+
+            switch (operation) {
+                case ADD ->
+                    collector.add(g, s, p, o);
+                case REMOVE -> {
+                    
+                    //make sure that only quads can be removed which exist
+                    if(!dataset.contains(g, s, p, o, ictx)) {
+                        throw new IllegalArgumentException(
+                                "This quad cannot be deleted because it does not exist: " + Quad.create(g, s, p, o) + ". " + 
+                                "Make sure to find it first with findResources."
+                        );
+                    }
+                    
+                    collector.delete(g, s, p, o);
+                }
+            }
+        });
+    }
+    
+    
     @Tool("""
     Records an operation on a literal RDF quad in the internal RDF patch.
 

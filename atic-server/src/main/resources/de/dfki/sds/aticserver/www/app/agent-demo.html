@@ -37,6 +37,11 @@
             .sidebar-section {
                 padding: 8px 12px;
                 flex: 1;
+                display: flex;
+                flex-direction: column;
+            }
+            .sidebar-section .recents-list {
+                flex: 1;
                 overflow-y: auto;
                 overflow-x: visible;
             }
@@ -643,6 +648,7 @@
                     </div>
                     <div class="sidebar-section" @click="showMenu = null">
                         <h6>Recents</h6>
+                        <div class="recents-list">
                         <div v-for="s in recentSessions" :key="s.sessionId"
                              class="session-item"
                              :class="{ active: currentSession && currentSession.sessionId === s.sessionId }"
@@ -659,7 +665,7 @@
                                 <i class="fa fa-ellipsis-v"></i>
                             </button>
                             <div v-if="showMenu === s.sessionId" class="session-dropdown"
-                                 :style="{ position: 'fixed', top: menuTop + 'px', left: menuLeft + 'px', zIndex: 10, background: '#fff', border: '1px solid #ddd', borderRadius: '6px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', minWidth: '140px', whiteSpace: 'nowrap' }"
+                                 :style="{ position: 'fixed', top: menuTop + 'px', left: menuLeft + 'px', zIndex: 9999, background: '#fff', border: '1px solid #ddd', borderRadius: '6px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', minWidth: '140px', whiteSpace: 'nowrap' }"
                                  @click.stop>
                                 <a class="dropdown-item session-dropdown-item" href="#" @click.prevent="startRename(s); showMenu = null">
                                     <i class="fa fa-pen me-2"></i> Rename
@@ -668,6 +674,7 @@
                                     <i class="fa fa-trash me-2"></i> Delete
                                 </a>
                             </div>
+                        </div>
                         </div>
                         <div v-if="recentSessions.length === 0" class="text-muted" style="font-size:13px; padding:8px;">
                             No sessions yet
@@ -769,6 +776,7 @@
                         errorStacktrace: null,
 
                         showLogs: JSON.parse(localStorage.getItem('showLogs') || 'false'),
+                        showMenu: null,
                         menuButton: null,
                         menuTop: 0,
                         menuLeft: 0,

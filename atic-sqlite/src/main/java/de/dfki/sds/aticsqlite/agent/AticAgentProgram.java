@@ -8,6 +8,9 @@ import de.dfki.sds.atic.agent.Session;
 import de.dfki.sds.atic.agent.ToolCallAttachment;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
@@ -120,11 +123,15 @@ You are a helpful Resource Description Framework (RDF) assistant.
 
         myToolExecutedEventListener = new MyToolExecutedEventListener();
 
+        ChatMemory memory = new EnrichingChatMemory(
+                MessageWindowChatMemory.withMaxMessages(10)
+        );
+        
         aticAgentViaLangChain = AiServices
                 .builder(AticAgentViaLangChain.class)
                 .chatModel(model)
                 .systemMessage(systemMessage)
-                .chatMemory(MessageWindowChatMemory.withMaxMessages(10))
+                .chatMemory(memory)
                 .registerListener(startedListener)
                 .registerListener(requestIssuedListener)
                 .registerListener(responseReceivedListener)
@@ -142,6 +149,46 @@ You are a helpful Resource Description Framework (RDF) assistant.
     public static AgentProgram create(Agent agent, String config, Session session, SqliteAticDatasetGraph dataset) {
         JSONObject configObj = new JSONObject(config);
         return new AticAgentProgram(agent, configObj, session, dataset);
+    }
+
+    public final class EnrichingChatMemory implements ChatMemory {
+
+        private final ChatMemory delegate;
+
+        public EnrichingChatMemory(ChatMemory delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Object id() {
+            return delegate.id();
+        }
+
+        @Override
+        public List<ChatMessage> messages() {
+            return delegate.messages();
+        }
+
+        @Override
+        public void clear() {
+            delegate.clear();
+        }
+
+        @Override
+        public void add(ChatMessage message) {
+            //tool calls have text == null
+            if (message instanceof AiMessage aiMessage && aiMessage.text() != null) {
+                String enriched = enrich(aiMessage.text());
+                message = AiMessage.from(enriched, aiMessage.toolExecutionRequests());
+            }
+            
+            delegate.add(message);
+        }
+
+        private String enrich(String answer) {
+            //this way the attachments are baked into the text
+            return messageToString(enrichToMessage(answer));
+        }
     }
 
     //we collect all tool errors as attachments
@@ -222,6 +269,16 @@ You are a helpful Resource Description Framework (RDF) assistant.
         aticDatasetGraphTools.reset();
         toolCallAttachments.clear();
 
+        //with messageToString attachments are mentioned in the text
+        String answer = aticAgentViaLangChain.chat(messageToString(message));
+
+        //add attachments and other enrichments
+        Message answerMessage = enrichToMessage(answer);
+        
+        session.append(answerMessage);
+    }
+    
+    private String messageToString(Message message) {
         StringBuilder messageSB = new StringBuilder();
         messageSB.append(message.content());
         messageSB.append("\n");
@@ -232,11 +289,11 @@ You are a helpful Resource Description Framework (RDF) assistant.
                 messageSB.append(" * ").append(attachment.toString()).append("\n");
             }
         }
-
-        String answer = aticAgentViaLangChain.chat(messageSB.toString());
-
-        Message.Builder responseMessageBuilder = Message
-                .builder(agent, answer, Message.TEXT_PLAIN);
+        return messageSB.toString();
+    }
+    
+    private Message enrichToMessage(String answer) {
+        Message.Builder responseMessageBuilder = Message.builder(agent, answer, Message.TEXT_PLAIN);
 
         //merge tool execution and potential error in one attachment
         merge(toolCallAttachments);
@@ -245,17 +302,19 @@ You are a helpful Resource Description Framework (RDF) assistant.
         for (Attachment attachment : toolCallAttachments) {
             responseMessageBuilder.attachment(attachment);
         }
-        
+
         //attach what quads the agent saw
-        if(aticDatasetGraphTools.hasFoundQuads()) {
+        if (aticDatasetGraphTools.hasFoundQuads()) {
             responseMessageBuilder.attachment(aticDatasetGraphTools.getRdfDatasetAttachment());
         }
-        
-        if(aticDatasetGraphTools.hasRDFPatch()) {
+
+        if (aticDatasetGraphTools.hasRDFPatch()) {
             responseMessageBuilder.attachment(aticDatasetGraphTools.getRdfPatchAttachment());
         }
 
-        session.append(responseMessageBuilder.build());
+        Message responseMessage = responseMessageBuilder.build();
+        
+        return responseMessage;
     }
 
     private String toString(AiServiceEvent event) {
