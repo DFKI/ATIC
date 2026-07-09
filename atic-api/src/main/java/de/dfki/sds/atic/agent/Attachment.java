@@ -12,6 +12,7 @@ public sealed interface Attachment
                 BinaryAttachment,
                 RdfNodesAttachment,
                 RdfGraphAttachment, 
+                RdfPatchAttachment,
                 RdfDatasetAttachment,
                 ToolCallAttachment {
     

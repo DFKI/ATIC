@@ -6,7 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.apache.jena.graph.Node;
-import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
 import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.riot.RDFFormat;
@@ -64,21 +63,34 @@ public record RdfDatasetAttachment(
 
         StringWriter sw = new StringWriter();
 
-        Dataset jenaDataset = DatasetFactory.wrap(dataset);
-
-        RDFDataMgr.write(
-                sw,
-                jenaDataset,
-                RDFFormat.TRIG_PRETTY
-        );
-
         Map<String, Object> map = new LinkedHashMap<>();
 
         map.put("type", "rdfDataset");
         map.put("graphs", getNumberOfGraphs());
         map.put("triples", getNumberOfTriples());
-        map.put("content", sw.toString());
+        map.put("content", toTrig());
 
         return Map.copyOf(map);
+    }
+
+    private String toTrig() {
+
+        StringWriter sw = new StringWriter();
+
+        RDFDataMgr.write(
+                sw,
+                DatasetFactory.wrap(dataset),
+                RDFFormat.TRIG_PRETTY
+        );
+
+        return sw.toString();
+    }
+
+    @Override
+    public String toString() {
+
+        return "RdfDatasetAttachment[dataset=\n"
+                + toTrig()
+                + "]";
     }
 }

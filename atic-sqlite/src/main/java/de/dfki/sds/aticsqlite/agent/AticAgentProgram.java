@@ -250,6 +250,10 @@ You are a helpful Resource Description Framework (RDF) assistant.
         if(aticDatasetGraphTools.hasFoundQuads()) {
             responseMessageBuilder.attachment(aticDatasetGraphTools.getRdfDatasetAttachment());
         }
+        
+        if(aticDatasetGraphTools.hasRDFPatch()) {
+            responseMessageBuilder.attachment(aticDatasetGraphTools.getRdfPatchAttachment());
+        }
 
         session.append(responseMessageBuilder.build());
     }

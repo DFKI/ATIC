@@ -1,0 +1,11 @@
+name: Change of literal through RDF patch
+
+dataset: 01_dataset.trig
+
+agentClass: AticAgentProgram
+config:
+
+principalUsername: user
+agentUsername: agent
+
+messageContent: In graph urn:graph:test change http://www.example.org/exampleDocument#Monica her http://www.example.org/vocabulary#name to "Monica Doe".

@@ -1,6 +1,7 @@
 package de.dfki.sds.aticsqlite.agent;
 
 import de.dfki.sds.atic.agent.RdfDatasetAttachment;
+import de.dfki.sds.atic.agent.RdfPatchAttachment;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import dev.langchain4j.agent.tool.P;
@@ -13,6 +14,9 @@ import java.util.Set;
 import org.apache.jena.datatypes.BaseDatatype;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.rdfpatch.RDFPatch;
+import org.apache.jena.rdfpatch.RDFPatchOps;
+import org.apache.jena.rdfpatch.changes.RDFChangesCollector;
 import org.apache.jena.sparql.core.DatasetGraph;
 import org.apache.jena.sparql.core.DatasetGraphFactory;
 import org.apache.jena.sparql.core.Quad;
@@ -38,19 +42,23 @@ public class AticDatasetGraphTools {
             "none",
             "wildcard"
     );
-    
+
     public static final String SKILL_TEXT = """
 When you need to query RDF data, use both tools: findResources and findLiterals. 
 At the beginning use a small value for limit, like 15 and increase when necessary.
+                                            
+When the user wants you to change RDF data use modifyLiteralQuad.
+If the graph is unknown assume default graph with URI `urn:x-arq:DefaultGraph`.
+The current state of the RDF patch can be seen with inspectRDFPatch.
                                       """;
 
-    
     private DatasetGraph foundQuadsDatasetGraph;
-    
-    
+    private RDFChangesCollector collector;
+
     public AticDatasetGraphTools(SqliteAticDatasetGraph dataset, InvocationContext ictx) {
         this.dataset = dataset;
         this.ictx = ictx;
+
     }
 
     /**
@@ -58,6 +66,9 @@ At the beginning use a small value for limit, like 15 and increase when necessar
      */
     public void reset() {
         foundQuadsDatasetGraph = DatasetGraphFactory.createGeneral();
+        collector = new RDFChangesCollector();
+        //RDFChangesCollector.RDFPatchStored stored = (RDFChangesCollector.RDFPatchStored) collector.getRDFPatch();
+        //stored.getActions()
     }
 
     //============================================================
@@ -120,9 +131,9 @@ At the beginning use a small value for limit, like 15 and increase when necessar
             ) int limit
     ) {
         List<QuadRecord> results = new ArrayList<>();
-        
+
         dataset.executeRead(() -> {
-            
+
             Node g = toNodeOrAny(dataset, graphUri);
             Node s = toNodeOrAny(dataset, subjectUri);
             Node p = toNodeOrAny(dataset, predicateUri);
@@ -133,13 +144,13 @@ At the beginning use a small value for limit, like 15 and increase when necessar
             while (iter.hasNext() && results.size() < limit) {
 
                 Quad q = iter.next();
-                
-                if(q.getObject().isLiteral()) {
+
+                if (q.getObject().isLiteral()) {
                     continue;
                 }
 
                 foundQuadsDatasetGraph.add(q);
-                
+
                 results.add(new QuadRecord(
                         q.getGraph().toString(),
                         q.getSubject().toString(),
@@ -236,12 +247,12 @@ At the beginning use a small value for limit, like 15 and increase when necessar
 
         Node finalObject = o;
         dataset.executeRead(() -> {
-            
+
             Node g = toNodeOrAny(dataset, graphUri);
             Node s = toNodeOrAny(dataset, subjectUri);
             Node p = toNodeOrAny(dataset, predicateUri);
 
-            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.findInternal(g, s, p, finalObject, true, false,ictx);
+            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.findInternal(g, s, p, finalObject, true, false, ictx);
 
             while (iter.hasNext() && results.size() < limit) {
 
@@ -252,7 +263,7 @@ At the beginning use a small value for limit, like 15 and increase when necessar
                 }
 
                 foundQuadsDatasetGraph.add(q);
-                
+
                 results.add(new QuadRecord(
                         q.getGraph().toString(),
                         q.getSubject().toString(),
@@ -267,6 +278,119 @@ At the beginning use a small value for limit, like 15 and increase when necessar
         return results;
     }
 
+    public enum PatchOperation {
+        ADD,
+        REMOVE
+    }
+
+    @Tool("""
+    Records an operation on a literal RDF quad in the internal RDF patch.
+
+    Use operation=ADD to add the quad to the patch.
+    Use operation=REMOVE to remove the quad in the patch.
+
+    The graph, subject and predicate must be URIs.
+    The object is always a literal and can be plain, language-tagged, or typed.
+
+    This tool only records the operation in the internal patch. It does not immediately modify the dataset.
+    """)
+    public void modifyLiteralQuad(
+            @P(
+                    name = "operation",
+                    description = "Either ADD or REMOVE."
+            ) PatchOperation operation,
+            @P(
+                    name = "graphUri",
+                    description = "URI of the graph.",
+                    required = true
+            ) String graphUri,
+            @P(
+                    name = "subjectUri",
+                    description = "URI of the subject.",
+                    required = true
+            ) String subjectUri,
+            @P(
+                    name = "predicateUri",
+                    description = "URI of the predicate.",
+                    required = true
+            ) String predicateUri,
+            @P(
+                    name = "objectLex",
+                    description = "Literal lexical value.",
+                    required = true
+            ) String objectLex,
+            @P(
+                    name = "objectDatatypeUri",
+                    description = "Datatype URI for a typed literal.",
+                    required = false,
+                    defaultValue = ""
+            ) String objectDatatypeUri,
+            @P(
+                    name = "objectLanguage",
+                    description = "Language tag for a language-tagged literal.",
+                    required = false,
+                    defaultValue = ""
+            ) String objectLanguage
+    ) {
+        Node object;
+
+        if (objectLanguage != null && !objectLanguage.isBlank()) {
+            object = NodeFactory.createLiteralLang(objectLex, objectLanguage);
+        } else if (objectDatatypeUri != null && !objectDatatypeUri.isBlank()) {
+            object = NodeFactory.createLiteralDT(
+                    objectLex,
+                    new BaseDatatype(objectDatatypeUri)
+            );
+        } else {
+            object = NodeFactory.createLiteralString(objectLex);
+        }
+
+        dataset.executeRead(() -> {
+
+            Node g = toNodeOrAny(dataset, graphUri);
+            Node s = toNodeOrAny(dataset, subjectUri);
+            Node p = toNodeOrAny(dataset, predicateUri);
+
+            if (g.equals(Node.ANY)) {
+                throw new IllegalArgumentException("Provide a valid graph URI.");
+            }
+            if (s.equals(Node.ANY)) {
+                throw new IllegalArgumentException("Provide a valid subject URI.");
+            }
+            if (p.equals(Node.ANY)) {
+                throw new IllegalArgumentException("Provide a valid predicate URI.");
+            }
+
+            switch (operation) {
+                case ADD ->
+                    collector.add(g, s, p, object);
+                case REMOVE -> {
+                    
+                    //make sure that only quads can be removed which exist
+                    if(!dataset.contains(g, s, p, object, ictx)) {
+                        throw new IllegalArgumentException(
+                                "This quad cannot be deleted because it does not exist: " + Quad.create(g, s, p, object) + ". " + 
+                                "Make sure to find it first with findLiterals."
+                        );
+                    }
+                    
+                    collector.delete(g, s, p, object);
+                }
+            }
+        });
+    }
+
+    @Tool("""
+      Returns the current state of the RDF patch.
+      """)
+    public String inspectRDFPatch() {
+        RDFPatch patch = collector.getRDFPatch();
+        StringBuilder sb = new StringBuilder();
+        sb.append(RDFPatchOps.summary(patch));
+        sb.append("\n");
+        sb.append(RDFPatchOps.str(patch));
+        return sb.toString();
+    }
 
     private static Node toNodeOrAny(DatasetGraph dsg, String value) {
         if (value == null) {
@@ -288,7 +412,7 @@ At the beginning use a small value for limit, like 15 and increase when necessar
                 return NodeFactory.createURI(expanded);
             }
         }
-        
+
         // Absolute URI?
         try {
             URI uri = new URI(value);
@@ -296,7 +420,7 @@ At the beginning use a small value for limit, like 15 and increase when necessar
                 return NodeFactory.createURI(value);
             }
         } catch (URISyntaxException ignored) {
-            
+
         }
 
         return Node.ANY;
@@ -310,14 +434,23 @@ At the beginning use a small value for limit, like 15 and increase when necessar
             ) {
 
     }
-    
-    
+
     public RdfDatasetAttachment getRdfDatasetAttachment() {
         return new RdfDatasetAttachment(foundQuadsDatasetGraph);
     }
-    
+
     public boolean hasFoundQuads() {
         return foundQuadsDatasetGraph.find().hasNext();
     }
     
+    public RdfPatchAttachment getRdfPatchAttachment() {
+        return new RdfPatchAttachment(collector.getRDFPatch());
+    }
+    
+    public boolean hasRDFPatch() {
+        return !((RDFChangesCollector.RDFPatchStored) collector.getRDFPatch())
+                .getActions()
+                .isEmpty();
+    }
+
 }
