@@ -12,6 +12,7 @@ public sealed interface Attachment
                 BinaryAttachment,
                 RdfNodesAttachment,
                 RdfGraphAttachment, 
+                RdfDatasetAttachment,
                 ToolCallAttachment {
     
     Map<String, Object> toMap();

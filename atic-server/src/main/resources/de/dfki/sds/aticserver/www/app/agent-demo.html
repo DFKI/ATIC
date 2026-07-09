@@ -454,6 +454,9 @@
                                 <i class="fa fa-chevron-right"></i>
                                 <i class="fa fa-wrench"></i>
                                 <span>{{ att.name }}</span>
+                                <span v-if="att.throwable" class="ms-auto text-danger">
+                                    <i class="fa fa-exclamation-triangle"></i>
+                                </span>
                             </button>
                             <div
                                 :id="'attBody' + aIdx"
@@ -469,7 +472,7 @@
                                 </div>
                                 <div v-if="att.throwable">
                                     <div class="attachment-label">Error</div>
-                                    <pre class="text-danger">{{ att.throwable }}</pre>
+                                    <pre>{{ att.throwable }}</pre>
                                 </div>
                             </div>
                         </li>
@@ -501,6 +504,32 @@
                                         {{ uri }}
                                     </li>
                                 </ul>
+                            </div>
+                        </li>
+                    </ul>
+
+                    <ul
+                        v-if="msg.attachments && msg.attachments.some(a => a.type === 'rdfDataset')"
+                        class="attachment-list">
+                        <li
+                            v-for="(att, dIdx) in msg.attachments.filter(a => a.type === 'rdfDataset')"
+                            :key="'d' + dIdx"
+                            class="attachment-item">
+                            <button
+                                class="attachment-toggle"
+                                data-bs-toggle="collapse"
+                                :data-bs-target="'#rdfDataSetBody' + dIdx"
+                                :aria-expanded="false"
+                                :id="'rdfDataSetHead' + dIdx">
+                                <i class="fa fa-chevron-right"></i>
+                                <i class="fa fa-project-diagram"></i>
+                                <span>{{ att.graphs }} {{ att.graphs === 1 ? 'graph' : 'graphs' }}, {{ att.triples }} {{ att.triples === 1 ? 'triple' : 'triples' }}</span>
+                            </button>
+                            <div
+                                :id="'rdfDataSetBody' + dIdx"
+                                class="collapse attachment-body"
+                                :aria-labelledby="'rdfDataSetHead' + dIdx">
+                                <pre>{{ att.content }}</pre>
                             </div>
                         </li>
                     </ul>

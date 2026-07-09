@@ -9,6 +9,10 @@ import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.riot.RDFFormat;
 
+/**
+ * @deprecated better use RdfDatasetAttachment 
+ */
+@Deprecated
 public record RdfGraphAttachment(
         Graph graph
         ) implements Attachment {

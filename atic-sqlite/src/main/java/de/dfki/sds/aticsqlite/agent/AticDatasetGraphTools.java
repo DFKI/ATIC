@@ -1,5 +1,6 @@
 package de.dfki.sds.aticsqlite.agent;
 
+import de.dfki.sds.atic.agent.RdfDatasetAttachment;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import dev.langchain4j.agent.tool.P;
@@ -13,6 +14,7 @@ import org.apache.jena.datatypes.BaseDatatype;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.sparql.core.DatasetGraph;
+import org.apache.jena.sparql.core.DatasetGraphFactory;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.util.iterator.ExtendedIterator;
 
@@ -42,6 +44,10 @@ When you need to query RDF data, use both tools: findResources and findLiterals.
 At the beginning use a small value for limit, like 15 and increase when necessary.
                                       """;
 
+    
+    private DatasetGraph foundQuadsDatasetGraph;
+    
+    
     public AticDatasetGraphTools(SqliteAticDatasetGraph dataset, InvocationContext ictx) {
         this.dataset = dataset;
         this.ictx = ictx;
@@ -51,7 +57,7 @@ At the beginning use a small value for limit, like 15 and increase when necessar
      * Resets the state.
      */
     public void reset() {
-
+        foundQuadsDatasetGraph = DatasetGraphFactory.createGeneral();
     }
 
     //============================================================
@@ -122,7 +128,7 @@ At the beginning use a small value for limit, like 15 and increase when necessar
             Node p = toNodeOrAny(dataset, predicateUri);
             Node o = toNodeOrAny(dataset, objectUri);
 
-            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.find(g, s, p, o, ictx);
+            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.findInternal(g, s, p, o, true, false, ictx);
 
             while (iter.hasNext() && results.size() < limit) {
 
@@ -132,6 +138,8 @@ At the beginning use a small value for limit, like 15 and increase when necessar
                     continue;
                 }
 
+                foundQuadsDatasetGraph.add(q);
+                
                 results.add(new QuadRecord(
                         q.getGraph().toString(),
                         q.getSubject().toString(),
@@ -233,7 +241,7 @@ At the beginning use a small value for limit, like 15 and increase when necessar
             Node s = toNodeOrAny(dataset, subjectUri);
             Node p = toNodeOrAny(dataset, predicateUri);
 
-            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.find(g, s, p, finalObject, ictx);
+            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.findInternal(g, s, p, finalObject, true, false,ictx);
 
             while (iter.hasNext() && results.size() < limit) {
 
@@ -243,6 +251,8 @@ At the beginning use a small value for limit, like 15 and increase when necessar
                     continue;
                 }
 
+                foundQuadsDatasetGraph.add(q);
+                
                 results.add(new QuadRecord(
                         q.getGraph().toString(),
                         q.getSubject().toString(),
@@ -300,4 +310,14 @@ At the beginning use a small value for limit, like 15 and increase when necessar
             ) {
 
     }
+    
+    
+    public RdfDatasetAttachment getRdfDatasetAttachment() {
+        return new RdfDatasetAttachment(foundQuadsDatasetGraph);
+    }
+    
+    public boolean hasFoundQuads() {
+        return foundQuadsDatasetGraph.find().hasNext();
+    }
+    
 }

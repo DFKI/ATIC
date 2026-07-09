@@ -2806,6 +2806,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     //note: if Quad.unionGraph is used, getUnionGraph is called
     @Override
     public AticGraph getGraph(org.apache.jena.graph.Node graphNode, InvocationContext ctx) {
+        return getGraph(graphNode, true, ctx);
+    }
+    
+    public AticGraph getGraph(org.apache.jena.graph.Node graphNode, boolean createIfMissing, InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         //special union Graph name
@@ -2841,6 +2845,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                     },
                     requestedUri
             );
+            
+            if(graphInfo == null && !createIfMissing) {
+                throw new IllegalStateException("Graph does not exist: " + graphNode);
+            }
 
             if (graphInfo == null) {
                 //throw new IllegalStateException("Graph not found: " + requestedUri);
@@ -3691,7 +3699,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     @Override
     public Iterator<Quad> find(Node g, Node s, Node p, Node o, InvocationContext ctx) {
-        return findInternal(g, s, p, o, true, ctx);
+        return findInternal(g, s, p, o, true, true, ctx);
     }
 
     /**
@@ -3709,7 +3717,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     @Override
     public Iterator<Quad> findNG(Node g, Node s, Node p, Node o, InvocationContext ctx) {
-        return findInternal(g, s, p, o, false, ctx);
+        return findInternal(g, s, p, o, false, true, ctx);
     }
 
     /**
@@ -3724,12 +3732,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      * @param ctx the invocation context containing caller information
      * @return an iterator over matching {@link Quad} objects
      */
-    private ExtendedIterator<Quad> findInternal(
+    public ExtendedIterator<Quad> findInternal(
             Node g,
             Node s,
             Node p,
             Node o,
             boolean includeDefaultGraph,
+            boolean createGraphIfMissing,
             InvocationContext ctx
     ) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
@@ -3800,7 +3809,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         // =========================================================
         // SINGLE GRAPH
         // =========================================================
-        AticGraph graph = getGraph(G, ctxFinal);
+        AticGraph graph = getGraph(G, createGraphIfMissing, ctxFinal);
         ExtendedIterator<Triple> iter = graph.find(s, p, o, ctxFinal);
 
         return new NiceIterator<Quad>() {

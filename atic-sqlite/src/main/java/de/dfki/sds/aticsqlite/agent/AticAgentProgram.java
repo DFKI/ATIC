@@ -245,6 +245,11 @@ You are a helpful Resource Description Framework (RDF) assistant.
         for (Attachment attachment : toolCallAttachments) {
             responseMessageBuilder.attachment(attachment);
         }
+        
+        //attach what quads the agent saw
+        if(aticDatasetGraphTools.hasFoundQuads()) {
+            responseMessageBuilder.attachment(aticDatasetGraphTools.getRdfDatasetAttachment());
+        }
 
         session.append(responseMessageBuilder.build());
     }
