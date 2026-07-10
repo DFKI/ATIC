@@ -180,7 +180,11 @@ createApp({
             axios.get('../auth/me').then(response => {
                 this.user = response.data;
             }).catch(error => {
-                this.error_msg = "Need to log in";
+                if (error.response && error.response.status === 401) {
+                    window.location.href = '../unauthorized.html';
+                } else {
+                    this.error_msg = "Need to log in";
+                }
             });
         },
     }

@@ -1001,7 +1001,11 @@
                         return d.toTimeString().slice(0, 5);
                     },
                     getAuthMe() {
-                        axios.get('/auth/me').then(r => this.user = r.data);
+                        axios.get('/auth/me').then(r => this.user = r.data).catch(error => {
+                            if (error.response && error.response.status === 401) {
+                                window.location.href = '/app/unauthorized.html';
+                            }
+                        });
                     },
                     postLogout() {
                         axios.post('/auth/logout').then(r => {

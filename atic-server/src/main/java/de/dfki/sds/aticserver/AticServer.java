@@ -212,7 +212,7 @@ public class AticServer {
             ctx.status(HttpStatus.FORBIDDEN);
             ctx.result(e.getMessage());
         });
-
+        
         app.exception(Exception.class, (e, ctx) -> {
             System.err.println("==========================================");
             System.err.println(LocalDateTime.now().toString());

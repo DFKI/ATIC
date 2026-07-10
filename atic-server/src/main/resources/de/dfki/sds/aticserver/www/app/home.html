@@ -95,6 +95,10 @@
                 getAuthMe() {
                     axios.get('/auth/me').then(response => {
                         this.user = response.data;
+                    }).catch(error => {
+                        if (error.response && error.response.status === 401) {
+                            window.location.href = '/app/unauthorized.html';
+                        }
                     });
                 },
                 postLogout() {

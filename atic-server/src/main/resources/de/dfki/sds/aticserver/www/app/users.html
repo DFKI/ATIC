@@ -16,7 +16,7 @@
         <title>User Management | Atic</title>
     </head>
     <body>
-        <div class="container mt-4" id="app">
+        <div class="container-fluid mt-4" id="app">
 
             <div class="row align-items-center">
                 <div class="col d-flex align-items-center m-2">
@@ -59,6 +59,7 @@
                                 <th>Email</th>
                                 <th>Groups</th>
                                 <th>URI</th>
+                                <th style="white-space: nowrap">Agent Data</th>
                                 <th style="width:180px;">Actions</th>
                             </tr>
                         </thead>
@@ -79,6 +80,17 @@
                                     {{ user.groups.map(g => g.groupname).join(', ') }}
                                 </td>
                                 <td style="font-size:12px;">{{ user.uri }}</td>
+                                <td v-if="user.type === 'agent'" style="font-size:11px;">
+                                    <div v-if="user.factory" class="mb-1">
+                                        <strong>Factory:</strong>
+                                        <pre class="mb-0" style="font-size:10px; white-space:pre-wrap; word-break:break-word; margin:0;">{{ user.factory }}</pre>
+                                    </div>
+                                    <div v-if="user.config">
+                                        <strong>Config:</strong>
+                                        <pre class="mb-0" style="font-size:10px; white-space:pre-wrap; word-break:break-word; margin:0;">{{ JSON.stringify(user.config, null, 2) }}</pre>
+                                    </div>
+                                </td>
+                                <td v-else style="font-size:12px; color:#999;">—</td>
                                 <td>
                                     <button v-if="user.type !== 'agent'" class="btn btn-sm btn-secondary me-1"
                                             @click="openEnableAgentModal(user)" title="Enable Agent">
@@ -224,6 +236,10 @@ createApp({
         getAuthMe() {
             axios.get('/auth/me').then(response => {
                 this.user = response.data;
+            }).catch(error => {
+                if (error.response && error.response.status === 401) {
+                    window.location.href = '/app/unauthorized.html';
+                }
             });
         },
         postLogout() {

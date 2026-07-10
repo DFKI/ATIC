@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Unauthorized | Atic</title>
+    </head>
+    <body>
+        <div class="container text-center" id="app">
+
+            <div class="row d-flex justify-content-center">
+
+                <div class="col-lg-6">
+                    <h1 class="m-4">
+                        <img src="img/atic-server.png" style="height: 60px"><br/>
+                        Unauthorized
+                    </h1>
+
+                    <p class="text-muted">You are not authorized to access this page.</p>
+
+                    <p class="text-muted">Redirecting to <a href="/app/login.html">login screen</a> in <span id="countdown">5</span> seconds...</p>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                &nbsp;
+
+                &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+            </div>
+        </div>
+
+        <script>
+            let count = 5;
+            const el = document.getElementById('countdown');
+            const timer = setInterval(() => {
+                count--;
+                el.textContent = count;
+                if (count <= 0) {
+                    clearInterval(timer);
+                    window.location.href = '/app/login.html';
+                }
+            }, 1000);
+        </script>
+    </body>
+</html>
