@@ -1,16 +1,19 @@
 package de.dfki.sds.atic.jenatic;
 
+import de.dfki.sds.atic.ac.SharingManagement;
+import de.dfki.sds.atic.ac.UserGroupManagement;
 import java.util.Iterator;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
 import org.apache.jena.riot.system.PrefixMap;
 import org.apache.jena.sparql.core.DatasetGraph;
 import org.apache.jena.sparql.core.Quad;
+import org.apache.jena.util.iterator.ExtendedIterator;
 
 /**
  *
  */
-public interface AticDatasetGraph extends DatasetGraph {
+public interface AticDatasetGraph extends DatasetGraph, UserGroupManagement, SharingManagement {
 
     @Override
     public default Graph getDefaultGraph() {
@@ -103,22 +106,38 @@ public interface AticDatasetGraph extends DatasetGraph {
         return find(quad, InvocationContext.EMPTY);
     }
 
-    public Iterator<Quad> find(Quad quad, InvocationContext ctx);
+    public default Iterator<Quad> find(Quad quad, InvocationContext ctx) {
+        return find(quad.getGraph(), quad.getSubject(), quad.getPredicate(), quad.getObject(), ctx);
+    }
 
     @Override
     public default Iterator<Quad> find(Node g, Node s, Node p, Node o) {
         return find(g, s, p, o, InvocationContext.EMPTY);
     }
 
-    public Iterator<Quad> find(Node g, Node s, Node p, Node o, InvocationContext ctx);
+    public default Iterator<Quad> find(Node g, Node s, Node p, Node o, InvocationContext ctx) {
+        return find(g, s, p, o, true, true, ctx);
+    }
 
     @Override
     public default Iterator<Quad> findNG(Node g, Node s, Node p, Node o) {
         return findNG(g, s, p, o, InvocationContext.EMPTY);
     }
 
-    public Iterator<Quad> findNG(Node g, Node s, Node p, Node o, InvocationContext ctx);
+    public default Iterator<Quad> findNG(Node g, Node s, Node p, Node o, InvocationContext ctx) {
+        return find(g, s, p, o, false, true, ctx);
+    }
 
+    public ExtendedIterator<Quad> find(
+            Node g,
+            Node s,
+            Node p,
+            Node o,
+            boolean includeDefaultGraph,
+            boolean createGraphIfMissing,
+            InvocationContext ctx
+    );
+    
     @Override
     public default boolean contains(Node g, Node s, Node p, Node o) {
         return contains(g, s, p, o, InvocationContext.EMPTY);

@@ -3690,42 +3690,6 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     /**
-     * Iterates over all quads matching the given pattern, including the default graph.
-     *
-     * @param g the graph node (Node.ANY for all graphs)
-     * @param s the subject node (Node.ANY for any subject)
-     * @param p the predicate node (Node.ANY for any predicate)
-     * @param o the object node (Node.ANY for any object)
-     * @param ctx the invocation context containing caller information
-     * @return an iterator over matching {@link Quad} objects
-     */
-    /*
-        Iterate over all quads in the dataset graph.
-     */
-    @Override
-    public Iterator<Quad> find(Node g, Node s, Node p, Node o, InvocationContext ctx) {
-        return findInternal(g, s, p, o, true, true, ctx);
-    }
-
-    /**
-     * Iterates over all quads matching the given pattern in named graphs only (excludes the default graph).
-     *
-     * @param g the graph node (Node.ANY for all named graphs)
-     * @param s the subject node (Node.ANY for any subject)
-     * @param p the predicate node (Node.ANY for any predicate)
-     * @param o the object node (Node.ANY for any object)
-     * @param ctx the invocation context containing caller information
-     * @return an iterator over matching {@link Quad} objects
-     */
-    /*
-        Find matching quads in the dataset in named graphs (NG) only
-     */
-    @Override
-    public Iterator<Quad> findNG(Node g, Node s, Node p, Node o, InvocationContext ctx) {
-        return findInternal(g, s, p, o, false, true, ctx);
-    }
-
-    /**
      * Internal quad iteration implementation. Handles {@link org.apache.jena.graph.Node#ANY} graph by iterating over all accessible graphs, and single-graph
      * queries by delegating to the graph's triple iterator.
      *
@@ -3734,10 +3698,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      * @param p the predicate node
      * @param o the object node
      * @param includeDefaultGraph whether to include the default graph
+     * @param createGraphIfMissing if true, automatically creates graph if graph does not exist
      * @param ctx the invocation context containing caller information
      * @return an iterator over matching {@link Quad} objects
      */
-    public ExtendedIterator<Quad> findInternal(
+    public ExtendedIterator<Quad> find(
             Node g,
             Node s,
             Node p,
@@ -3958,14 +3923,6 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     @Override
     public void delete(Quad quad, InvocationContext ctx) {
         delete(quad.getGraph(), quad.getSubject(), quad.getPredicate(), quad.getObject(), ctx);
-    }
-
-    /**
-     * Delegates to {@link #find(Node, Node, Node, Node, InvocationContext)} using the quad's components.
-     */
-    @Override
-    public Iterator<Quad> find(Quad quad, InvocationContext ctx) {
-        return find(quad.getGraph(), quad.getSubject(), quad.getPredicate(), quad.getObject(), ctx);
     }
 
     /**

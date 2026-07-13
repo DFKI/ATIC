@@ -136,7 +136,7 @@ The current state of the RDF patch during processing can be inspected with inspe
             Node p = toNodeOrAny(dataset, predicateUri);
             Node o = toNodeOrAny(dataset, objectUri);
 
-            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.findInternal(g, s, p, o, true, false, ictx);
+            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.find(g, s, p, o, true, false, ictx);
 
             while (iter.hasNext() && results.size() < limit) {
 
@@ -249,7 +249,7 @@ The current state of the RDF patch during processing can be inspected with inspe
             Node s = toNodeOrAny(dataset, subjectUri);
             Node p = toNodeOrAny(dataset, predicateUri);
 
-            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.findInternal(g, s, p, finalObject, true, false, ictx);
+            ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) dataset.find(g, s, p, finalObject, true, false, ictx);
 
             while (iter.hasNext() && results.size() < limit) {
 
