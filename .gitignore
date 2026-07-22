@@ -15,3 +15,4 @@ nbactions.xml
 *.versionsBackup
 /atic-sqlite/nbproject/
 /rdfpatch-sqlite/nbproject/
+/atic-server/nbproject/
