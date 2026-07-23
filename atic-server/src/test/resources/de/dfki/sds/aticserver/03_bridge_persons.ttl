@@ -1,0 +1,49 @@
+
+@prefix ex: <https://example.org/id/> .
+@prefix schema: <https://schema.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+ex:alice-smith
+    a schema:Person ;
+    foaf:name "Alice Smith" ;
+    schema:givenName "Alice" ;
+    schema:familyName "Smith" ;
+    schema:email "alice.smith@example.org" ;
+    schema:jobTitle "Data Scientist" ;
+    schema:birthDate "1990-05-14"^^xsd:date ;
+    schema:gender "Female" ;
+    schema:nationality "German" ;
+    schema:knows ex:bob-johnson ;
+    dcterms:created "2025-01-10T09:15:00Z"^^xsd:dateTime ;
+    dcterms:modified "2026-07-20T14:30:00Z"^^xsd:dateTime .
+
+ex:bob-johnson
+    a schema:Person ;
+    foaf:name "Bob Johnson" ;
+    schema:givenName "Bob" ;
+    schema:familyName "Johnson" ;
+    schema:email "bob.johnson@example.org" ;
+    schema:jobTitle "Software Engineer" ;
+    schema:birthDate "1987-11-03"^^xsd:date ;
+    schema:gender "Male" ;
+    schema:nationality "British" ;
+    schema:knows ex:alice-smith ,
+                 ex:carol-miller ;
+    dcterms:created "2024-08-05T11:00:00Z"^^xsd:dateTime ;
+    dcterms:modified "2026-07-18T16:45:00Z"^^xsd:dateTime .
+
+ex:carol-miller
+    a schema:Person ;
+    foaf:name "Carol Miller" ;
+    schema:givenName "Carol" ;
+    schema:familyName "Miller" ;
+    schema:email "carol.miller@example.org" ;
+    schema:jobTitle "Project Manager" ;
+    schema:birthDate "1992-02-21"^^xsd:date ;
+    schema:gender "Female" ;
+    schema:nationality "Canadian" ;
+    schema:knows ex:bob-johnson ;
+    dcterms:created "2025-03-22T08:20:00Z"^^xsd:dateTime ;
+    dcterms:modified "2026-07-21T10:05:00Z"^^xsd:dateTime .

@@ -1,0 +1,35 @@
+{
+  "headers": [
+    {
+      "title": "Name",
+      "key": "name"
+    },
+    {
+      "title": "Email",
+      "key": "email"
+    },
+    {
+      "title": "Job Title",
+      "key": "jobTitle"
+    }
+  ],
+  "items": {
+    "$type": "array",
+    "$map": {
+      "@id": "?person",
+      "name": "?name",
+      "email": "?email",
+      "jobTitle": "?jobTitle"
+    },
+    "$where": [
+      "?person a schema:Person",
+      "?person foaf:name ?name",
+      "?person schema:email ?email",
+      "?person schema:jobTitle ?jobTitle"
+    ],
+    "@context": {
+      "schema": "https://schema.org/",
+      "foaf": "http://xmlns.com/foaf/0.1/"
+    }
+  }
+}

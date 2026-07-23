@@ -71,11 +71,11 @@ public class UploadUnitTest {
             userPassword = server.getDatasetGraph().addUser("John", "Doe", "john.doe@example.org", userUsername, InvocationContext.EMPTY);
         });
 
-        server.init((app, conf) -> {
+        server.init((javalinConf, aticConf) -> {
             //person
             ConfigDrivenCrudEndpoints personCDCE = new ConfigDrivenCrudEndpoints("/de/dfki/sds/aticserver/cdce/person.yml");
             personCDCE.setGlobalDefaultLimit(5);
-            personCDCE.register(app, "", server.getDatasetGraph());
+            personCDCE.register(javalinConf.routes, "", server.getDatasetGraph());
         });
     }
 

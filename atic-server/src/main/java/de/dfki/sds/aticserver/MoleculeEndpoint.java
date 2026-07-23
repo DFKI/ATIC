@@ -6,7 +6,7 @@ import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.PagedTripleIterator;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
-import io.javalin.Javalin;
+import io.javalin.config.RoutesConfig;
 import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
 import java.util.ArrayList;
@@ -75,12 +75,12 @@ public class MoleculeEndpoint {
         commentProperties.add(RDFS.comment);
     }
 
-    public void register(Javalin app, String path, SqliteAticDatasetGraph datasetGraph) {
-        app.get(path + "resource" + "/{uri}", ctx -> handleGetInstance(ctx, Rendering.RESOURCE, datasetGraph));
-        app.get(path + "fragment" + "/{uri}", ctx -> handleGetInstance(ctx, Rendering.FRAGMENT, datasetGraph));
-        app.get(path + "molecule" + "/{uri}", ctx -> handleGetInstance(ctx, Rendering.MOLECULE, datasetGraph));
+    public void register(RoutesConfig routes, String path, SqliteAticDatasetGraph datasetGraph) {
+        routes.get(path + "resource" + "/{uri}", ctx -> handleGetInstance(ctx, Rendering.RESOURCE, datasetGraph));
+        routes.get(path + "fragment" + "/{uri}", ctx -> handleGetInstance(ctx, Rendering.FRAGMENT, datasetGraph));
+        routes.get(path + "molecule" + "/{uri}", ctx -> handleGetInstance(ctx, Rendering.MOLECULE, datasetGraph));
 
-        app.get(path + "molecule", this::handleGetDocumentation);
+        routes.get(path + "molecule", this::handleGetDocumentation);
         
         //TODO maybe later other endpoints
         //app.get(fullPath, ctx -> handleGet(ctx, datasetGraph));

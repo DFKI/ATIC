@@ -10,7 +10,7 @@ import de.dfki.sds.atic.ac.PermissionDeniedException;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
-import io.javalin.Javalin;
+import io.javalin.config.RoutesConfig;
 import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
 import jakarta.json.Json;
@@ -68,7 +68,7 @@ public class ConfigDrivenCrudEndpoints {
 
     private final Yaml yaml;
     private Map<String, Object> config;
-    
+
     //also page size
     private int globalDefaultLimit = 50;
 
@@ -105,7 +105,7 @@ public class ConfigDrivenCrudEndpoints {
         }
     }
 
-    public void register(Javalin app, String path, SqliteAticDatasetGraph datasetGraph) {
+    public void register(RoutesConfig routes, String path, SqliteAticDatasetGraph datasetGraph) {
 
         //allow an additional path so it can be registered under e.g. "/api"
         String fullPath = path + (String) config.get("path");
@@ -117,24 +117,24 @@ public class ConfigDrivenCrudEndpoints {
 
             switch (type) {
                 case "get" ->
-                    app.get(fullPath, ctx -> handleGet(ctx, datasetGraph, endpointConfig));
+                    routes.get(fullPath, ctx -> handleGet(ctx, datasetGraph, endpointConfig));
 
                 case "getInstance" ->
-                    app.get(fullPath + "/{uri}", ctx -> handleGetInstance(ctx, datasetGraph, endpointConfig));
+                    routes.get(fullPath + "/{uri}", ctx -> handleGetInstance(ctx, datasetGraph, endpointConfig));
 
                 case "post" ->
-                    app.post(fullPath, ctx -> handlePost(fullPath, ctx, datasetGraph, endpointConfig));
+                    routes.post(fullPath, ctx -> handlePost(fullPath, ctx, datasetGraph, endpointConfig));
 
                 case "putInstance" -> {
                     //reuse the getInstance config and put it into the putInstance config
                     Map<String, Object> getInstance = (Map<String, Object>) endpoints.get("getInstance");
                     endpointConfig.put("getInstance", getInstance);
 
-                    app.put(fullPath + "/{uri}", ctx -> handlePutInstance(fullPath, ctx, datasetGraph, endpointConfig));
+                    routes.put(fullPath + "/{uri}", ctx -> handlePutInstance(fullPath, ctx, datasetGraph, endpointConfig));
                 }
 
                 case "deleteInstance" ->
-                    app.delete(fullPath + "/{uri}", ctx -> handleDeleteInstance(ctx, datasetGraph, endpointConfig));
+                    routes.delete(fullPath + "/{uri}", ctx -> handleDeleteInstance(ctx, datasetGraph, endpointConfig));
             }
         }
     }
@@ -151,10 +151,10 @@ public class ConfigDrivenCrudEndpoints {
         int defaultPageSize = (int) cfg.getOrDefault("defaultPageSize", defaultLimit);
 
         // ---- Read query params ----
-        Integer page = ctx.queryParamAsClass("page", Integer.class).allowNullable().get();
-        Integer pageSize = ctx.queryParamAsClass("page-size", Integer.class).allowNullable().get();
-        Integer offset = ctx.queryParamAsClass("offset", Integer.class).allowNullable().get();
-        Integer limit = ctx.queryParamAsClass("limit", Integer.class).allowNullable().get();
+        Integer page = ctx.queryParamAsClass("page", Integer.class).getOrNull();
+        Integer pageSize = ctx.queryParamAsClass("page-size", Integer.class).getOrNull();
+        Integer offset = ctx.queryParamAsClass("offset", Integer.class).getOrNull();
+        Integer limit = ctx.queryParamAsClass("limit", Integer.class).getOrNull();
 
         // ---- Normalize to offset + limit ----
         if (page != null) {
@@ -184,10 +184,10 @@ public class ConfigDrivenCrudEndpoints {
 
         Dataset dataset = DatasetFactory.wrap(datasetGraph);
         AticServer.transferContext(ctx, dataset.getContext());
-        
+
         //select graph
         String graphUri = ctx.queryParam("graph");
-        if(graphUri == null) {
+        if (graphUri == null) {
             graphUri = Quad.defaultGraphIRI.getURI();
         }
 
@@ -292,11 +292,11 @@ public class ConfigDrivenCrudEndpoints {
 
         //select graph
         String graphUri = ctx.queryParam("graph");
-        if(graphUri == null) {
+        if (graphUri == null) {
             graphUri = Quad.defaultGraphIRI.getURI();
         }
         Node graphNode = NodeFactory.createURI(graphUri);
-        
+
         //prepare invocation context
         InvocationContext ictx = AticServer.fromJavalinContext(ctx);
 
@@ -388,14 +388,14 @@ public class ConfigDrivenCrudEndpoints {
             Map<Resource, String> res2url = new HashMap<>();
             for (Resource res : createdResources) {
                 String encUri = URLEncoder.encode(createdResources.get(0).getURI(), StandardCharsets.UTF_8);
-                
-                if(graphNode.equals(Quad.defaultGraphIRI)) {
+
+                if (graphNode.equals(Quad.defaultGraphIRI)) {
                     res2url.put(res, path + "/" + encUri);
                 } else {
                     String encGraph = URLEncoder.encode(graphUri, StandardCharsets.UTF_8);
                     res2url.put(res, path + "/" + encUri + "?graph=" + encGraph);
                 }
-                
+
             }
 
             if (res2url.size() == 1) {
@@ -405,7 +405,7 @@ public class ConfigDrivenCrudEndpoints {
                 ctx.header("Location", entry.getValue());
                 //TODO should also be a public final static attribute somewhere
                 ctx.header("Atic-Resource-URI", entry.getKey().getURI());
-                
+
             } else {
                 //created when more then one is created
                 ctx.status(HttpStatus.CREATED);
@@ -432,13 +432,13 @@ public class ConfigDrivenCrudEndpoints {
         // Prepare dataset with user context
         Dataset dataset = DatasetFactory.wrap(datasetGraph);
         AticServer.transferContext(ctx, dataset.getContext());
-        
+
         //select graph
         String graphUri = ctx.queryParam("graph");
-        if(graphUri == null) {
+        if (graphUri == null) {
             graphUri = Quad.defaultGraphIRI.getURI();
         }
-        
+
         dataset.begin(TxnType.WRITE);
         Model model = dataset.getNamedModel(graphUri);
         try {
@@ -571,5 +571,5 @@ public class ConfigDrivenCrudEndpoints {
     public void setGlobalDefaultLimit(int globalDefaultLimit) {
         this.globalDefaultLimit = globalDefaultLimit;
     }
-    
+
 }
