@@ -17,19 +17,19 @@
     "$type": "array",
     "$map": {
       "@id": "?person",
-      "name": "?name",
+      "name": "?name_var",
       "email": "?email",
       "jobTitle": "?jobTitle"
     },
     "$where": [
       "?person a schema:Person",
-      "?person foaf:name ?name",
+      "?person foaf:name ?name_var",
       "?person schema:email ?email",
       "?person schema:jobTitle ?jobTitle"
-    ],
-    "@context": {
-      "schema": "https://schema.org/",
-      "foaf": "http://xmlns.com/foaf/0.1/"
-    }
+    ]
+  },
+  "@context": {
+    "schema": "https://schema.org/",
+    "foaf": "http://xmlns.com/foaf/0.1/"
   }
 }

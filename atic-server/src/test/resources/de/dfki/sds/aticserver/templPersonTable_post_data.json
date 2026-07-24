@@ -1,0 +1,7 @@
+{
+  "items": [{
+      "name": "John",
+      "email": "john@example.org",
+      "jobTitle": "Developer"
+  }]
+}

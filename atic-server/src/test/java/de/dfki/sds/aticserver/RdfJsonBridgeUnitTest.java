@@ -5,6 +5,7 @@ import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.conf.ConfigLoader;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,11 +20,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.jena.rdfpatch.RDFPatch;
+import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
 import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -116,7 +120,7 @@ public class RdfJsonBridgeUnitTest {
         });
     }
 
-    private JSONObject loadTemplate(String filename) throws IOException {
+    private JSONObject loadJson(String filename) throws IOException {
         try (InputStream is
                 = MoleculeEndpointAticServerUnitTest.class
                         .getResourceAsStream(
@@ -134,14 +138,20 @@ public class RdfJsonBridgeUnitTest {
                 }
     }
 
+    @Disabled
     @Test
     public void test() throws Exception {
-        helper("03_bridge_persons.ttl", "templPersonTable1.json");
+        helperQuery("03_bridge_persons.ttl", "templPersonTable1.json");
     }
     
-    private void helper(String ttlFilename, String templFilename) throws Exception {
+    @Test
+    public void test2() throws Exception {
+        helperModification("POST", "03_bridge_persons.ttl", "templPersonTable1.json", "templPersonTable_post_data.json");
+    }
+    
+    private void helperQuery(String ttlFilename, String templFilename) throws Exception {
         loadData(ttlFilename);
-        JSONObject template = loadTemplate(templFilename);
+        JSONObject template = loadJson(templFilename);
 
         String host = appConfig.getHost();
         int port = appConfig.getPort();
@@ -179,4 +189,57 @@ public class RdfJsonBridgeUnitTest {
         System.out.println(result.toString(2));
     }
 
+    private void helperModification(String operation, String ttlFilename, String templFilename, String dataFilename) throws Exception {
+        loadData(ttlFilename);
+        JSONObject template = loadJson(templFilename);
+        
+        JSONObject data = loadJson(dataFilename);
+        
+        JSONObject requestJson = new JSONObject();
+        requestJson.put("data", data);
+        requestJson.put("template", template);
+        
+
+        String host = appConfig.getHost();
+        int port = appConfig.getPort();
+        
+        String token = loginAsAdmin();
+
+        HttpClient client = HttpClient.newHttpClient();
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(
+                        "http://" + host + ":" + port + "/bridge?dryRun=true"
+                ))
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .method(
+                        operation,
+                        HttpRequest.BodyPublishers.ofString(
+                                requestJson.toString(2)
+                        )
+                )
+                .build();
+
+        HttpResponse<String> response
+                = client.send(
+                        request,
+                        HttpResponse.BodyHandlers.ofString()
+                );
+
+        RDFPatch patch;
+        try (InputStream in = new ByteArrayInputStream(
+                response.body().getBytes(StandardCharsets.UTF_8))) {
+
+            patch = RDFPatchOps.read(in);
+        }
+        
+        //System.out.println(response.statusCode());
+        //System.out.println(response.body());
+
+        System.out.println(RDFPatchOps.str(patch));
+    }
+
+    
 }

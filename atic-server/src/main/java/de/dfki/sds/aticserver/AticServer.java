@@ -1384,7 +1384,7 @@ public class AticServer {
                 Map<String, List<String>> queryParams
                         = ctx.queryParamMap();
 
-                JSONObject projection
+                JSONObject template
                         = new JSONObject(
                                 ctx.body()
                         );
@@ -1392,7 +1392,7 @@ public class AticServer {
                 JSONObject result
                         = rdfJsonBridge.toJson(
                                 queryParams,
-                                projection,
+                                template,
                                 datasetGraph,
                                 ictx
                         );
@@ -1405,13 +1405,23 @@ public class AticServer {
             case "PUT":
             case "PATCH":
             case "DELETE":
-
-                // TODO implement mutation handling
-                ctx.status(501)
-                        .result(
-                                "Not implemented yet"
+                
+                JSONObject request
+                        = new JSONObject(
+                                ctx.body()
                         );
 
+                RDFPatch patch = rdfJsonBridge.toPatch(
+                        method, 
+                        request.getJSONObject("data"), 
+                        request.getJSONObject("template"), 
+                        () -> "urn:atic:resource-" + UUID.randomUUID(),
+                        datasetGraph,
+                        ictx
+                );
+
+                ctx.result(RDFPatchOps.str(patch));
+                
                 break;
 
             default:

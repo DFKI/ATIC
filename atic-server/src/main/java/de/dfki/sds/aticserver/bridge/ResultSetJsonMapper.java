@@ -166,6 +166,7 @@ public class ResultSetJsonMapper {
 
                     copy.put(
                             resolveValue(
+                                    null,
                                     item,
                                     qs
                             )
@@ -183,6 +184,7 @@ public class ResultSetJsonMapper {
             json.put(
                     key,
                     resolveValue(
+                            key,
                             value,
                             qs
                     )
@@ -192,7 +194,9 @@ public class ResultSetJsonMapper {
         return json;
     }
 
+    //this is called to resolve a value
     private Object resolveValue(
+            String key,
             Object value,
             QuerySolution qs
     ) {
@@ -200,7 +204,6 @@ public class ResultSetJsonMapper {
         if (!(value instanceof String expr)) {
             return value;
         }
-
 
         /*
          * ?variable
@@ -211,6 +214,10 @@ public class ResultSetJsonMapper {
                     = qs.get(
                             expr.substring(1)
                     );
+            
+            if(key.equals("@id")) {
+                return node.asResource().getURI();
+            }
 
             return toJson(node);
         }
@@ -226,6 +233,10 @@ public class ResultSetJsonMapper {
 
             RDFNode node
                     = qs.get(variable);
+            
+            if(key.equals("@id")) {
+                return node.asResource().getURI();
+            }
 
             return toJson(node);
         }
@@ -233,6 +244,7 @@ public class ResultSetJsonMapper {
         return expr;
     }
 
+    //create a binding from an existing one
     private Binding createBinding(
             QuerySolution qs
     ) {
@@ -257,6 +269,7 @@ public class ResultSetJsonMapper {
         return builder.build();
     }
 
+    //turn rdf node to json
     private Object toJson(
             RDFNode node
     ) {
