@@ -1,0 +1,12 @@
+{
+    "$map": {
+        "@id": "?person",
+        "desc": "?desc"
+    },
+    "$where": [
+        "?person schema:description ?desc"
+    ],
+    "@context": {
+        "schema": "https://schema.org/"
+    }
+}

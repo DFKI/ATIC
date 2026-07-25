@@ -5,6 +5,7 @@ import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.conf.ConfigLoader;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
+import io.json.compare.CompareMode;
 import io.json.compare.JSONCompare;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -21,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
@@ -178,6 +180,31 @@ public class RdfJsonBridgeUnitTest {
                 Map.of("person", List.of("https://example.org/id/alice-smith"))
         );
     }
+    
+    @Test
+    public void personList() throws Exception {
+        helperQuery("03_bridge_persons.ttl", "bridge_03_personList.json", Map.of());
+    }
+
+    @Test
+    public void personBooleanList() throws Exception {
+        helperQuery("03_bridge_persons.ttl", "bridge_04_personBooleanList.json", Map.of());
+    }
+    
+    @Test
+    public void personDateModifier() throws Exception {
+        helperQuery("03_bridge_persons.ttl", "bridge_05_personDateModifier.json", Map.of());
+    }
+    
+    @Test
+    public void personDescriptionLang() throws Exception {
+        helperQuery("03_bridge_persons.ttl", "bridge_06_personDescriptionLang.json", Map.of());
+    }
+    
+    @Test
+    public void personDescriptionLangToString() throws Exception {
+        helperQuery("03_bridge_persons.ttl", "bridge_07_personDescriptionLangToString.json", Map.of());
+    }
 
     
     @Disabled
@@ -214,21 +241,23 @@ public class RdfJsonBridgeUnitTest {
                         HttpResponse.BodyHandlers.ofString()
                 );
 
-        //System.out.println(response.statusCode());
-        //System.out.println(response.body());
-        //JSONObject result = new JSONObject(response.body());
-        //System.out.println(result.toString(2));
-        Object expectedBody = loadJSON(templFilename.replace(".json", "-expected.json"));
-
         if (String.valueOf(response.statusCode()).startsWith("2")) {
             String body = response.body();
             assertNotNull(body);
 
             Object actualBody = new JSONTokener(body).nextValue();
+            
+            if(actualBody instanceof JSONObject object) {
+                System.out.println(object.toString(2));
+            } else if(actualBody instanceof JSONArray array) {
+                System.out.println(array.toString(2));
+            } else if(actualBody instanceof String str) {
+                System.out.println(str);
+            }
 
-            System.out.println(actualBody);
+            Object expectedBody = loadJSON(templFilename.replace(".json", "-expected.json"));
 
-            JSONCompare.assertMatches(expectedBody, actualBody);
+            JSONCompare.assertMatches(expectedBody, actualBody, Set.of(CompareMode.JSON_ARRAY_NON_EXTENSIBLE, CompareMode.JSON_OBJECT_NON_EXTENSIBLE));
 
         } else {
             Assertions.fail(response.toString());

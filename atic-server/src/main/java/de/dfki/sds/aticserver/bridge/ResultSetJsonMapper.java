@@ -2,20 +2,72 @@ package de.dfki.sds.aticserver.bridge;
 
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import org.apache.jena.graph.Node;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.rdf.model.Literal;
+import org.apache.jena.rdf.model.Model;
+import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.sparql.core.Var;
 import org.apache.jena.sparql.engine.binding.Binding;
 import org.apache.jena.sparql.engine.binding.BindingBuilder;
+import org.apache.jena.vocabulary.XSD;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class ResultSetJsonMapper {
+
+    private final Map<String, NodeModifier> modifiers = new HashMap<>();
+
+    private final Model model = ModelFactory.createDefaultModel();
+
+    public ResultSetJsonMapper() {
+        registerModifier(
+                "date",
+                new DateModifier()
+        );
+        registerModifier(
+                "string",
+                new StringModifier()
+        );
+
+        registerModifier(
+                "upper",
+                new StringModifier(String::toUpperCase)
+        );
+
+        registerModifier(
+                "lower",
+                new StringModifier(String::toLowerCase)
+        );
+
+        registerModifier(
+                "trim",
+                new StringModifier(String::trim)
+        );
+
+        registerModifier(
+                "capitalize",
+                new StringModifier(s
+                        -> s.isEmpty()
+                ? s
+                : Character.toUpperCase(s.charAt(0))
+                + s.substring(1))
+        );
+    }
+
+    public final void registerModifier(
+            String name,
+            NodeModifier modifier
+    ) {
+        modifiers.put(name, modifier);
+    }
 
     public Object map(
             JSONObject queryNode,
@@ -218,42 +270,84 @@ public class ResultSetJsonMapper {
         }
 
         /*
-         * ?variable
+        * Separate expression and optional modifiers.
+        *
+        * Examples:
+        *
+        * ?date
+        * ?date$date:dd.MM.yyyy
+        * ?date$upper
+        * $foaf:name
+        * $foaf:name$date:dd.MM.yyyy
          */
-        if (expr.startsWith("?")) {
+        String[] parts = expr.split("\\$");
 
-            RDFNode node
-                    = qs.get(
-                            expr.substring(1)
-                    );
+        RDFNode node;
 
-            if (key != null && key.equals("@id")) {
-                return node.asResource().getURI();
-            }
+        String base = parts[0];
 
-            return toJson(node);
+        if (base.startsWith("?")) {
+
+            node = qs.get(base.substring(1));
+
+        } else if (base.isEmpty()) {
+            // expression started with '$'
+            String property = parts[1];
+            String variable = propertyVariable("$" + property);
+            node = qs.get(variable);
+
+            // modifiers start one later
+            parts = Arrays.copyOfRange(parts, 1, parts.length);
+
+        } else {
+            return expr;
         }
 
+        if (node == null) {
+            return JSONObject.NULL;
+        }
+
+        Node current = node.asNode();
 
         /*
-         * $property alias
+     * Apply modifiers.
          */
-        if (expr.startsWith("$")) {
+        for (int i = 1; i < parts.length; i++) {
 
-            String variable
-                    = propertyVariable(expr);
+            String modifierExpr = parts[i];
 
-            RDFNode node
-                    = qs.get(variable);
+            String name;
+            String argument = null;
 
-            if (key != null && key.equals("@id")) {
-                return node.asResource().getURI();
+            int idx = modifierExpr.indexOf(':');
+
+            if (idx >= 0) {
+                name = modifierExpr.substring(0, idx);
+                argument = modifierExpr.substring(idx + 1);
+            } else {
+                name = modifierExpr;
             }
 
-            return toJson(node);
+            NodeModifier modifier = modifiers.get(name);
+
+            if (modifier == null) {
+                throw new IllegalArgumentException(
+                        "Unknown modifier: $" + name
+                );
+            }
+
+            current = modifier.apply(
+                    current,
+                    argument
+            );
         }
 
-        return expr;
+        if ("@id".equals(key)) {
+            return current.getURI();
+        }
+
+        return toJson(model.asRDFNode(current)
+        );
     }
 
     //create a binding from an existing one
@@ -292,23 +386,19 @@ public class ResultSetJsonMapper {
 
         if (node.isResource()) {
 
-            JSONObject obj
-                    = new JSONObject();
-
-            obj.put(
-                    "@id",
-                    node.asResource()
-                            .getURI()
-            );
-
-            return obj;
+            return new JSONObject()
+                    .put(
+                            "@id",
+                            node.asResource().getURI()
+                    );
         }
 
-        Literal lit
-                = node.asLiteral();
+        Literal lit = node.asLiteral();
 
-        Object value
-                = lit.getValue();
+        /*
+     * Native JSON values.
+         */
+        Object value = lit.getValue();
 
         if (value instanceof Number
                 || value instanceof Boolean) {
@@ -316,7 +406,37 @@ public class ResultSetJsonMapper {
             return value;
         }
 
-        return value.toString();
+        /*
+     * Language-tagged literal.
+         */
+        String lang = lit.getLanguage();
+
+        if (!lang.isBlank()) {
+
+            return new JSONObject()
+                    .put("@value", lit.getLexicalForm())
+                    .put("@language", lang);
+        }
+
+        /*
+     * Typed literal.
+     *
+     * xsd:string is represented as a plain JSON string.
+         */
+        String datatype = lit.getDatatypeURI();
+
+        if (datatype != null
+                && !XSD.xstring.getURI().equals(datatype)) {
+
+            return new JSONObject()
+                    .put("@value", lit.getLexicalForm())
+                    .put("@type", datatype);
+        }
+
+        /*
+     * Plain string literal.
+         */
+        return lit.getLexicalForm();
     }
 
     private String propertyVariable(

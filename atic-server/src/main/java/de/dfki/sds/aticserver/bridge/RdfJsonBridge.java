@@ -59,6 +59,9 @@ public class RdfJsonBridge {
         this.resultSetJsonMapper = resultSetJsonMapper;
     }
 
+    //==========================================================
+    //reading
+    
     public Object toJson(
             Map<String, List<String>> queryParams,
             JSONObject template,
@@ -246,6 +249,9 @@ public class RdfJsonBridge {
         );
     }
 
+    //====================================================================
+    //writing
+    
     // use for POST, PUT, PATCH, DELETE
     public RDFPatch toPatch(
             String method,

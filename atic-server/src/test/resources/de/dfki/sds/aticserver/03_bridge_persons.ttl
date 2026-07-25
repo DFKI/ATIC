@@ -15,6 +15,10 @@ ex:alice-smith
     schema:birthDate "1990-05-14"^^xsd:date ;
     schema:gender "Female" ;
     schema:nationality "German" ;
+    schema:activated true ;
+    schema:description
+        "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects."@en ,
+        "Alice Smith ist Data Scientist mit Schwerpunkt auf maschinellem Lernen, Datenanalyse und Wissensgraphen. Sie entwickelt datengetriebene Lösungen und arbeitet gerne an innovativen Forschungsprojekten."@de ;
     schema:knows ex:bob-johnson ;
     dcterms:created "2025-01-10T09:15:00Z"^^xsd:dateTime ;
     dcterms:modified "2026-07-20T14:30:00Z"^^xsd:dateTime .
@@ -28,7 +32,11 @@ ex:bob-johnson
     schema:jobTitle "Software Engineer" ;
     schema:birthDate "1987-11-03"^^xsd:date ;
     schema:gender "Male" ;
+    schema:activated true ;
     schema:nationality "British" ;
+    schema:description
+        "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software."@en ,
+        "Bob Johnson ist Softwareentwickler mit Erfahrung in verteilten Systemen, Backend-Entwicklung und Cloud-nativen Anwendungen. Er entwickelt robuste Software und unterstützt gerne sein Team."@de ;
     schema:knows ex:alice-smith ,
                  ex:carol-miller ;
     dcterms:created "2024-08-05T11:00:00Z"^^xsd:dateTime ;
@@ -43,7 +51,11 @@ ex:carol-miller
     schema:jobTitle "Project Manager" ;
     schema:birthDate "1992-02-21"^^xsd:date ;
     schema:gender "Female" ;
+    schema:activated false ;
     schema:nationality "Canadian" ;
+    schema:description
+        "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning."@en ,
+        "Carol Miller ist Projektmanagerin mit Schwerpunkt auf der Koordination interdisziplinärer Teams und der erfolgreichen Umsetzung von Digitalisierungsprojekten. Sie legt großen Wert auf klare Kommunikation und effiziente Planung."@de ;
     schema:knows ex:bob-johnson ;
     dcterms:created "2025-03-22T08:20:00Z"^^xsd:dateTime ;
     dcterms:modified "2026-07-21T10:05:00Z"^^xsd:dateTime .

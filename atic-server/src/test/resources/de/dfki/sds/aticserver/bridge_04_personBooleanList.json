@@ -1,0 +1,9 @@
+{
+    "$map": "?active",
+    "$where": [
+        "?person schema:activated ?active"
+    ],
+    "@context": {
+        "schema": "https://schema.org/"
+    }
+}

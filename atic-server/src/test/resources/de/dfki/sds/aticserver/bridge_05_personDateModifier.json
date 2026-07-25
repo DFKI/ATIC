@@ -1,0 +1,9 @@
+{
+    "$map": "?bd$date:dd.MM.yyyy",
+    "$where": [
+        "?person schema:birthDate ?bd"
+    ],
+    "@context": {
+        "schema": "https://schema.org/"
+    }
+}

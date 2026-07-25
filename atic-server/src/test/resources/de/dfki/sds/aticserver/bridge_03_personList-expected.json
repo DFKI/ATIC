@@ -1,0 +1,17 @@
+[
+  {
+    "mail": "alice.smith@example.org",
+    "name": "Alice Smith",
+    "@id": "https://example.org/id/alice-smith"
+  },
+  {
+    "mail": "bob.johnson@example.org",
+    "name": "Bob Johnson",
+    "@id": "https://example.org/id/bob-johnson"
+  },
+  {
+    "mail": "carol.miller@example.org",
+    "name": "Carol Miller",
+    "@id": "https://example.org/id/carol-miller"
+  }
+]

@@ -1,0 +1,15 @@
+{
+    "$map": {
+        "@id": "?person",
+        "desc": "?desc$string"
+    },
+    "$where": [
+        "?person schema:description ?desc"
+    ],
+    "$filter": [
+        "LANG(?desc) = 'en'"
+    ],
+    "@context": {
+        "schema": "https://schema.org/"
+    }
+}
