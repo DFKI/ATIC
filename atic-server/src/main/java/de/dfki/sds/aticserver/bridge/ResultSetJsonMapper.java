@@ -25,40 +25,44 @@ public class ResultSetJsonMapper {
             InvocationContext ctx,
             RdfJsonBridge.TemplateExecutor executor
     ) {
-        
-        JSONObject map
-                = queryNode.getJSONObject("$map");
 
-        JSONArray array
-                = new JSONArray();
+        Object map = queryNode.get("$map");
+
+        JSONArray array = new JSONArray();
 
         while (rs.hasNext()) {
 
-            QuerySolution qs
-                    = rs.next();
+            QuerySolution qs = rs.next();
 
-            Binding binding
-                    = createBinding(qs);
+            Binding binding = createBinding(qs);
 
-            JSONObject obj
-                    = instantiate(
-                            map,
-                            qs,
-                            binding,
-                            executor,
-                            queryParams,
-                            datasetGraph,
-                            ctx
-                    );
+            Object value;
 
-            array.put(obj);
+            if (map instanceof JSONObject obj) {
+
+                value = instantiate(
+                        obj,
+                        qs,
+                        binding,
+                        executor,
+                        queryParams,
+                        datasetGraph,
+                        ctx
+                );
+
+            } else {
+
+                value = resolveValue(
+                        null,
+                        map,
+                        qs
+                );
+            }
+
+            array.put(value);
         }
 
-        String type
-                = queryNode.optString(
-                        "$type",
-                        null
-                );
+        String type = queryNode.optString("$type", null);
 
         if ("array".equals(type)) {
             return array;
@@ -70,30 +74,29 @@ public class ResultSetJsonMapper {
                 return JSONObject.NULL;
             }
 
-            return array.getJSONObject(0);
+            return array.get(0);
         }
 
-
         /*
-         * automatic behavior:
-         *
-         * 0 -> null
-         * 1 -> object
-         * n -> array
+     * automatic behavior:
+     *
+     * 0 -> null
+     * 1 -> value
+     * n -> array
          */
         if (array.isEmpty()) {
             return JSONObject.NULL;
         }
 
         if (array.length() == 1) {
-            return array.getJSONObject(0);
+            return array.get(0);
         }
 
         return array;
     }
 
-    private JSONObject instantiate(
-            JSONObject map,
+    private Object instantiate(
+            Object map,
             QuerySolution qs,
             Binding binding,
             RdfJsonBridge.TemplateExecutor executor,
@@ -102,26 +105,34 @@ public class ResultSetJsonMapper {
             InvocationContext ctx
     ) {
 
-        JSONObject json
-                = new JSONObject();
+        /*
+     * "$map": "?name"
+         */
+        if (!(map instanceof JSONObject jsonMap)) {
 
-        for (String key : map.keySet()) {
+            return resolveValue(
+                    null,
+                    map,
+                    qs
+            );
+        }
 
-            Object value
-                    = map.get(key);
+        JSONObject json = new JSONObject();
 
+        for (String key : jsonMap.keySet()) {
+
+            Object value = jsonMap.get(key);
 
             /*
-             * nested query object
+         * nested query object
              */
             if (value instanceof JSONObject child
                     && child.has("$where")) {
 
-                Object nested
-                        = executor.execute(
-                                child,
-                                binding
-                        );
+                Object nested = executor.execute(
+                        child,
+                        binding
+                );
 
                 json.put(
                         key,
@@ -131,9 +142,8 @@ public class ResultSetJsonMapper {
                 continue;
             }
 
-
             /*
-             * nested static object
+         * nested static object
              */
             if (value instanceof JSONObject child) {
 
@@ -153,22 +163,24 @@ public class ResultSetJsonMapper {
                 continue;
             }
 
-
             /*
-             * arrays
+         * arrays
              */
-            if (value instanceof JSONArray array) {
+            if (value instanceof JSONArray arr) {
 
-                JSONArray copy
-                        = new JSONArray();
+                JSONArray copy = new JSONArray();
 
-                for (Object item : array) {
+                for (Object item : arr) {
 
                     copy.put(
-                            resolveValue(
-                                    null,
+                            instantiate(
                                     item,
-                                    qs
+                                    qs,
+                                    binding,
+                                    executor,
+                                    queryParams,
+                                    datasetGraph,
+                                    ctx
                             )
                     );
                 }
@@ -214,8 +226,8 @@ public class ResultSetJsonMapper {
                     = qs.get(
                             expr.substring(1)
                     );
-            
-            if(key.equals("@id")) {
+
+            if (key != null && key.equals("@id")) {
                 return node.asResource().getURI();
             }
 
@@ -233,8 +245,8 @@ public class ResultSetJsonMapper {
 
             RDFNode node
                     = qs.get(variable);
-            
-            if(key.equals("@id")) {
+
+            if (key != null && key.equals("@id")) {
                 return node.asResource().getURI();
             }
 

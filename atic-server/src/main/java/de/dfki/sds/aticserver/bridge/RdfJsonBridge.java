@@ -59,7 +59,7 @@ public class RdfJsonBridge {
         this.resultSetJsonMapper = resultSetJsonMapper;
     }
 
-    public JSONObject toJson(
+    public Object toJson(
             Map<String, List<String>> queryParams,
             JSONObject template,
             AticDatasetGraph datasetGraph,
@@ -73,14 +73,8 @@ public class RdfJsonBridge {
                 ctx,
                 BindingFactory.binding()
         );
-
-        if (result instanceof JSONObject json) {
-            return json;
-        }
-
-        throw new IllegalStateException(
-                "Root document must evaluate to JSONObject"
-        );
+        
+        return result;
     }
 
     private Object evaluate(

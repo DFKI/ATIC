@@ -1,0 +1,9 @@
+{
+    "$map": "?name",
+    "$where": [
+        "?person foaf:name ?name"
+    ],
+    "@context": {
+        "foaf": "http://xmlns.com/foaf/0.1/"
+    }
+}

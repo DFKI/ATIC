@@ -1389,7 +1389,7 @@ public class AticServer {
                                 ctx.body()
                         );
 
-                JSONObject result
+                Object result
                         = rdfJsonBridge.toJson(
                                 queryParams,
                                 template,
