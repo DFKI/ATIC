@@ -15,9 +15,11 @@ public class SparqlQueryBuilder {
 
     public String build(
             JSONObject template,
+            JSONObject root,
             Map<String, List<String>> queryParams,
             Binding binding
     ) {
+        JSONObject context = root.optJSONObject("@context");
 
         ParameterizedSparqlString pss =
                 new ParameterizedSparqlString();
@@ -25,7 +27,7 @@ public class SparqlQueryBuilder {
 
         appendPrefixes(
                 pss,
-                template
+                context
         );
 
 
@@ -106,13 +108,8 @@ public class SparqlQueryBuilder {
 
     private void appendPrefixes(
             ParameterizedSparqlString pss,
-            JSONObject template
+            JSONObject context
     ) {
-
-        JSONObject context =
-                template.optJSONObject("@context");
-
-
         if (context == null) {
             return;
         }

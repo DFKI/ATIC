@@ -1,0 +1,30 @@
+{
+    "$type": "array",
+    "$map": {
+        "@id": "?person",
+        "name": "?name",
+        "mail": "?em",
+        "knows": {
+            "$type": "array",
+            "$map": {
+                "@id": "?knowsPerson",
+                "name": "?knowsPersonName"
+            },
+            "$where": [
+                "?person schema:knows ?knowsPerson",
+                "?knowsPerson foaf:name ?knowsPersonName"
+            ],
+            "$orderby": [
+                "DESC(?knowsPersonName)"
+            ]
+        }
+    },
+    "$where": [
+        "?person foaf:name ?name",
+        "?person schema:email ?em"
+    ],
+    "@context": {
+        "foaf": "http://xmlns.com/foaf/0.1/",
+        "schema": "https://schema.org/"
+    }
+}

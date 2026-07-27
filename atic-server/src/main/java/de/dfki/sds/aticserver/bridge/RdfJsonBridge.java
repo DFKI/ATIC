@@ -69,12 +69,23 @@ public class RdfJsonBridge {
             InvocationContext ctx
     ) {
 
+        JSONObject root = template;
+        
+        PrefixMapping prefixes = PrefixMapping.Factory.create();
+
+        JSONObject context = template.optJSONObject("@context");
+        if (context != null) {
+            loadPrefixes(context, prefixes);
+        }
+        
         Object result = evaluate(
                 template,
+                root,
                 queryParams,
                 datasetGraph,
                 ctx,
-                BindingFactory.binding()
+                BindingFactory.binding(),
+                prefixes
         );
         
         return result;
@@ -82,10 +93,12 @@ public class RdfJsonBridge {
 
     private Object evaluate(
             Object node,
+            JSONObject root,
             Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
-            Binding binding
+            Binding binding,
+            PrefixMapping prefixes
     ) {
 
         if (node instanceof JSONObject obj) {
@@ -94,10 +107,12 @@ public class RdfJsonBridge {
 
                 return executeQuery(
                         obj,
+                        root,
                         queryParams,
                         datasetGraph,
                         ctx,
-                        binding
+                        binding,
+                        prefixes
                 );
             }
 
@@ -110,10 +125,12 @@ public class RdfJsonBridge {
                         key,
                         evaluate(
                                 obj.get(key),
+                                root,
                                 queryParams,
                                 datasetGraph,
                                 ctx,
-                                binding
+                                binding,
+                                prefixes
                         )
                 );
             }
@@ -131,10 +148,12 @@ public class RdfJsonBridge {
                 result.put(
                         evaluate(
                                 item,
+                                root,
                                 queryParams,
                                 datasetGraph,
                                 ctx,
-                                binding
+                                binding,
+                                prefixes
                         )
                 );
             }
@@ -147,15 +166,18 @@ public class RdfJsonBridge {
 
     private Object executeQuery(
             JSONObject template,
+            JSONObject root,
             Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
-            Binding binding
+            Binding binding,
+            PrefixMapping prefixes
     ) {
 
         String sparql
                 = sparqlQueryBuilder.build(
                         template,
+                        root,
                         queryParams,
                         binding
                 );
@@ -199,13 +221,18 @@ public class RdfJsonBridge {
                                         rewindable,
                                         queryParams,
                                         datasetGraph,
-                                        ctx, (JSONObject childTemplate, Binding childBinding) -> executeQuery(
-                                        childTemplate,
-                                        queryParams,
-                                        datasetGraph,
                                         ctx,
-                                        childBinding
-                                ));
+                                        prefixes,
+                                        (JSONObject childTemplate, Binding childBinding) -> executeQuery(
+                                            childTemplate,
+                                            root,
+                                            queryParams,
+                                            datasetGraph,
+                                            ctx,
+                                            childBinding,
+                                            prefixes
+                                        )
+                                );
 
                         if (LOG.isDebugEnabled()) {
 

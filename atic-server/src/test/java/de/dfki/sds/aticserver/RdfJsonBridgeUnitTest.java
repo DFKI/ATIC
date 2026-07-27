@@ -206,6 +206,16 @@ public class RdfJsonBridgeUnitTest {
         helperQuery("03_bridge_persons.ttl", "bridge_07_personDescriptionLangToString.json", Map.of());
     }
 
+    @Test
+    public void personListNested() throws Exception {
+        helperQuery("03_bridge_persons.ttl", "bridge_08_personListNested.json", Map.of());
+    }
+    
+    @Test
+    public void personListValueAsProperty() throws Exception {
+        helperQuery("03_bridge_persons.ttl", "bridge_09_personListValueAsProperty.json", Map.of());
+    }
+
     
     @Disabled
     @Test

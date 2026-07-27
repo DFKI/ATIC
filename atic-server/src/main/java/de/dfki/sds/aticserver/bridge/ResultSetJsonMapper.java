@@ -8,15 +8,20 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import org.apache.jena.graph.Node;
+import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.rdf.model.Literal;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdf.model.RDFNode;
+import org.apache.jena.rdf.model.Resource;
+import org.apache.jena.shared.PrefixMapping;
+import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.core.Var;
 import org.apache.jena.sparql.engine.binding.Binding;
 import org.apache.jena.sparql.engine.binding.BindingBuilder;
+import org.apache.jena.util.iterator.ExtendedIterator;
 import org.apache.jena.vocabulary.XSD;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -75,6 +80,7 @@ public class ResultSetJsonMapper {
             Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
+            PrefixMapping prefixes,
             RdfJsonBridge.TemplateExecutor executor
     ) {
 
@@ -99,7 +105,8 @@ public class ResultSetJsonMapper {
                         executor,
                         queryParams,
                         datasetGraph,
-                        ctx
+                        ctx,
+                        prefixes
                 );
 
             } else {
@@ -107,7 +114,11 @@ public class ResultSetJsonMapper {
                 value = resolveValue(
                         null,
                         map,
-                        qs
+                        map,
+                        qs,
+                        datasetGraph,
+                        ctx,
+                        prefixes
                 );
             }
 
@@ -154,7 +165,8 @@ public class ResultSetJsonMapper {
             RdfJsonBridge.TemplateExecutor executor,
             Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
-            InvocationContext ctx
+            InvocationContext ctx,
+            PrefixMapping prefixes
     ) {
 
         /*
@@ -165,7 +177,11 @@ public class ResultSetJsonMapper {
             return resolveValue(
                     null,
                     map,
-                    qs
+                    map,
+                    qs,
+                    datasetGraph,
+                    ctx,
+                    prefixes
             );
         }
 
@@ -208,7 +224,8 @@ public class ResultSetJsonMapper {
                                 executor,
                                 queryParams,
                                 datasetGraph,
-                                ctx
+                                ctx,
+                                prefixes
                         )
                 );
 
@@ -232,7 +249,8 @@ public class ResultSetJsonMapper {
                                     executor,
                                     queryParams,
                                     datasetGraph,
-                                    ctx
+                                    ctx,
+                                    prefixes
                             )
                     );
                 }
@@ -250,7 +268,11 @@ public class ResultSetJsonMapper {
                     resolveValue(
                             key,
                             value,
-                            qs
+                            map,
+                            qs,
+                            datasetGraph,
+                            ctx,
+                            prefixes
                     )
             );
         }
@@ -262,7 +284,11 @@ public class ResultSetJsonMapper {
     private Object resolveValue(
             String key,
             Object value,
-            QuerySolution qs
+            Object map,
+            QuerySolution qs,
+            AticDatasetGraph datasetGraph,
+            InvocationContext ctx,
+            PrefixMapping prefixes
     ) {
 
         if (!(value instanceof String expr)) {
@@ -290,15 +316,47 @@ public class ResultSetJsonMapper {
 
             node = qs.get(base.substring(1));
 
-        } else if (base.isEmpty()) {
+        } 
+        else if (base.isEmpty()) {
+            
+            node = null;
+            
             // expression started with '$'
-            String property = parts[1];
-            String variable = propertyVariable("$" + property);
-            node = qs.get(variable);
+            String propertyCuri = parts[1];
+            String propertyUri = prefixes.expandPrefix(propertyCuri);
+            Node property = NodeFactory.createURI(propertyUri);
+            
+            if (map != null && (map instanceof JSONObject jsonMap)) {
+                
+                String idVar = jsonMap.optString("@id");
+                if(idVar == null) {
+                    throw new IllegalArgumentException("@id required in $map");
+                }
+                
+                String name = idVar.substring(1);
+                Resource subject = qs.getResource(name);
+                if(subject == null) {
+                    throw new IllegalArgumentException("no subject bound with " + name);
+                }
+                
+                Node n = datasetGraph.calculateRead(() -> {
+                    ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) datasetGraph.find(null, subject.asNode(), property, Node.ANY);
+                    Quad q = null;
+                    if(iter.hasNext()) {
+                        q = iter.next();
+                    }
+                    iter.close();
+                    return q == null ? null : q.getObject();
+                });
+                
+                if(n != null) {
+                    node = model.asRDFNode(n);
+                }
+            }
 
             // modifiers start one later
             parts = Arrays.copyOfRange(parts, 1, parts.length);
-
+            
         } else {
             return expr;
         }

@@ -1,0 +1,15 @@
+{
+    "$type": "array",
+    "$map": {
+        "@id": "?person",
+        "name": "$foaf:name",
+        "mail": "$schema:email"
+    },
+    "$where": [
+        "?person a schema:Person"
+    ],
+    "@context": {
+        "foaf": "http://xmlns.com/foaf/0.1/",
+        "schema": "https://schema.org/"
+    }
+}
