@@ -4,6 +4,7 @@
         "desc": "?desc$string"
     },
     "$where": [
+        "?person a schema:Person",
         "?person schema:description ?desc"
     ],
     "$filter": [

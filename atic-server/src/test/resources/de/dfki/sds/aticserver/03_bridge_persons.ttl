@@ -4,6 +4,7 @@
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
 
 ex:alice-smith
     a schema:Person ;
@@ -62,3 +63,10 @@ ex:carol-miller
     schema:knows ex:bob-johnson ;
     dcterms:created "2025-03-22T08:20:00Z"^^xsd:dateTime ;
     dcterms:modified "2026-07-21T10:05:00Z"^^xsd:dateTime .
+
+schema:Person a rdfs:Class ;
+    foaf:name "Person" ;
+    schema:icon "https://example.org/icon/person" ;
+    schema:description
+        "A person"@en ,
+        "Eine Person"@de .

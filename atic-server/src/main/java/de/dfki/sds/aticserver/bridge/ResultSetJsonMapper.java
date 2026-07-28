@@ -290,7 +290,7 @@ public class ResultSetJsonMapper {
 
             if (key.equals("$fragment") && value instanceof String val) {
 
-                resolveFragment(json, val, qs, datasetGraph, ctx, binding, prefixes);
+                resolveFragment(json, val, qs, datasetGraph, ctx, binding, prefixes, true);
 
             } else {
 
@@ -319,7 +319,8 @@ public class ResultSetJsonMapper {
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
             Binding binding,
-            PrefixMapping prefixes
+            PrefixMapping prefixes,
+            boolean expandType
     ) {
 
         Node subject = RdfJsonBridge.parseToken(value, prefixes);
@@ -380,13 +381,13 @@ public class ResultSetJsonMapper {
                 
                 //TODO for @type get fragment to have more info about it
 
-                json.put(
-                        fp.key,
-                        toJson(
-                                ModelFactory.createDefaultModel()
-                                        .asRDFNode(object)
-                        )
-                );
+                Object o = toJson(ModelFactory.createDefaultModel().asRDFNode(object));
+                
+                json.put(fp.key, o);
+                
+                if(fp.key.equals("@type") && expandType) {
+                    resolveFragment((JSONObject) o, object.getURI(), qs, datasetGraph, ctx, binding, prefixes, false);
+                }
             }
         }
     }

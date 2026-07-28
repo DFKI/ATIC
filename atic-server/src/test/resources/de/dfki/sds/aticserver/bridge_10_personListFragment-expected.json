@@ -1,6 +1,15 @@
 [
   {
-    "@type": {"@id": "https://schema.org/Person"},
+    "@type": {
+      "@type": {"@id": "http://www.w3.org/2000/01/rdf-schema#Class"},
+      "icon": "https://example.org/icon/person",
+      "comment": {
+        "@value": "A person",
+        "@language": "en"
+      },
+      "@id": "https://schema.org/Person",
+      "label": "Person"
+    },
     "icon": "https://example.org/icon/alice",
     "comment": {
       "@value": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects.",
@@ -10,7 +19,16 @@
     "label": "Alice Smith"
   },
   {
-    "@type": {"@id": "https://schema.org/Person"},
+    "@type": {
+      "@type": {"@id": "http://www.w3.org/2000/01/rdf-schema#Class"},
+      "icon": "https://example.org/icon/person",
+      "comment": {
+        "@value": "A person",
+        "@language": "en"
+      },
+      "@id": "https://schema.org/Person",
+      "label": "Person"
+    },
     "icon": "https://example.org/icon/bob",
     "comment": {
       "@value": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software.",
@@ -20,7 +38,16 @@
     "label": "Bob Johnson"
   },
   {
-    "@type": {"@id": "https://schema.org/Person"},
+    "@type": {
+      "@type": {"@id": "http://www.w3.org/2000/01/rdf-schema#Class"},
+      "icon": "https://example.org/icon/person",
+      "comment": {
+        "@value": "A person",
+        "@language": "en"
+      },
+      "@id": "https://schema.org/Person",
+      "label": "Person"
+    },
     "icon": "https://example.org/icon/carol",
     "comment": {
       "@value": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning.",

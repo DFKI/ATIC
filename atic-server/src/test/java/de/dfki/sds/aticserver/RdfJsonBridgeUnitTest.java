@@ -283,7 +283,7 @@ public class RdfJsonBridgeUnitTest {
 
             Object expectedBody = loadJSON(templFilename.replace(".json", "-expected.json"));
 
-            JSONCompare.assertMatches(expectedBody, actualBody, Set.of(CompareMode.JSON_ARRAY_NON_EXTENSIBLE, CompareMode.JSON_OBJECT_NON_EXTENSIBLE));
+            JSONCompare.assertMatches(expectedBody.toString(), actualBody.toString(), Set.of(CompareMode.JSON_ARRAY_NON_EXTENSIBLE, CompareMode.JSON_OBJECT_NON_EXTENSIBLE));
 
         } else {
             Assertions.fail(response.toString());

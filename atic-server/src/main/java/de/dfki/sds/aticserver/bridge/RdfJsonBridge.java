@@ -3,6 +3,7 @@ package de.dfki.sds.aticserver.bridge;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.RDFChangesDistinctCollector;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -749,6 +750,14 @@ public class RdfJsonBridge {
 
         if (uri != null) {
             return NodeFactory.createURI(uri);
+        }
+        
+        try {
+            //try parse as URI
+            URI.create(token);
+            return NodeFactory.createURI(token);
+        } catch(Exception e) {
+            //ignore
         }
 
         throw new IllegalArgumentException(
