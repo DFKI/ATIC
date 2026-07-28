@@ -4,6 +4,7 @@ import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.conf.ConfigLoader;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticserver.bridge.ResultSetJsonMapper;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import io.json.compare.CompareMode;
 import io.json.compare.JSONCompare;
@@ -26,10 +27,13 @@ import java.util.Set;
 import java.util.StringJoiner;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
+import org.apache.jena.sparql.vocabulary.FOAF;
+import org.apache.jena.vocabulary.RDF;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -214,6 +218,18 @@ public class RdfJsonBridgeUnitTest {
     @Test
     public void personListValueAsProperty() throws Exception {
         helperQuery("03_bridge_persons.ttl", "bridge_09_personListValueAsProperty.json", Map.of());
+    }
+
+    @Test
+    public void personListFragment() throws Exception {
+        List<ResultSetJsonMapper.FragmentProperty> fragmentSetting = server.getRdfJsonBridge().getFragmentSetting();
+        fragmentSetting.clear();
+        fragmentSetting.add(new ResultSetJsonMapper.FragmentProperty("@type", RDF.type.asNode(), false));
+        fragmentSetting.add(new ResultSetJsonMapper.FragmentProperty("icon", NodeFactory.createURI("https://schema.org/icon"), false));
+        fragmentSetting.add(new ResultSetJsonMapper.FragmentProperty("label", FOAF.name.asNode(), true));
+        fragmentSetting.add(new ResultSetJsonMapper.FragmentProperty("comment", NodeFactory.createURI("https://schema.org/description"), true));
+        
+        helperQuery("03_bridge_persons.ttl", "bridge_10_personListFragment.json", Map.of());
     }
 
     

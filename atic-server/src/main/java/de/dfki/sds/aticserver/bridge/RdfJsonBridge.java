@@ -58,6 +58,10 @@ public class RdfJsonBridge {
         this.sparqlQueryBuilder = sparqlQueryBuilder;
         this.resultSetJsonMapper = resultSetJsonMapper;
     }
+    
+    public List<ResultSetJsonMapper.FragmentProperty> getFragmentSetting() {
+        return resultSetJsonMapper.getFragmentSetting();
+    }
 
     //==========================================================
     //reading
@@ -222,6 +226,7 @@ public class RdfJsonBridge {
                                         queryParams,
                                         datasetGraph,
                                         ctx,
+                                        binding,
                                         prefixes,
                                         (JSONObject childTemplate, Binding childBinding) -> executeQuery(
                                             childTemplate,
@@ -715,7 +720,7 @@ public class RdfJsonBridge {
 
     }
 
-    private Node parseToken(
+    /*package*/ static Node parseToken(
             String token,
             PrefixMapping prefixes
     ) {

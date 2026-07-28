@@ -1977,4 +1977,8 @@ public class AticServer {
         return rdfPatchWriter;
     }
 
+    public RdfJsonBridge getRdfJsonBridge() {
+        return rdfJsonBridge;
+    }
+
 }

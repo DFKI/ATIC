@@ -1,7 +1,9 @@
 package de.dfki.sds.aticserver.bridge;
 
+import de.dfki.sds.atic.helper.JSONUtils;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -21,7 +23,10 @@ import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.core.Var;
 import org.apache.jena.sparql.engine.binding.Binding;
 import org.apache.jena.sparql.engine.binding.BindingBuilder;
+import org.apache.jena.sparql.vocabulary.FOAF;
 import org.apache.jena.util.iterator.ExtendedIterator;
+import org.apache.jena.vocabulary.RDF;
+import org.apache.jena.vocabulary.RDFS;
 import org.apache.jena.vocabulary.XSD;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -32,7 +37,15 @@ public class ResultSetJsonMapper {
 
     private final Model model = ModelFactory.createDefaultModel();
 
+    private final List<FragmentProperty> fragmentSetting = new ArrayList<>();
+    
+    public record FragmentProperty(String key, Node property, boolean languageAware) {
+        
+    }
+
     public ResultSetJsonMapper() {
+        defaultFragmentSetting();
+
         registerModifier(
                 "date",
                 new DateModifier()
@@ -67,6 +80,17 @@ public class ResultSetJsonMapper {
         );
     }
 
+    private void defaultFragmentSetting() {
+        fragmentSetting.add(new FragmentProperty("@type", RDF.type.asNode(), false));
+        fragmentSetting.add(new FragmentProperty("label", RDFS.label.asNode(), true));
+        fragmentSetting.add(new FragmentProperty("comment", RDFS.comment.asNode(), true));
+        fragmentSetting.add(new FragmentProperty("icon", FOAF.img.asNode(), false));
+    }
+
+    public List<FragmentProperty> getFragmentSetting() {
+        return fragmentSetting;
+    }
+
     public final void registerModifier(
             String name,
             NodeModifier modifier
@@ -80,6 +104,7 @@ public class ResultSetJsonMapper {
             Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
+            Binding initalBinding,
             PrefixMapping prefixes,
             RdfJsonBridge.TemplateExecutor executor
     ) {
@@ -92,7 +117,7 @@ public class ResultSetJsonMapper {
 
             QuerySolution qs = rs.next();
 
-            Binding binding = createBinding(qs);
+            Binding binding = createBinding(qs, initalBinding);
 
             Object value;
 
@@ -185,7 +210,7 @@ public class ResultSetJsonMapper {
             );
         }
 
-        JSONObject json = new JSONObject();
+        JSONObject json = JSONUtils.createJSONObject();
 
         for (String key : jsonMap.keySet()) {
 
@@ -263,21 +288,205 @@ public class ResultSetJsonMapper {
                 continue;
             }
 
-            json.put(
-                    key,
-                    resolveValue(
-                            key,
-                            value,
-                            map,
-                            qs,
-                            datasetGraph,
-                            ctx,
-                            prefixes
-                    )
-            );
+            if (key.equals("$fragment") && value instanceof String val) {
+
+                resolveFragment(json, val, qs, datasetGraph, ctx, binding, prefixes);
+
+            } else {
+
+                json.put(
+                        key,
+                        resolveValue(
+                                key,
+                                value,
+                                map,
+                                qs,
+                                datasetGraph,
+                                ctx,
+                                prefixes
+                        )
+                );
+            }
         }
 
         return json;
+    }
+
+    private void resolveFragment(
+            JSONObject json,
+            String value,
+            QuerySolution qs,
+            AticDatasetGraph datasetGraph,
+            InvocationContext ctx,
+            Binding binding,
+            PrefixMapping prefixes
+    ) {
+
+        Node subject = RdfJsonBridge.parseToken(value, prefixes);
+
+        if (subject.isVariable()) {
+
+            subject = binding.get((Var) subject);
+
+            if (subject == null) {
+                return;
+            }
+        }
+
+        String locale = "en";
+
+        if (binding != null) {
+
+            Node localeNode
+                    = binding.get(Var.alloc("locale"));
+
+            if (localeNode != null
+                    && localeNode.isLiteral()) {
+
+                locale
+                        = localeNode.getLiteralLexicalForm();
+            }
+        }
+        
+        json.put("@id", subject.getURI());
+
+        for (FragmentProperty fp : fragmentSetting) {
+
+            Node predicate = fp.property;
+
+            Node object;
+
+            if (fp.languageAware) {
+
+                object = getBestLanguageMatch(
+                        subject,
+                        predicate,
+                        locale,
+                        datasetGraph,
+                        ctx
+                );
+
+            } else {
+
+                object = getFirstObject(
+                        subject,
+                        predicate,
+                        datasetGraph,
+                        ctx
+                );
+            }
+
+            if (object != null) {
+                
+                //TODO for @type get fragment to have more info about it
+
+                json.put(
+                        fp.key,
+                        toJson(
+                                ModelFactory.createDefaultModel()
+                                        .asRDFNode(object)
+                        )
+                );
+            }
+        }
+    }
+
+    private Node getBestLanguageMatch(
+            Node subject,
+            Node predicate,
+            String locale,
+            AticDatasetGraph datasetGraph,
+            InvocationContext ctx
+    ) {
+
+        Node exact = null;
+        Node untagged = null;
+        Node first = null;
+
+        ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) datasetGraph.find(
+                Node.ANY,
+                subject,
+                predicate,
+                Node.ANY,
+                ctx
+        );
+
+        try {
+
+            while (it.hasNext()) {
+
+                Node object
+                        = it.next().getObject();
+
+                if (!object.isLiteral()) {
+
+                    if (first == null) {
+                        first = object;
+                    }
+
+                    continue;
+                }
+
+                if (first == null) {
+                    first = object;
+                }
+
+                String lang
+                        = object.getLiteralLanguage();
+
+                if (lang.equalsIgnoreCase(locale)) {
+                    exact = object;
+                    break;
+                }
+
+                if (lang.isBlank()
+                        && untagged == null) {
+
+                    untagged = object;
+                }
+            }
+
+        } finally {
+            it.close();
+        }
+
+        if (exact != null) {
+            return exact;
+        }
+
+        if (untagged != null) {
+            return untagged;
+        }
+
+        return first;
+    }
+
+    private Node getFirstObject(
+            Node subject,
+            Node predicate,
+            AticDatasetGraph datasetGraph,
+            InvocationContext ctx
+    ) {
+
+        ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) datasetGraph.find(
+                Node.ANY,
+                subject,
+                predicate,
+                Node.ANY,
+                ctx
+        );
+
+        try {
+
+            if (it.hasNext()) {
+                return it.next().getObject();
+            }
+
+            return null;
+
+        } finally {
+            it.close();
+        }
     }
 
     //this is called to resolve a value
@@ -316,47 +525,46 @@ public class ResultSetJsonMapper {
 
             node = qs.get(base.substring(1));
 
-        } 
-        else if (base.isEmpty()) {
-            
+        } else if (base.isEmpty()) {
+
             node = null;
-            
+
             // expression started with '$'
             String propertyCuri = parts[1];
             String propertyUri = prefixes.expandPrefix(propertyCuri);
             Node property = NodeFactory.createURI(propertyUri);
-            
+
             if (map != null && (map instanceof JSONObject jsonMap)) {
-                
+
                 String idVar = jsonMap.optString("@id");
-                if(idVar == null) {
+                if (idVar == null) {
                     throw new IllegalArgumentException("@id required in $map");
                 }
-                
+
                 String name = idVar.substring(1);
                 Resource subject = qs.getResource(name);
-                if(subject == null) {
+                if (subject == null) {
                     throw new IllegalArgumentException("no subject bound with " + name);
                 }
-                
+
                 Node n = datasetGraph.calculateRead(() -> {
                     ExtendedIterator<Quad> iter = (ExtendedIterator<Quad>) datasetGraph.find(null, subject.asNode(), property, Node.ANY);
                     Quad q = null;
-                    if(iter.hasNext()) {
+                    if (iter.hasNext()) {
                         q = iter.next();
                     }
                     iter.close();
                     return q == null ? null : q.getObject();
                 });
-                
-                if(n != null) {
+
+                if (n != null) {
                     node = model.asRDFNode(n);
                 }
             }
 
             // modifiers start one later
             parts = Arrays.copyOfRange(parts, 1, parts.length);
-            
+
         } else {
             return expr;
         }
@@ -410,19 +618,21 @@ public class ResultSetJsonMapper {
 
     //create a binding from an existing one
     private Binding createBinding(
-            QuerySolution qs
+            QuerySolution qs,
+            Binding initialBinding
     ) {
 
         BindingBuilder builder
-                = Binding.builder();
+                = initialBinding != null
+                        ? Binding.builder(initialBinding)
+                        : Binding.builder();
 
         Iterator<String> vars
                 = qs.varNames();
 
         while (vars.hasNext()) {
 
-            String var
-                    = vars.next();
+            String var = vars.next();
 
             builder.add(
                     Var.alloc(var),
@@ -444,7 +654,7 @@ public class ResultSetJsonMapper {
 
         if (node.isResource()) {
 
-            return new JSONObject()
+            return JSONUtils.createJSONObject()
                     .put(
                             "@id",
                             node.asResource().getURI()
@@ -471,7 +681,7 @@ public class ResultSetJsonMapper {
 
         if (!lang.isBlank()) {
 
-            return new JSONObject()
+            return JSONUtils.createJSONObject()
                     .put("@value", lit.getLexicalForm())
                     .put("@language", lang);
         }
@@ -486,7 +696,7 @@ public class ResultSetJsonMapper {
         if (datatype != null
                 && !XSD.xstring.getURI().equals(datatype)) {
 
-            return new JSONObject()
+            return JSONUtils.createJSONObject()
                     .put("@value", lit.getLexicalForm())
                     .put("@type", datatype);
         }

@@ -8,6 +8,7 @@
 ex:alice-smith
     a schema:Person ;
     foaf:name "Alice Smith" ;
+    schema:icon "https://example.org/icon/alice";
     schema:givenName "Alice" ;
     schema:familyName "Smith" ;
     schema:email "alice.smith@example.org" ;
@@ -26,6 +27,7 @@ ex:alice-smith
 ex:bob-johnson
     a schema:Person ;
     foaf:name "Bob Johnson" ;
+    schema:icon "https://example.org/icon/bob";
     schema:givenName "Bob" ;
     schema:familyName "Johnson" ;
     schema:email "bob.johnson@example.org" ;
@@ -45,6 +47,7 @@ ex:bob-johnson
 ex:carol-miller
     a schema:Person ;
     foaf:name "Carol Miller" ;
+    schema:icon "https://example.org/icon/carol";
     schema:givenName "Carol" ;
     schema:familyName "Miller" ;
     schema:email "carol.miller@example.org" ;
