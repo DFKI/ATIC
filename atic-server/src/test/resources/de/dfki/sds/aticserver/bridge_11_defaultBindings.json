@@ -1,0 +1,27 @@
+{
+    "$type": "array",
+    "$map": {
+        "@id": "?person",
+        "my-type": "?cUri",
+        "bLit": "?bLiteral",
+        "cLit": "?cLiteral"
+    },
+    "$where": [
+        "?person a ?cUri"
+    ],
+    "$default": {
+        "aLiteral": { "@value": "5", "@type": "xsd:integer" },
+        "bLiteral": 5,
+        "cLiteral": true,
+        "aUri": { "@id": "http://example.org" },
+        "bUri": "http://example.org",
+        "cUri": "schema:Person"
+    },
+    "$limit": 10,
+    "$offset": 0,
+    "@context": {
+        "foaf": "http://xmlns.com/foaf/0.1/",
+        "schema": "https://schema.org/",
+        "xsd": "http://www.w3.org/2001/XMLSchema#"
+    }
+}

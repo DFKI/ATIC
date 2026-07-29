@@ -231,6 +231,11 @@ public class RdfJsonBridgeUnitTest {
         
         helperQuery("03_bridge_persons.ttl", "bridge_10_personListFragment.json", Map.of());
     }
+    
+    @Test
+    public void defaultBindings() throws Exception {
+        helperQuery("03_bridge_persons.ttl", "bridge_11_defaultBindings.json", Map.of());
+    }
 
     
     @Disabled

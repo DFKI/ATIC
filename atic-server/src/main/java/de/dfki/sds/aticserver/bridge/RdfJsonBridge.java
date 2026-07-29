@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
+import org.apache.jena.datatypes.BaseDatatype;
 import org.apache.jena.datatypes.xsd.XSDDatatype;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
@@ -30,7 +31,7 @@ import org.apache.jena.sparql.core.DatasetGraphFactory;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.core.Var;
 import org.apache.jena.sparql.engine.binding.Binding;
-import org.apache.jena.sparql.engine.binding.BindingFactory;
+import org.apache.jena.sparql.engine.binding.BindingBuilder;
 import org.apache.jena.vocabulary.RDF;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -59,14 +60,13 @@ public class RdfJsonBridge {
         this.sparqlQueryBuilder = sparqlQueryBuilder;
         this.resultSetJsonMapper = resultSetJsonMapper;
     }
-    
+
     public List<ResultSetJsonMapper.FragmentProperty> getFragmentSetting() {
         return resultSetJsonMapper.getFragmentSetting();
     }
 
     //==========================================================
     //reading
-    
     public Object toJson(
             Map<String, List<String>> queryParams,
             JSONObject template,
@@ -75,25 +75,43 @@ public class RdfJsonBridge {
     ) {
 
         JSONObject root = template;
-        
+
         PrefixMapping prefixes = PrefixMapping.Factory.create();
 
         JSONObject context = template.optJSONObject("@context");
         if (context != null) {
             loadPrefixes(context, prefixes);
         }
-        
-        Object result = evaluate(
+
+        BindingBuilder defaults = Binding.builder();
+
+        JSONObject defaultObj = template.optJSONObject("$default");
+        if (defaultObj != null) {
+            for (String key : defaultObj.keySet()) {
+
+                Node node = toNode(
+                        defaultObj.get(key),
+                        prefixes
+                );
+
+                if (node != null) {
+                    defaults.add(
+                            Var.alloc(key),
+                            node
+                    );
+                }
+            }
+        }
+
+        return evaluate(
                 template,
                 root,
                 queryParams,
                 datasetGraph,
                 ctx,
-                BindingFactory.binding(),
+                defaults.build(),
                 prefixes
         );
-        
-        return result;
     }
 
     private Object evaluate(
@@ -230,13 +248,13 @@ public class RdfJsonBridge {
                                         binding,
                                         prefixes,
                                         (JSONObject childTemplate, Binding childBinding) -> executeQuery(
-                                            childTemplate,
-                                            root,
-                                            queryParams,
-                                            datasetGraph,
-                                            ctx,
-                                            childBinding,
-                                            prefixes
+                                                childTemplate,
+                                                root,
+                                                queryParams,
+                                                datasetGraph,
+                                                ctx,
+                                                childBinding,
+                                                prefixes
                                         )
                                 );
 
@@ -284,7 +302,6 @@ public class RdfJsonBridge {
 
     //====================================================================
     //writing
-    
     // use for POST, PUT, PATCH, DELETE
     public RDFPatch toPatch(
             String method,
@@ -378,10 +395,9 @@ public class RdfJsonBridge {
                             });
                 });
             }
-            
+
             //TODO PUT means we have to do a toJson and collect the triples if they would be queried
             //so we delete the queried triples and insert the given ones to simulate a PUT
-            
             default ->
                 throw new IllegalArgumentException(
                         "Unsupported method: " + method
@@ -540,7 +556,7 @@ public class RdfJsonBridge {
             Triple t = e.getValue();
 
             Node object
-                    = toNode(data.get(jsonKey));
+                    = toNode(data.get(jsonKey), prefixes);
 
             bindings.put(
                     (Var) t.getObject(),
@@ -680,7 +696,7 @@ public class RdfJsonBridge {
             Node o = parseToken(parts[2], prefixes);
 
             Triple triple = Triple.create(s, p, o);
-            
+
             triples.add(triple);
 
             if (triple.getObject().isVariable()) {
@@ -751,12 +767,12 @@ public class RdfJsonBridge {
         if (uri != null) {
             return NodeFactory.createURI(uri);
         }
-        
+
         try {
             //try parse as URI
             URI.create(token);
             return NodeFactory.createURI(token);
-        } catch(Exception e) {
+        } catch (Exception e) {
             //ignore
         }
 
@@ -787,7 +803,8 @@ public class RdfJsonBridge {
     }
 
     private Node toNode(
-            Object value
+            Object value,
+            PrefixMapping prefixes
     ) {
 
         if (value == null
@@ -796,14 +813,60 @@ public class RdfJsonBridge {
             return null;
         }
 
+        /*
+     * JSON-LD resource
+         */
         if (value instanceof JSONObject obj
                 && obj.has("@id")) {
 
-            return NodeFactory.createURI(
-                    obj.getString("@id")
+            String uri = obj.getString("@id");
+
+            uri = expandUri(uri, prefixes);
+
+            return NodeFactory.createURI(uri);
+        }
+
+        /*
+     * JSON-LD literal
+         */
+        if (value instanceof JSONObject obj
+                && obj.has("@value")) {
+
+            Object lexical = obj.get("@value");
+
+            String lang = obj.optString("@language", null);
+
+            if (lang != null && !lang.isBlank()) {
+
+                return NodeFactory.createLiteralLang(
+                        lexical.toString(),
+                        lang
+                );
+            }
+
+            String datatype = obj.optString("@type", null);
+
+            if (datatype != null && !datatype.isBlank()) {
+
+                datatype = expandUri(
+                        datatype,
+                        prefixes
+                );
+                
+                return NodeFactory.createLiteralDT(
+                        lexical.toString(),
+                        new BaseDatatype(datatype)
+                );
+            }
+
+            return NodeFactory.createLiteralString(
+                    lexical.toString()
             );
         }
 
+        /*
+     * Native JSON values.
+         */
         if (value instanceof Integer i) {
             return NodeFactory.createLiteralByValue(
                     i,
@@ -839,9 +902,51 @@ public class RdfJsonBridge {
             );
         }
 
+        /*
+        * String:
+        *  - full URI
+        *  - CURIE
+        *  - prefix name
+        *  - otherwise plain string
+         */
+        if (value instanceof String s) {
+
+            String expanded = expandUri(
+                    s,
+                    prefixes
+            );
+
+            if (!expanded.equals(s)) {
+                return NodeFactory.createURI(expanded);
+            }
+
+            return NodeFactory.createLiteralString(s);
+        }
+
         return NodeFactory.createLiteralString(
                 value.toString()
         );
+    }
+
+    private String expandUri(
+            String value,
+            PrefixMapping prefixes
+    ) {
+        String expanded
+                = prefixes.expandPrefix(value);
+
+        if (!expanded.equals(value)) {
+            return expanded;
+        }
+
+        String ns
+                = prefixes.getNsPrefixURI(value);
+
+        if (ns != null) {
+            return ns;
+        }
+
+        return value;
     }
 
     private String stripModifiers(

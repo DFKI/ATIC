@@ -264,7 +264,7 @@ public class SparqlQueryBuilder {
         }
     }
 
-
+    //TODO improve: better queryParams value parsing and bindings can be overwritten by queryParams
     private void appendValues(
             StringBuilder sparql,
             Map<String, List<String>> queryParams,

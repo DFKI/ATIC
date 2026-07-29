@@ -708,32 +708,4 @@ public class ResultSetJsonMapper {
         return lit.getLexicalForm();
     }
 
-    private String propertyVariable(
-            String expr
-    ) {
-
-        String s
-                = expr.substring(1);
-
-        int idx
-                = s.indexOf(':');
-
-        if (idx >= 0) {
-            s = s.substring(
-                    idx + 1
-            );
-        }
-
-        idx
-                = s.indexOf('$');
-
-        if (idx >= 0) {
-            s = s.substring(
-                    0,
-                    idx
-            );
-        }
-
-        return s;
-    }
 }

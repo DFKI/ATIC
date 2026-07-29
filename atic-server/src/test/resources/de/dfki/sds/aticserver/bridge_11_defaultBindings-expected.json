@@ -1,0 +1,20 @@
+[
+  {
+    "bLit": 5,
+    "my-type": {"@id": "https://schema.org/Person"},
+    "cLit": true,
+    "@id": "https://example.org/id/alice-smith"
+  },
+  {
+    "bLit": 5,
+    "my-type": {"@id": "https://schema.org/Person"},
+    "cLit": true,
+    "@id": "https://example.org/id/bob-johnson"
+  },
+  {
+    "bLit": 5,
+    "my-type": {"@id": "https://schema.org/Person"},
+    "cLit": true,
+    "@id": "https://example.org/id/carol-miller"
+  }
+]
