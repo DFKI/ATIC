@@ -136,6 +136,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     private User adminUser;
 
+    private SystemAticGraph systemGraph;
+    
     /**
      * Dataset capabilities configuration (rdf-star support, etc.).
      */
@@ -168,6 +170,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         this.rdfPatchEmitter = new RDFPatchEmitterTransactional();
         this.agentSessionManager = new AgentSessionManager();
         this.capabilities = capabilities;
+        this.systemGraph = new SystemAticGraph(this);
         if (mainListener != null) {
             this.rdfPatchEmitter.addListener(mainListener);
         }
@@ -250,6 +253,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         db.writeQuery("create_table_spog.sql");
         db.writeQuery("create_table_splg.sql");
+        db.writeQuery("create_table_system_splu.sql");
 
         //rdf-star
         db.writeQuery("create_table_resource_spo.sql");
@@ -2799,6 +2803,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return getGraph(org.apache.jena.sparql.core.Quad.defaultGraphIRI, ctx);
     }
 
+    public AticGraph getSystemGraph() {
+        return systemGraph;
+    }
+    
     /**
      * Returns an {@link AticGraph} for the given node. Creates the graph if it does not exist. Handles virtual graphs and the union graph. Performs a READ
      * access control check.
@@ -4028,6 +4036,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         for (SqliteAticGraph graph : graphMap.values()) {
             graph.begin();
         }
+        systemGraph.begin();
     }
 
     /**
@@ -4051,6 +4060,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         for (SqliteAticGraph graph : graphMap.values()) {
             graph.commit();
         }
+        systemGraph.commit();
         db.commit();
         rdfPatchEmitter.commit();
     }
@@ -4063,6 +4073,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         for (SqliteAticGraph graph : graphMap.values()) {
             graph.abort();
         }
+        systemGraph.abort();
         db.abort();
         rdfPatchEmitter.abort();
     }
