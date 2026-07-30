@@ -2804,7 +2804,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     public AticGraph getSystemGraph() {
-        return systemGraph;
+        return getGraph(SystemAticGraph.node, false, InvocationContext.EMPTY);
     }
     
     /**
@@ -2828,6 +2828,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         //special union Graph name
         if (graphNode.equals(Quad.unionGraph)) {
             return getUnionGraph(ctx);
+        }
+        
+        //special system graph name
+        if (graphNode.equals(SystemAticGraph.node)) {
+            return systemGraph;
         }
 
         //ensure that Quad.defaultGraphIRI is used if default graph is mentioned
@@ -2975,7 +2980,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         Iterator<Node> iter = listGraphNodes(ctx, false);
-
+        
         return getUnionGraph(iter, ctx);
     }
 
