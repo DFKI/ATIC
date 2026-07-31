@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS system_splu (
     lex TEXT NOT NULL,
     lang TEXT,
     dt TEXT,
-    user_primary_group INTEGER NOT NULL, -- u
+    user_primary_group INTEGER, -- u, can be null for all users see it
 
     creator INTEGER NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),

@@ -2,6 +2,7 @@ package de.dfki.sds.aticsqlite;
 
 import de.dfki.sds.atic.ac.Permission;
 import de.dfki.sds.atic.jenatic.AticGraph;
+import de.dfki.sds.atic.jenatic.AticTriple;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -187,6 +188,12 @@ public class SystemAticGraph implements AticGraph {
             long p = predicateCache.get(t.getPredicate());
 
             LiteralLabel lit = t.getObject().getLiteral();
+            
+            //we would like to create system triples which are user agnostic (independent)
+            boolean userAgnostic = false;
+            if(t instanceof AticTriple aticTriple) {
+                userAgnostic = aticTriple.isUserAgnostic();
+            }
 
             systemSpluBatch.add(new Object[]{
                 s,
@@ -194,7 +201,7 @@ public class SystemAticGraph implements AticGraph {
                 lit.getLexicalForm(),
                 lit.language(),
                 lit.getDatatypeURI(),
-                ctx.getPrimaryGroupId(),
+                userAgnostic ? null : ctx.getPrimaryGroupId(),
                 ctx.getUserId()
             });
         }
@@ -295,10 +302,13 @@ public class SystemAticGraph implements AticGraph {
                 FROM system_splu splu
                 JOIN resource_uri su ON su.id = splu.s
                 JOIN property pu ON pu.id = splu.p
-                WHERE splu.user_primary_group = ?
+                LEFT JOIN resource_acl_effective ae_rs ON ae_rs.resource_id = splu.s AND ae_rs.user_id = ?
+                WHERE COALESCE(ae_rs.permission, 0) >= ? AND (splu.user_primary_group = ? OR splu.user_primary_group IS NULL)
                 """);
 
             List<Object> params = new ArrayList<>();
+            params.add(ctx.getUserId());
+            params.add(Permission.READ.getCode());
             params.add(ctx.getPrimaryGroupId());
 
             if (s != null && s != Node.ANY) {
@@ -431,10 +441,13 @@ public class SystemAticGraph implements AticGraph {
                 SELECT EXISTS (
                     SELECT 1
                     FROM system_splu splu
-                    WHERE splu.user_primary_group = ?
+                    LEFT JOIN resource_acl_effective ae_rs ON ae_rs.resource_id = splu.s AND ae_rs.user_id = ?
+                    WHERE COALESCE(ae_rs.permission, 0) >= ? AND (splu.user_primary_group = ? OR splu.user_primary_group IS NULL)
                 """);
 
             List<Object> params = new ArrayList<>();
+            params.add(ctx.getUserId());
+            params.add(Permission.READ.getCode());
             params.add(ctx.getPrimaryGroupId());
 
             if (s != null && s != Node.ANY) {
@@ -484,11 +497,12 @@ public class SystemAticGraph implements AticGraph {
 
             String sql = """
                 SELECT COUNT(*)
-                FROM system_splu
-                WHERE user_primary_group = ?
+                FROM system_splu splu
+                LEFT JOIN resource_acl_effective ae_rs ON ae_rs.resource_id = splu.s AND ae_rs.user_id = ?
+                WHERE COALESCE(ae_rs.permission, 0) >= ? AND (splu.user_primary_group = ? OR splu.user_primary_group IS NULL)
                 """;
 
-            Object[] params = new Object[] { ctx.getPrimaryGroupId() };
+            Object[] params = new Object[] { ctx.getUserId(), Permission.READ.getCode(), ctx.getPrimaryGroupId() };
 
             return db.read(
                     sql,

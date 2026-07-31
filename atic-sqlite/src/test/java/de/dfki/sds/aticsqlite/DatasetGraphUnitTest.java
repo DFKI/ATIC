@@ -241,10 +241,12 @@ public class DatasetGraphUnitTest {
             List<Node> graphs = new ArrayList<>();
             dataset.listGraphNodes(ctx).forEachRemaining(graphs::add);
 
-            assertEquals(3, graphs.size());
+            //4 because of system graph
+            assertEquals(4, graphs.size());
             assertTrue(graphs.contains(g1));
             assertTrue(graphs.contains(g2));
             assertTrue(graphs.contains(g3));
+            assertTrue(graphs.contains(SystemAticGraph.node));
 
         } finally {
             dataset.end();
@@ -379,8 +381,11 @@ public class DatasetGraphUnitTest {
             List<Node> graphs = new ArrayList<>();
             dataset.listGraphNodes(ctx).forEachRemaining(graphs::add);
 
-            assertTrue(graphs.isEmpty(),
+            assertTrue(graphs.size() == 1,
                     "No named graphs should remain after clear()");
+            
+            assertTrue(graphs.contains(SystemAticGraph.node),
+                    "No system graph");
 
             // 3. Default graph still exists
             AticGraph defaultGraph = dataset.getDefaultGraph(ctx);

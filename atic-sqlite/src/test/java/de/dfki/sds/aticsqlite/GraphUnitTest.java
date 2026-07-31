@@ -38,7 +38,7 @@ public class GraphUnitTest {
         User user = dataset.calculateRead(() -> {
             return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
         });
-        
+
         InvocationContext ctx = new InvocationContext.Builder().fromUser(user).build();
 
         dataset.begin(TxnType.READ);
@@ -49,7 +49,7 @@ public class GraphUnitTest {
             dataset.end();
         }
     }
-    
+
     //strange behavior: on debug same object, when full run different objects
     //@Disabled
     @Test
@@ -58,19 +58,19 @@ public class GraphUnitTest {
         User user = dataset.calculateRead(() -> {
             return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
         });
-        
+
         InvocationContext ctx = new InvocationContext.Builder().fromUser(user).build();
 
         dataset.begin(TxnType.READ);
         try {
             AticGraph graph1 = dataset.getDefaultGraph(ctx);
             assertNotNull(graph1, "Admin should be able to read the default graph");
-            
+
             AticGraph graph2 = dataset.getDefaultGraph(ctx);
             assertNotNull(graph1, "Admin should be able to read the default graph");
-            
+
             assertEquals(graph1, graph2);
-            
+
         } finally {
             dataset.end();
         }
@@ -217,11 +217,17 @@ public class GraphUnitTest {
             dataset.end();
         }
 
-        // 1) listGraphNodes as non‑admin => should be empty
+        // 1) listGraphNodes as non-admin => should only expose the system graph
         dataset.begin(TxnType.READ);
         try {
             Iterator<Node> iter = dataset.listGraphNodes(nonAdminCtx);
-            assertFalse(iter.hasNext(), "Non‑admin should see no graphs");
+
+            assertTrue(iter.hasNext(), "Non-admin should see the system graph");
+
+            Node graph = iter.next();
+            assertEquals(SystemAticGraph.node, graph);
+
+            assertFalse(iter.hasNext(), "Non-admin should not see any other graphs");
         } finally {
             dataset.end();
         }
@@ -475,5 +481,5 @@ public class GraphUnitTest {
             dataset.end();
         }
     }
-    
+
 }

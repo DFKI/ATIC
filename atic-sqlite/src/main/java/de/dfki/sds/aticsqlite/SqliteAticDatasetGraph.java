@@ -2823,16 +2823,16 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
     
     public AticGraph getGraph(org.apache.jena.graph.Node graphNode, boolean createIfMissing, InvocationContext ctx) {
+        //special system graph name
+        if (graphNode.equals(SystemAticGraph.node)) {
+            return systemGraph;
+        }
+        
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         //special union Graph name
         if (graphNode.equals(Quad.unionGraph)) {
             return getUnionGraph(ctx);
-        }
-        
-        //special system graph name
-        if (graphNode.equals(SystemAticGraph.node)) {
-            return systemGraph;
         }
 
         //ensure that Quad.defaultGraphIRI is used if default graph is mentioned
@@ -3034,6 +3034,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         List<IdAndUri> idAndUris = new ArrayList<>();
 
         for (Node graphNode : requested) {
+            if(graphNode.equals(SystemAticGraph.node)) {
+                continue;
+            }
 
             IdAndUri idAndUri;
             try {
@@ -3073,6 +3076,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         SqliteAticGraph sqliteAticGraph = new SqliteAticGraph(idAndUris, this);
 
         graphMap.put(key, sqliteAticGraph);
+        
+        //in-memory union to allow to get a union of database-backed graphs and special system graph
+        if(requested.contains(SystemAticGraph.node)) {
+            return new UnionAticGraph(sqliteAticGraph, systemGraph);
+        }
 
         return sqliteAticGraph;
     }
@@ -3149,6 +3157,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                     },
                     params.toArray()
             );
+            
+            //always the system graph
+            nodes.add(SystemAticGraph.node);
 
             return nodes.iterator();
 
@@ -3166,6 +3177,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     @Override
     public boolean containsGraph(Node graphNode, InvocationContext ctx) {
+        if(graphNode.equals(SystemAticGraph.node)) {
+            return true;
+        }
+        
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         boolean enableAC = !isAdmin(ctx);
@@ -3231,6 +3246,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     @Override
     public void addGraph(Node graphName, Graph graph, InvocationContext ctx) {
+        
+        if(graphName.equals(SystemAticGraph.node)) {
+            throw new IllegalStateException("Graph already exists: " + graphName);
+        }
+        
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         String graphUri = graphName.getURI();
@@ -3304,6 +3324,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      * @param ctx the invocation context containing caller information
      */
     public void addVirtualGraph(Node graphName, String factoryMethodPath, JSONObject config, InvocationContext ctx) {
+        if(graphName.equals(SystemAticGraph.node)) {
+            throw new IllegalStateException("Graph already exists: " + graphName);
+        }
+        
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         String graphUri = graphName.getURI();
@@ -3447,6 +3471,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     @Override
     public void removeGraph(Node graphName, InvocationContext ctx) {
+        if(graphName.equals(SystemAticGraph.node)) {
+            throw new IllegalArgumentException("Cannot delete system graph");
+        }
+        
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         boolean enableAC = !isAdmin(ctx);
