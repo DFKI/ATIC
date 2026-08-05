@@ -7,10 +7,6 @@
 
 </div>
 
-<<<<<<< HEAD
-
-=======
->>>>>>> system
 ## Overview
 
 Corporate Memories are computer systems in organizations that continuously collect, update and structure knowledge for various tasks.
@@ -21,6 +17,14 @@ This is accompanied with a server component providing endpoints and correspondin
 Results of a preliminary evaluation verify the correct operation of our prototype and indicate moderate performance.
 
 Our [demo page](https://www.dfki.uni-kl.de/~mschroeder/demo/atic/) contains a link to a deployed instance for testing and also presents a video showing the main aspects in action.
+
+## Release Notes
+
+* 1.4.0 system graph
+* 1.3.0 atic agents
+* 1.2.0 performance considerations: `resource_acl_effective`
+* 1.1.0 RML feature
+* 1.0.0 inital version (paper)
 
 ## Installation
 
