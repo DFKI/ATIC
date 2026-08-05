@@ -7,7 +7,10 @@
 
 </div>
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> system
 ## Overview
 
 Corporate Memories are computer systems in organizations that continuously collect, update and structure knowledge for various tasks.

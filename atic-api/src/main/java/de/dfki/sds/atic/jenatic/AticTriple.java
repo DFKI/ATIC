@@ -11,6 +11,12 @@ public class AticTriple extends Triple {
 
     private double confidence = 1.0;
     private double applicability = 1.0;
+    
+    /**
+     * Triple is meant to be true independently of who the user is.
+     * Default is false: Triple is stated by a certain user by default.
+     */
+    private boolean userAgnostic = false;
 
     // -----------------------
     // Constructors
@@ -90,4 +96,13 @@ public class AticTriple extends Triple {
         }
         this.applicability = applicability;
     }
+
+    public boolean isUserAgnostic() {
+        return userAgnostic;
+    }
+
+    public void setUserAgnostic(boolean userAgnostic) {
+        this.userAgnostic = userAgnostic;
+    }
+    
 }
