@@ -4036,6 +4036,12 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         virtualGraphMap.clear();
 
         agentSessionManager.close();
+        
+        try {
+            db.close();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
 
         closed = true;
     }

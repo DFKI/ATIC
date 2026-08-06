@@ -627,8 +627,6 @@ public class DatabaseLongLivedConnection implements Database {
 
             ctxLocal.remove();
         }
-
-        //ds.close();
     }
 
     @Override
