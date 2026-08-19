@@ -3,7 +3,6 @@ package de.dfki.sds.aticsqlite;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.jenatic.InvocationContext;
-import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph.Capabilities;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;

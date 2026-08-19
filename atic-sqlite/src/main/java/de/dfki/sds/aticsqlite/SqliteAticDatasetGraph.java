@@ -138,19 +138,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
     private SystemAticGraph systemGraph;
     
-    /**
-     * Dataset capabilities configuration (rdf-star support, etc.).
-     */
     private Capabilities capabilities;
-
-    /**
-     * Capabilities configuration for this dataset graph instance.
-     */
-    public record Capabilities(boolean rdfStarEnabled) {
-
-        public static final Capabilities DEFAULT = new Capabilities(true);
-    }
-
+    
     public SqliteAticDatasetGraph(Database db) {
         this(db, null);
     }

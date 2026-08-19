@@ -80,7 +80,7 @@ public class SqliteAticGraph implements AticGraph {
     private final boolean rdfStarEnabled;
 
     public SqliteAticGraph(List<IdAndUri> idAndUris, SqliteAticDatasetGraph datasetGraph) {
-        this.rdfStarEnabled = datasetGraph.getCapabilities().rdfStarEnabled();
+        this.rdfStarEnabled = datasetGraph.getCapabilities().isRdfStarEnabled();
         if (idAndUris == null || idAndUris.isEmpty()) {
             throw new IllegalArgumentException("idAndUris must have at least one graph");
         }

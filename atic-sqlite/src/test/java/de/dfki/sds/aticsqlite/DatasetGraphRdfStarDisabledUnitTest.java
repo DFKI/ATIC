@@ -34,7 +34,8 @@ public class DatasetGraphRdfStarDisabledUnitTest {
 
     @BeforeEach
     void setup(@org.junit.jupiter.api.io.TempDir Path tempDir) throws Exception {
-        var capabilities = new SqliteAticDatasetGraph.Capabilities(false);
+        //var capabilities = new SqliteAticDatasetGraph.Capabilities(false);
+        var capabilities = Capabilities.builder().rdfStarEnabled(false).build();
         dataset = new SqliteAticDatasetGraph(TL.createDatabase(tempDir), null, capabilities);
     }
 
