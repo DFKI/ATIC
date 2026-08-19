@@ -27,4 +27,9 @@ public class TL {
         return new SqliteAticDatasetGraph(db);
     }
     
+    public static SqliteAticDatasetGraph createDatasetGraph(Path tempDir, Capabilities capabilities) {
+        Database db = createDatabase(tempDir);
+        return new SqliteAticDatasetGraph(db, null, capabilities);
+    }
+    
 }

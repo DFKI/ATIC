@@ -69,6 +69,9 @@ PREFIX ex: <http://example.org/>
     @Config(value = "rdf-star", description = "Enable RDF-Star support")
     boolean rdfStarEnabled = true;
     
+    @Config(value = "property-type-aware", description = "Enable property type aware support")
+    boolean propertyTypeAware = false;
+    
     public int getPort() {
         return port;
     }
@@ -135,6 +138,10 @@ PREFIX ex: <http://example.org/>
 
     public boolean isRdfStarEnabled() {
         return rdfStarEnabled;
+    }
+
+    public boolean isPropertyTypeAware() {
+        return propertyTypeAware;
     }
     
 }

@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -299,32 +298,17 @@ public class SqliteAticGraph implements AticGraph {
         // ---------------------------------------
         // 1. Collect all URIs (subjects + objects + predicates)
         // ---------------------------------------
-        Set<Node> resourceNodes = new HashSet<>();
-        Set<Node> predicateNodes = new HashSet<>();
-
-        for (Triple t : triples) {
-            //check valid triple and would throw exception if invalid
-            AticGraphUtils.valid(t);
-
-            // Collect subjects and objects, including blank nodes
-            resourceNodes.add(t.getSubject());
-
-            if (!t.getObject().isLiteral()) {
-                resourceNodes.add(t.getObject());
-            }
-
-            predicateNodes.add(t.getPredicate());
-        }
+        AticGraphUtils.Collection collection = AticGraphUtils.collectAllURIs(triples);
 
         // ---------------------------------------
         // 2. Resolve resources in bulk
         // ---------------------------------------
-        AticGraphUtils.bulkResolveResources(resourceNodes, ctx, db, true, enableAC, resourceCache, predicateCache, permissionCache, datasetGraph);
+        AticGraphUtils.bulkResolveResources(collection.resourceNodes(), ctx, db, true, enableAC, resourceCache, predicateCache, permissionCache, datasetGraph);
 
         // ---------------------------------------
         // 3. Resolve predicates in bulk
         // ---------------------------------------
-        AticGraphUtils.bulkResolvePredicates(predicateNodes, ctx, db, predicateCache, datasetGraph);
+        AticGraphUtils.bulkResolvePredicates(collection.predicateObjectsMap(), ctx, db, predicateCache, datasetGraph);
 
         // ---------------------------------------
         // 4. Prepare batch inserts

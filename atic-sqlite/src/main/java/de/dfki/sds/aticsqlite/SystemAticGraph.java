@@ -8,7 +8,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -147,32 +146,17 @@ public class SystemAticGraph implements AticGraph {
         // ---------------------------------------
         // 1. Collect all URIs (subjects + objects + predicates)
         // ---------------------------------------
-        Set<Node> resourceNodes = new HashSet<>();
-        Set<Node> predicateNodes = new HashSet<>();
-
-        for (Triple t : triples) {
-            //check valid triple and would throw exception if invalid
-            valid(t);
-
-            // Collect subjects and objects, including blank nodes
-            resourceNodes.add(t.getSubject());
-
-            if (!t.getObject().isLiteral()) {
-                resourceNodes.add(t.getObject());
-            }
-
-            predicateNodes.add(t.getPredicate());
-        }
+        AticGraphUtils.Collection collection = AticGraphUtils.collectAllURIs(triples);
 
         // ---------------------------------------
         // 2. Resolve resources in bulk
         // ---------------------------------------
-        AticGraphUtils.bulkResolveResources(resourceNodes, ctx, db, true, false, resourceCache, predicateCache, permissionCache, datasetGraph);
+        AticGraphUtils.bulkResolveResources(collection.resourceNodes(), ctx, db, true, false, resourceCache, predicateCache, permissionCache, datasetGraph);
 
         // ---------------------------------------
         // 3. Resolve predicates in bulk
         // ---------------------------------------
-        AticGraphUtils.bulkResolvePredicates(predicateNodes, ctx, db, predicateCache, datasetGraph);
+        AticGraphUtils.bulkResolvePredicates(collection.predicateObjectsMap(), ctx, db, predicateCache, datasetGraph);
 
         // ---------------------------------------
         // 4. Prepare batch inserts
@@ -280,7 +264,7 @@ public class SystemAticGraph implements AticGraph {
             // Resolve predicate if needed
             if (p != null && p != Node.ANY) {
                 AticGraphUtils.bulkResolvePredicates(
-                        Set.of(p),
+                        Map.of(p, Set.of()),
                         ctx,
                         db,
                         predicateCache,
@@ -426,7 +410,7 @@ public class SystemAticGraph implements AticGraph {
             // Resolve predicate if needed
             if (p != null && p != Node.ANY) {
                 AticGraphUtils.bulkResolvePredicates(
-                        Set.of(p),
+                        Map.of(p, Set.of()),
                         ctx,
                         db,
                         predicateCache,
@@ -571,7 +555,7 @@ public class SystemAticGraph implements AticGraph {
             // Resolve predicate if needed
             if (p != null && p != Node.ANY) {
                 AticGraphUtils.bulkResolvePredicates(
-                        Set.of(p),
+                        Map.of(p, Set.of()),
                         ctx,
                         db,
                         predicateCache,

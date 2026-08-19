@@ -1,5 +1,3 @@
-
-
 package de.dfki.sds.aticsqlite;
 
 import de.dfki.sds.atic.ac.Permission;
@@ -26,6 +24,36 @@ import org.apache.jena.shared.DeleteDeniedException;
  *
  */
 /*package*/ class AticGraphUtils {
+
+    public record Collection(Set<Node> resourceNodes, Map<Node, Set<Node>> predicateObjectsMap) {
+
+    }
+
+    public static Collection collectAllURIs(List<Triple> triples) {
+        Set<Node> resourceNodes = new HashSet<>();
+        //Set<Node> predicateNodes = new HashSet<>();
+        Map<Node, Set<Node>> predicateObjectsMap = new HashMap<>();
+
+        for (Triple t : triples) {
+            //check valid triple and would throw exception if invalid
+            valid(t);
+
+            // Collect subjects and objects, including blank nodes
+            resourceNodes.add(t.getSubject());
+
+            if (!t.getObject().isLiteral()) {
+                resourceNodes.add(t.getObject());
+            }
+
+            if (t.getPredicate().isBlank()) {
+                throw new IllegalArgumentException("Predicate cannot be blank: " + t);
+            }
+
+            predicateObjectsMap.computeIfAbsent(t.getPredicate(), m -> new HashSet<>()).add(t.getObject());
+        }
+
+        return new Collection(resourceNodes, predicateObjectsMap);
+    }
 
     //TODO bulkResolveResources can be optimized for performance
     public static void bulkResolveResources(
@@ -192,26 +220,13 @@ import org.apache.jena.shared.DeleteDeniedException;
         // ---------------- TRIPLE TERMS ----------------
         if (!tripleNodes.isEmpty()) {
 
-            Set<Node> resourceNodes = new HashSet<>();
-            Set<Node> predicateNodes = new HashSet<>();
+            List<Triple> triples = new ArrayList<>();
+            tripleNodes.forEach(n -> triples.add(n.getTriple()));
 
-            for (Node n : tripleNodes) {
-                Triple t = n.getTriple();
+            AticGraphUtils.Collection collection = AticGraphUtils.collectAllURIs(triples);
 
-                resourceNodes.add(t.getSubject());
-                if (!t.getObject().isLiteral()) {
-                    resourceNodes.add(t.getObject());
-                }
-
-                if (t.getPredicate().isBlank()) {
-                    throw new IllegalArgumentException("Predicate cannot be blank: " + t);
-                }
-
-                predicateNodes.add(t.getPredicate());
-            }
-
-            bulkResolveResources(resourceNodes, ctx, db, createIfMissing, withPermission, resourceCache, predicateCache, permissionCache, datasetGraph);
-            bulkResolvePredicates(predicateNodes, ctx, db, predicateCache, datasetGraph);
+            bulkResolveResources(collection.resourceNodes(), ctx, db, createIfMissing, withPermission, resourceCache, predicateCache, permissionCache, datasetGraph);
+            bulkResolvePredicates(collection.predicateObjectsMap(), ctx, db, predicateCache, datasetGraph);
 
             List<Node> spoNodes = new ArrayList<>();
             List<Node> splNodes = new ArrayList<>();
@@ -487,81 +502,221 @@ import org.apache.jena.shared.DeleteDeniedException;
     }
 
     public static void bulkResolvePredicates(
-            Set<Node> nodes,
+            Map<Node, Set<Node>> predicates,
             InvocationContext ctx,
             Database db,
-            Map<Node, Long> cache, 
+            Map<Node, Long> cache,
             SqliteAticDatasetGraph datasetGraph) throws SQLException {
 
         Map<Node, String> bnode2uri = datasetGraph.getBnode2uri();
 
-        // Assign URNs to blank nodes just like resources
-        for (Node n : nodes) {
-            if (n.isBlank() && !bnode2uri.containsKey(n)) {
-                bnode2uri.put(n, datasetGraph.createURN("blanknode"));
+        /*
+         * Assign URNs to blank nodes just like resources.
+         */
+        for (Node predicate : predicates.keySet()) {
+            if (predicate.isBlank() && !bnode2uri.containsKey(predicate)) {
+                bnode2uri.put(
+                        predicate,
+                        datasetGraph.createURN("blanknode")
+                );
             }
         }
 
-        // Which predicates still need resolution?
-        List<Node> missing = nodes.stream()
-                .filter(u -> !cache.containsKey(u))
+        /*
+         * Which predicates still need resolution?
+         */
+        List<Node> missing = predicates.keySet().stream()
+                .filter(predicate -> !cache.containsKey(predicate))
                 .toList();
 
         if (missing.isEmpty()) {
             return;
         }
 
-        // Build list of URIs to SELECT (skolemized for blank nodes)
+        /*
+         * Build list of URIs to SELECT (skolemized for blank nodes).
+         */
         List<String> urisToSelect = missing.stream()
-                .map(n -> n.isBlank() ? bnode2uri.get(n) : n.getURI())
+                .map(predicate
+                        -> predicate.isBlank()
+                ? bnode2uri.get(predicate)
+                : predicate.getURI())
                 .toList();
 
-        String sql = "SELECT id, uri FROM property WHERE uri IN ("
-                + urisToSelect.stream().map(u -> "?").collect(Collectors.joining(","))
-                + ")";
+        String sql = """
+        SELECT id, uri, type
+        FROM property
+        WHERE uri IN (%s)
+        """.formatted(
+                urisToSelect.stream()
+                        .map(u -> "?")
+                        .collect(Collectors.joining(","))
+        );
 
-        Map<String, Long> found = db.read(sql, rs -> {
-            Map<String, Long> map = new HashMap<>();
+        Map<String, PropertyRecord> found = db.read(sql, rs -> {
+            Map<String, PropertyRecord> map = new HashMap<>();
+
             while (rs.next()) {
-                map.put(rs.getString("uri"), rs.getLong("id"));
+                map.put(
+                        rs.getString("uri"),
+                        new PropertyRecord(
+                                rs.getLong("id"),
+                                PropertyType.fromValue(rs.getInt("type"))
+                        )
+                );
             }
+
             return map;
         }, urisToSelect.toArray());
 
-        // Populate Node→ID cache
-        for (Node n : missing) {
-            String uri = n.isBlank() ? bnode2uri.get(n) : n.getURI();
-            if (found.containsKey(uri)) {
-                cache.put(n, found.get(uri));
+        /*
+         * Populate Node -> ID cache and validate existing property types.
+         */
+        for (Node predicate : missing) {
+            String uri = predicate.isBlank()
+                    ? bnode2uri.get(predicate)
+                    : predicate.getURI();
+
+            PropertyRecord property = found.get(uri);
+
+            if (property == null) {
+                continue;
             }
+
+            if (datasetGraph.getCapabilities().isPropertyTypeAware()) {
+                Set<Node> objects = predicates.get(predicate);
+
+                if (!objects.isEmpty()) {
+
+                    PropertyType detectedType = detectPropertyType(objects, true);
+
+                    validatePropertyType(
+                            uri,
+                            property.type(),
+                            detectedType
+                    );
+                }
+            }
+
+            cache.put(predicate, property.id());
         }
 
-        // Determine which nodes still need insertion
+        /*
+         * Determine which predicates still need insertion.
+         */
         Set<Node> toBeResolved = new HashSet<>();
         List<Object[]> insertBatch = new ArrayList<>();
 
-        for (Node node : missing) {
-            if (!cache.containsKey(node)) {
-                String uri = node.isBlank() ? bnode2uri.get(node) : node.getURI();
-                toBeResolved.add(node);
-                insertBatch.add(new Object[]{uri, ctx.getUserId()});
+        for (Node predicate : missing) {
+            if (cache.containsKey(predicate)) {
+                continue;
             }
+
+            String uri = predicate.isBlank()
+                    ? bnode2uri.get(predicate)
+                    : predicate.getURI();
+
+            Set<Node> objects = predicates.get(predicate);
+
+            PropertyType type = detectPropertyType(objects, false);
+
+            toBeResolved.add(predicate);
+
+            insertBatch.add(new Object[]{
+                uri,
+                type.getValue(),
+                ctx.getUserId()
+            });
         }
 
-        // Insert missing predicates & recurse
+        /*
+         * Insert missing predicates.
+         *
+         * The first occurrence establishes the property type.
+         */
         if (!insertBatch.isEmpty()) {
             db.writeBatch("""
             INSERT OR IGNORE INTO property
-            (uri, creator)
-            VALUES (?, ?)
+                (uri, type, creator)
+            VALUES (?, ?, ?)
         """, insertBatch, 1000);
 
-            // After insert, ensure they really got resolved
-            bulkResolvePredicates(toBeResolved, ctx, db, cache, datasetGraph);
+            /*
+             * Resolve the newly inserted properties.
+             */
+            bulkResolvePredicates(
+                    toBeResolved.stream()
+                            .collect(Collectors.toMap(
+                                    predicate -> predicate,
+                                    predicates::get
+                            )),
+                    ctx,
+                    db,
+                    cache,
+                    datasetGraph
+            );
         }
     }
 
-    
+    private static PropertyType detectPropertyType(Set<Node> objects, boolean validate) {
+        PropertyType detectedType = PropertyType.UNDEFINED;
+
+        for (Node object : objects) {
+            PropertyType type;
+
+            if (object.isURI() || object.isBlank()) {
+                type = PropertyType.URI;
+            } else if (object.isLiteral()) {
+                type = PropertyType.LITERAL;
+            } else {
+                type = PropertyType.UNDEFINED;
+            }
+
+            if (detectedType == PropertyType.UNDEFINED) {
+                detectedType = type;
+            } else if (validate && detectedType != type) {
+                throw new IllegalArgumentException(
+                        "Objects have different types: "
+                        + detectedType + " and " + type
+                );
+            }
+        }
+
+        return detectedType;
+    }
+
+    private static void validatePropertyType(
+            String propertyUri,
+            PropertyType existingType,
+            PropertyType detectedType) {
+
+        /*
+         * UNDEFINED doesn't impose a constraint.
+         */
+        if (existingType == PropertyType.UNDEFINED || detectedType == PropertyType.UNDEFINED) {
+            return;
+        }
+
+        if (existingType != detectedType) {
+            throw new IllegalArgumentException(
+                    "Property type inconsistency for property <"
+                    + propertyUri
+                    + ">: propertyTypeAware is enabled, "
+                    + "but the property is defined as "
+                    + existingType
+                    + " while the current triple has an object of type "
+                    + detectedType
+            );
+        }
+    }
+
+    private record PropertyRecord(
+            long id,
+            PropertyType type
+            ) {
+
+    }
+
     private static String sha256(String input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -581,8 +736,7 @@ import org.apache.jena.shared.DeleteDeniedException;
             throw new RuntimeException("SHA-256 not available", e);
         }
     }
-    
-    
+
     public static long graphMustBeUniquelyIdentified(List<IdAndUri> idAndUris, boolean isAdd) {
         // the graph must be uniquely identified
         if (idAndUris == null || idAndUris.size() != 1) {
@@ -753,5 +907,5 @@ import org.apache.jena.shared.DeleteDeniedException;
         }
         return n;
     }
-    
+
 }

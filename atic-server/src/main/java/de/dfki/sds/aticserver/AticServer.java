@@ -19,6 +19,7 @@ import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
 import de.dfki.sds.aticsqlite.DatabaseOptions;
@@ -147,8 +148,13 @@ public class AticServer {
                         .enableForeignKeys(config.databaseForeignKeysEnabled)
                         .build();
         Database database = new DatabaseLongLivedConnection(options);
+        
+        //from config to capabilities
+        Capabilities.Builder capBuilder = Capabilities.builder();
+        capBuilder.rdfStarEnabled(config.isRdfStarEnabled());
+        capBuilder.propertyTypeAware(config.isPropertyTypeAware());
 
-        datasetGraph = new SqliteAticDatasetGraph(database, rdfPatchWriter, new SqliteAticDatasetGraph.Capabilities(config.isRdfStarEnabled()));
+        datasetGraph = new SqliteAticDatasetGraph(database, rdfPatchWriter, capBuilder.build());
     }
 
     private void initFolders() {
