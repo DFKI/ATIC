@@ -19,7 +19,6 @@ import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
 import de.dfki.sds.atic.jenatic.InvocationContext;
-import de.dfki.sds.aticserver.bridge.RdfJsonBridge;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
 import de.dfki.sds.aticsqlite.DatabaseOptions;
@@ -27,6 +26,7 @@ import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
 import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
+import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import de.dfki.sds.rdfpatchsqlite.Converter;
 import io.javalin.Javalin;
 import io.javalin.config.JavalinConfig;
@@ -356,8 +356,8 @@ public class AticServer {
 
         routes.get("/vkg/{uri}/**", this::handleVirtualGraphRequest);
 
-        //TODO query method would be nice
-        routes.get("/bridge", this::handleBridge);
+        routes.get("/bridge", this::handleBridge); //TODO GET is legacy, is done by QUERY
+        routes.query("/bridge", this::handleBridge);
         routes.post("/bridge", this::handleBridge);
         routes.put("/bridge", this::handleBridge);
         routes.patch("/bridge", this::handleBridge);
@@ -1378,7 +1378,7 @@ public class AticServer {
 
         switch (method) {
 
-            case "GET":
+            case "GET": //GET is legacy
             case "QUERY":
 
                 Map<String, List<String>> queryParams

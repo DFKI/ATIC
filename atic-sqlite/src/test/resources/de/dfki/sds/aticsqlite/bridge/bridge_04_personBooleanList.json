@@ -1,0 +1,18 @@
+{
+    "template": {
+        "$map": "?active",
+        "$where": [
+            "?person schema:activated ?active"
+        ],
+        "@context": {
+            "schema": "https://schema.org/"
+        }
+    },
+    "expected": [
+        true,
+        true,
+        false
+    ],
+    "data": "data_01_bridge_persons.ttl",
+    "params": {}
+}

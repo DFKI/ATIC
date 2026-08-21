@@ -1,4 +1,4 @@
-package de.dfki.sds.aticserver.bridge;
+package de.dfki.sds.aticsqlite.bridge;
 
 import de.dfki.sds.atic.helper.JSONUtils;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;

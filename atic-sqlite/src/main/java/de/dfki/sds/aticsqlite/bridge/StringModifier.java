@@ -1,6 +1,6 @@
 
 
-package de.dfki.sds.aticserver.bridge;
+package de.dfki.sds.aticsqlite.bridge;
 
 import java.util.function.UnaryOperator;
 import org.apache.jena.graph.Node;

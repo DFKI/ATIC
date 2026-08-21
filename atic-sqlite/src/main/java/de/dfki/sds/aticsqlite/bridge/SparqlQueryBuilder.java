@@ -1,4 +1,4 @@
-package de.dfki.sds.aticserver.bridge;
+package de.dfki.sds.aticsqlite.bridge;
 
 import java.util.Iterator;
 import java.util.LinkedHashSet;

@@ -1,6 +1,6 @@
 
 
-package de.dfki.sds.aticserver.bridge;
+package de.dfki.sds.aticsqlite.bridge;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;

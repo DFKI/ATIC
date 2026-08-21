@@ -4,7 +4,6 @@ import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.conf.ConfigLoader;
 import de.dfki.sds.atic.jenatic.InvocationContext;
-import de.dfki.sds.aticserver.bridge.ResultSetJsonMapper;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import io.json.compare.CompareMode;
 import io.json.compare.JSONCompare;
@@ -27,13 +26,10 @@ import java.util.Set;
 import java.util.StringJoiner;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
-import org.apache.jena.sparql.vocabulary.FOAF;
-import org.apache.jena.vocabulary.RDF;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -42,13 +38,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
 
 /**
  *
  */
-public class RdfJsonBridgeUnitTest {
+public class RdfJsonBridgeViaServerUnitTest {
 
     private static Path tempDir;
     private static AticConfig appConfig;
@@ -85,6 +79,11 @@ public class RdfJsonBridgeUnitTest {
         server.close();
     }
 
+    //TODO just test the GET, POST, PUT, PATCH, DELETE route in server
+    
+    //=================================================
+    //helper
+    
     private String loginAsAdmin() throws IOException, InterruptedException {
         File passwordsFile = new File(server.getDataFolder(), "passwords.json.generated");
         JSONObject passwords = new JSONObject(FileUtils.readFileToString(passwordsFile, StandardCharsets.UTF_8));
@@ -154,7 +153,7 @@ public class RdfJsonBridgeUnitTest {
     }
 
     private Object loadJSON(String filename) throws IOException {
-        try (InputStream is = MoleculeEndpointAticServerUnitTest.class
+        try (InputStream is = RdfJsonBridgeViaServerUnitTest.class
                 .getResourceAsStream("/de/dfki/sds/aticserver/" + filename)) {
 
             if (is == null) {
@@ -172,79 +171,7 @@ public class RdfJsonBridgeUnitTest {
             throw new JSONException("Root JSON value must be an object or array");
         }
     }
-
-    @Test
-    public void personNameList() throws Exception {
-        helperQuery("03_bridge_persons.ttl", "bridge_01_personNameList.json", Map.of());
-    }
-
-    @Test
-    public void personNameListBound() throws Exception {
-        helperQuery("03_bridge_persons.ttl", "bridge_02_personNameListBound.json", 
-                Map.of("person", List.of("https://example.org/id/alice-smith"))
-        );
-    }
     
-    @Test
-    public void personList() throws Exception {
-        helperQuery("03_bridge_persons.ttl", "bridge_03_personList.json", Map.of());
-    }
-
-    @Test
-    public void personBooleanList() throws Exception {
-        helperQuery("03_bridge_persons.ttl", "bridge_04_personBooleanList.json", Map.of());
-    }
-    
-    @Test
-    public void personDateModifier() throws Exception {
-        helperQuery("03_bridge_persons.ttl", "bridge_05_personDateModifier.json", Map.of());
-    }
-    
-    @Test
-    public void personDescriptionLang() throws Exception {
-        helperQuery("03_bridge_persons.ttl", "bridge_06_personDescriptionLang.json", Map.of());
-    }
-    
-    @Test
-    public void personDescriptionLangToString() throws Exception {
-        helperQuery("03_bridge_persons.ttl", "bridge_07_personDescriptionLangToString.json", Map.of());
-    }
-
-    @Test
-    public void personListNested() throws Exception {
-        helperQuery("03_bridge_persons.ttl", "bridge_08_personListNested.json", Map.of());
-    }
-    
-    @Test
-    public void personListValueAsProperty() throws Exception {
-        helperQuery("03_bridge_persons.ttl", "bridge_09_personListValueAsProperty.json", Map.of());
-    }
-
-    @Test
-    public void personListFragment() throws Exception {
-        List<ResultSetJsonMapper.FragmentProperty> fragmentSetting = server.getRdfJsonBridge().getFragmentSetting();
-        fragmentSetting.clear();
-        fragmentSetting.add(new ResultSetJsonMapper.FragmentProperty("@type", RDF.type.asNode(), false));
-        fragmentSetting.add(new ResultSetJsonMapper.FragmentProperty("icon", NodeFactory.createURI("https://schema.org/icon"), false));
-        fragmentSetting.add(new ResultSetJsonMapper.FragmentProperty("label", FOAF.name.asNode(), true));
-        fragmentSetting.add(new ResultSetJsonMapper.FragmentProperty("comment", NodeFactory.createURI("https://schema.org/description"), true));
-        
-        helperQuery("03_bridge_persons.ttl", "bridge_10_personListFragment.json", Map.of());
-    }
-    
-    @Test
-    public void defaultBindings() throws Exception {
-        helperQuery("03_bridge_persons.ttl", "bridge_11_defaultBindings.json", Map.of());
-    }
-
-    
-    @Disabled
-    @Test
-    public void test2() throws Exception {
-        helperModification("POST", "03_bridge_persons.ttl", "templPersonTable1.json", "templPersonTable_post_data.json", Map.of());
-    }
-
-    //=================================================
     private void helperQuery(String ttlFilename, String templFilename, Map<String, List<String>> queryParams) throws Exception {
         loadData(ttlFilename);
         JSONObject template = loadJson(templFilename);

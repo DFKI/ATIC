@@ -1,0 +1,19 @@
+{
+    "template": {
+        "$type": "array",
+        "$map": "?name",
+        "$where": [
+            "?person foaf:name ?name"
+        ],
+        "@context": {
+            "foaf": "http://xmlns.com/foaf/0.1/"
+        }
+    },
+    "expected": [
+        "Alice Smith"
+    ],
+    "data": "data_01_bridge_persons.ttl",
+    "params": { 
+        "person": "https://example.org/id/alice-smith"
+    }
+}
