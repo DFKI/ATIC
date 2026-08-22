@@ -305,7 +305,7 @@ public class RdfJsonBridge {
     // use for POST, PUT, PATCH, DELETE
     public RDFPatch toPatch(
             String method,
-            JSONObject data,
+            Object data,
             JSONObject template,
             Supplier<String> uriSupplier,
             AticDatasetGraph datasetGraph,
@@ -362,8 +362,8 @@ public class RdfJsonBridge {
             case "PATCH" -> {
 
                 /*
-                    * PATCH replaces only the predicates present
-                    * in the submitted data.
+                 * PATCH replaces only the predicates present
+                 * in the submitted data.
                  */
                 datasetGraph.executeRead(() -> {
 
@@ -424,7 +424,7 @@ public class RdfJsonBridge {
          */
         if (templateObj.has("$map")) {
 
-            JSONObject map = templateObj.getJSONObject("$map");
+            Object map = templateObj.get("$map");
             JSONArray where = templateObj.getJSONArray("$where");
 
             ParsedTemplate parsed = parseWhere(
@@ -456,30 +456,43 @@ public class RdfJsonBridge {
                                 uriSupplier,
                                 payload
                         );
+                        
+                    } else if (item instanceof String obj) {
+                        /*
+                        emitObject(
+                                obj,
+                                parsed,
+                                prefixes,
+                                uriSupplier,
+                                payload
+                        );
+                        */
                     }
                 }
             }
 
             /*
-         * Continue walking nested template parts.
+             * Continue walking nested template parts.
              */
-            for (String key : map.keySet()) {
+            if (map instanceof JSONObject mapJsonObject) {
+                for (String key : mapJsonObject.keySet()) {
 
-                Object childTemplate = map.get(key);
+                    Object childTemplate = mapJsonObject.get(key);
 
-                if (!(childTemplate instanceof JSONObject)) {
-                    continue;
-                }
+                    if (!(childTemplate instanceof JSONObject)) {
+                        continue;
+                    }
 
-                if (data instanceof JSONObject obj && obj.has(key)) {
+                    if (data instanceof JSONObject obj && obj.has(key)) {
 
-                    walk(
-                            obj.get(key),
-                            childTemplate,
-                            prefixes,
-                            uriSupplier,
-                            payload
-                    );
+                        walk(
+                                obj.get(key),
+                                childTemplate,
+                                prefixes,
+                                uriSupplier,
+                                payload
+                        );
+                    }
                 }
             }
 
@@ -487,7 +500,7 @@ public class RdfJsonBridge {
         }
 
         /*
-     * Plain JSON object
+         * Plain JSON object
          */
         if (!(data instanceof JSONObject dataObj)) {
             return;
@@ -518,12 +531,12 @@ public class RdfJsonBridge {
     ) {
 
         /*
-     * Variable bindings established while materializing this object.
+         * Variable bindings established while materializing this object.
          */
         Map<Var, Node> bindings = new HashMap<>();
 
         /*
-     * Root subject.
+         * Root subject.
          */
         Node subject;
 
@@ -543,7 +556,7 @@ public class RdfJsonBridge {
         bindings.put(parsed.rootVariable(), subject);
 
         /*
-     * Bind JSON values.
+         * Bind JSON values.
          */
         for (Map.Entry<String, Triple> e : parsed.jsonMappings().entrySet()) {
 
@@ -565,7 +578,7 @@ public class RdfJsonBridge {
         }
 
         /*
-     * Allocate remaining resource variables.
+         * Allocate remaining resource variables.
          */
         for (Triple t : parsed.whereTriples()) {
 
@@ -595,7 +608,7 @@ public class RdfJsonBridge {
         }
 
         /*
-     * Instantiate the whole graph pattern.
+         * Instantiate the whole graph pattern.
          */
         for (Triple pattern : parsed.whereTriples()) {
 
@@ -612,7 +625,7 @@ public class RdfJsonBridge {
             );
 
             Quad q = Quad.create(
-                    Quad.defaultGraphNodeGenerated,
+                    Quad.defaultGraphIRI,
                     s,
                     p,
                     o
@@ -635,7 +648,7 @@ public class RdfJsonBridge {
     }
 
     private ParsedTemplate parseWhere(
-            JSONObject map,
+            Object map,
             JSONArray where,
             PrefixMapping prefixes
     ) {
@@ -652,28 +665,38 @@ public class RdfJsonBridge {
 
         Map<String, Var> mappedVariables
                 = new HashMap<>();
-
-        for (String key : map.keySet()) {
-
-            Object value = map.get(key);
-
-            if (!(value instanceof String s)
-                    || !s.startsWith("?")) {
-                continue;
+        
+        Var directVariable = null;
+        
+        if (map instanceof String mapString) {
+            
+            if(mapString.startsWith("?")) {
+                directVariable = Var.alloc(mapString.substring(1));
             }
+            
+        } else if (map instanceof JSONObject mapJsonObject) {
+            for (String key : mapJsonObject.keySet()) {
 
-            mappedVariables.put(
-                    stripModifiers(key),
-                    Var.alloc(
-                            s.substring(1)
-                    )
-            );
+                Object value = mapJsonObject.get(key);
 
-            if (key.equals("@id")) {
-                rootVariable
-                        = Var.alloc(
+                if (!(value instanceof String s)
+                        || !s.startsWith("?")) {
+                    continue;
+                }
+
+                mappedVariables.put(
+                        stripModifiers(key),
+                        Var.alloc(
                                 s.substring(1)
-                        );
+                        )
+                );
+
+                if (key.equals("@id")) {
+                    rootVariable
+                            = Var.alloc(
+                                    s.substring(1)
+                            );
+                }
             }
         }
 
@@ -701,8 +724,7 @@ public class RdfJsonBridge {
 
             if (triple.getObject().isVariable()) {
 
-                Var ov
-                        = (Var) triple.getObject();
+                Var ov = (Var) triple.getObject();
 
                 for (Map.Entry<String, Var> e
                         : mappedVariables.entrySet()) {
@@ -716,6 +738,15 @@ public class RdfJsonBridge {
 
                         literalVariables.add(ov);
                     }
+                }
+                
+                //direct variable
+                if(ov.equals(directVariable)) {
+                    jsonMappings.put(
+                            "$map",
+                            triple
+                    );
+                    literalVariables.add(ov);
                 }
             }
         }
@@ -852,7 +883,7 @@ public class RdfJsonBridge {
                         datatype,
                         prefixes
                 );
-                
+
                 return NodeFactory.createLiteralDT(
                         lexical.toString(),
                         new BaseDatatype(datatype)

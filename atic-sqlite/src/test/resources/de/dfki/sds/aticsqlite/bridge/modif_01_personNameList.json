@@ -1,0 +1,22 @@
+{
+    "method": "DELETE",
+    "payload": [
+        "Alice Smith"
+    ],
+    "template": {
+        "$map": "?name",
+        "$where": [
+            "?person a schema:Person",
+            "?person foaf:name ?name"
+        ],
+        "@context": {
+            "foaf": "http://xmlns.com/foaf/0.1/",
+            "schema": "https://schema.org/"
+        }
+    },
+    "expected": [
+        "TODO"
+    ],
+    "data": "data_01_bridge_persons.ttl",
+    "params": { }
+}

@@ -7,25 +7,35 @@ import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import de.dfki.sds.aticsqlite.bridge.ResultSetJsonMapper;
 import io.json.compare.CompareMode;
 import io.json.compare.JSONCompare;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.commons.io.IOUtils;
 import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.rdfpatch.RDFPatch;
+import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -42,82 +52,95 @@ public class RdfJsonBridgeUnitTest {
         rdfJsonBridge = new RdfJsonBridge();
     }
 
+    //=========================
+    //query tests
     @Test
     public void personNameList() throws Exception {
-        runTest("01_personNameList");
+        runQueryTest("01_personNameList");
     }
-    
+
     @Test
     public void personNameListBound() throws Exception {
-        runTest("02_personNameListBound");
+        runQueryTest("02_personNameListBound");
     }
-    
+
     @Test
     public void personList() throws Exception {
-        runTest("03_personList");
+        runQueryTest("03_personList");
     }
-    
+
     @Test
     public void personBooleanList() throws Exception {
-        runTest("04_personBooleanList");
+        runQueryTest("04_personBooleanList");
     }
-    
+
     @Test
     public void personDateModifier() throws Exception {
-        runTest("05_personDateModifier");
+        runQueryTest("05_personDateModifier");
     }
-    
+
     @Test
     public void personDescriptionLang() throws Exception {
-        runTest("06_personDescriptionLang");
+        runQueryTest("06_personDescriptionLang");
     }
-    
+
     @Test
     public void personDescriptionLangToString() throws Exception {
-        runTest("07_personDescriptionLangToString");
+        runQueryTest("07_personDescriptionLangToString");
     }
-    
+
     @Test
     public void personListNested() throws Exception {
-        runTest("08_personListNested");
+        runQueryTest("08_personListNested");
     }
-    
+
     @Test
     public void personListValueAsProperty() throws Exception {
-        runTest("09_personListValueAsProperty");
+        runQueryTest("09_personListValueAsProperty");
     }
-    
+
     @Test
     public void personListFragment() throws Exception {
-        runTest("10_personListFragment");
+        runQueryTest("10_personListFragment");
+    }
+
+    @Test
+    public void defaultBindings() throws Exception {
+        runQueryTest("11_defaultBindings");
+    }
+
+    //modification tests
+    
+    @Disabled
+    @Test
+    public void personNameListModif() throws Exception {
+        runModifTest("01_personNameList");
     }
     
     @Test
-    public void defaultBindings() throws Exception {
-        runTest("11_defaultBindings");
+    public void personListModif() throws Exception {
+        runModifTest("02_personList");
     }
 
     //Helper =============================================
-    
-    
-    public void runTest(String testName) throws Exception {
+    public void runQueryTest(String testName) throws Exception {
 
-        JSONObject test = (JSONObject) loadJSON("bridge_" + testName + ".json");
+        JSONObject test = (JSONObject) loadJSON("query_" + testName + ".json");
         JSONObject template = test.getJSONObject("template");
         Object expected = test.get("expected");
         Map<String, List<String>> queryParams = toMap(test.getJSONObject("params"));
         loadData(test.getString("data"));
-        
-        if(test.has("fragmentSettings")) {
+
+        if (test.has("fragmentSettings")) {
             List<ResultSetJsonMapper.FragmentProperty> fragmentSetting = rdfJsonBridge.getFragmentSetting();
             fragmentSetting.clear();
             JSONObject fragmentSettings = test.getJSONObject("fragmentSettings");
-            for(String key : fragmentSettings.keySet()) {
+            for (String key : fragmentSettings.keySet()) {
                 JSONObject setting = fragmentSettings.getJSONObject(key);
                 fragmentSetting.add(
                         new ResultSetJsonMapper.FragmentProperty(
-                                key, 
-                                NodeFactory.createURI(setting.getString("uri")), 
+                                key,
+                                NodeFactory.createURI(setting.getString("uri")),
                                 setting.getBoolean("languageAware"))
                 );
             }
@@ -139,6 +162,47 @@ public class RdfJsonBridgeUnitTest {
                         CompareMode.JSON_OBJECT_NON_EXTENSIBLE
                 )
         );
+    }
+
+    public void runModifTest(String testName) throws Exception {
+        JSONObject test = (JSONObject) loadJSON("modif_" + testName + ".json");
+        JSONObject template = test.getJSONObject("template");
+        JSONArray expected = test.getJSONArray("expected");
+        String method = test.getString("method");
+        Object payload = test.get("payload");
+        Map<String, List<String>> queryParams = toMap(test.getJSONObject("params"));
+        loadData(test.getString("data"));
+
+        if (test.has("fragmentSettings")) {
+            List<ResultSetJsonMapper.FragmentProperty> fragmentSetting = rdfJsonBridge.getFragmentSetting();
+            fragmentSetting.clear();
+            JSONObject fragmentSettings = test.getJSONObject("fragmentSettings");
+            for (String key : fragmentSettings.keySet()) {
+                JSONObject setting = fragmentSettings.getJSONObject(key);
+                fragmentSetting.add(
+                        new ResultSetJsonMapper.FragmentProperty(
+                                key,
+                                NodeFactory.createURI(setting.getString("uri")),
+                                setting.getBoolean("languageAware"))
+                );
+            }
+        }
+
+        User user = dataset.calculateRead(() -> {
+            return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
+        });
+
+        InvocationContext ctx = new InvocationContext.Builder().fromUser(user).build();
+
+        Supplier<String> uriSupplier = () -> {
+            return "";
+        };
+
+        RDFPatch actual = dataset.calculateRead(() -> {
+            return rdfJsonBridge.toPatch(method, payload, template, uriSupplier, dataset, ctx);
+        });
+
+        assertEqualPatch(expected, actual);
     }
 
     private void loadData(String filename) throws IOException {
@@ -205,4 +269,34 @@ public class RdfJsonBridgeUnitTest {
         }
     }
 
+    private void assertEqualPatch(JSONArray expected, RDFPatch actual) throws IOException {
+        Set<String> expectedSet = IntStream.range(0, expected.length())
+                .mapToObj(expected::getString)
+                .collect(Collectors.toSet());
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        RDFPatchOps.write(out, actual);
+
+        Set<String> actualSet = new BufferedReader(
+            new InputStreamReader(
+                    new ByteArrayInputStream(out.toByteArray()),
+                    StandardCharsets.UTF_8))
+            .lines()
+            .map(String::trim)
+            .filter(line -> line.startsWith("A ") || line.startsWith("D "))
+            .collect(Collectors.toSet());
+
+        Set<String> missing = new HashSet<>(expectedSet);
+        missing.removeAll(actualSet);
+
+        Set<String> extra = new HashSet<>(actualSet);
+        extra.removeAll(expectedSet);
+
+        assertTrue(
+                missing.isEmpty() && extra.isEmpty(),
+                () -> "RDF patch differs:"
+                + "\n  Missing: " + missing
+                + "\n  Extra:   " + extra
+        );
+    }
 }
