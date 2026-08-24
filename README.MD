@@ -20,6 +20,7 @@ Our [demo page](https://www.dfki.uni-kl.de/~mschroeder/demo/atic/) contains a li
 
 ## Release Notes
 
+* 1.5.0 property type awareness: URI vs Literal properties
 * 1.4.0 system graph
 * 1.3.0 atic agents
 * 1.2.0 performance considerations: `resource_acl_effective`
