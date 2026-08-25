@@ -1,0 +1,31 @@
+{
+    "method": "PATCH",
+    "payload": [
+        {
+            "@id": "https://example.org/id/alice-smith",
+            "name": "Alice Johnson"
+        }
+    ],
+    "template": {
+        "$type": "array",
+        "$map": {
+            "@id": "?person",
+            "name": "?name",
+            "mail": "?em"
+        },
+        "$where": [
+            "?person foaf:name ?name",
+            "?person schema:email ?em"
+        ],
+        "@context": {
+            "foaf": "http://xmlns.com/foaf/0.1/",
+            "schema": "https://schema.org/"
+        }
+    },
+    "expected": [
+        "D <https://example.org/id/alice-smith> <http://xmlns.com/foaf/0.1/name> \"Alice Smith\" .",
+        "A <https://example.org/id/alice-smith> <http://xmlns.com/foaf/0.1/name> \"Alice Johnson\" ."
+    ],
+    "data": "data_01_bridge_persons.ttl",
+    "params": { }
+}

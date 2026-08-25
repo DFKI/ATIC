@@ -16,10 +16,12 @@ import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -45,6 +47,8 @@ public class RdfJsonBridgeUnitTest {
 
     private RdfJsonBridge rdfJsonBridge;
     private SqliteAticDatasetGraph dataset;
+    
+    private static final boolean PRINT_MODIF = true;
 
     @BeforeEach
     void setup(@org.junit.jupiter.api.io.TempDir Path tempDir) throws Exception {
@@ -110,18 +114,32 @@ public class RdfJsonBridgeUnitTest {
     }
 
     //modification tests
-    
-    @Disabled
+    @Disabled //more difficult
     @Test
     public void personNameListModif() throws Exception {
         runModifTest("01_personNameList");
     }
-    
+
     @Test
     public void personListModif() throws Exception {
         runModifTest("02_personList");
     }
 
+    @Test
+    public void personListWithoutIdModif() throws Exception {
+        runModifTest("03_personListWithoutId");
+    }
+
+    @Test
+    public void personListRemoveModif() throws Exception {
+        runModifTest("04_personListRemove");
+    }
+
+    @Test
+    public void personListPatchModif() throws Exception {
+        runModifTest("05_personListPatch");
+    }
+    
     //Helper =============================================
     public void runQueryTest(String testName) throws Exception {
 
@@ -194,13 +212,29 @@ public class RdfJsonBridgeUnitTest {
 
         InvocationContext ctx = new InvocationContext.Builder().fromUser(user).build();
 
+        AtomicLong uriGenId = new AtomicLong(1);
+
         Supplier<String> uriSupplier = () -> {
-            return "";
+            String uri = "urn:gen-id:" + uriGenId.longValue();
+            uriGenId.incrementAndGet();
+            return uri;
         };
 
         RDFPatch actual = dataset.calculateRead(() -> {
             return rdfJsonBridge.toPatch(method, payload, template, uriSupplier, dataset, ctx);
         });
+
+        if (PRINT_MODIF) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            RDFPatchOps.write(out, actual);
+            String[] lines = out.toString(StandardCharsets.UTF_8)
+                    .split("\\R", -1);
+            String result = Arrays.stream(lines)
+                    .filter(line -> !line.isEmpty())
+                    .map(line -> "\"" + line.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+                    .collect(Collectors.joining(",\n"));
+            System.out.println(result);
+        }
 
         assertEqualPatch(expected, actual);
     }
@@ -278,13 +312,13 @@ public class RdfJsonBridgeUnitTest {
         RDFPatchOps.write(out, actual);
 
         Set<String> actualSet = new BufferedReader(
-            new InputStreamReader(
-                    new ByteArrayInputStream(out.toByteArray()),
-                    StandardCharsets.UTF_8))
-            .lines()
-            .map(String::trim)
-            .filter(line -> line.startsWith("A ") || line.startsWith("D "))
-            .collect(Collectors.toSet());
+                new InputStreamReader(
+                        new ByteArrayInputStream(out.toByteArray()),
+                        StandardCharsets.UTF_8))
+                .lines()
+                .map(String::trim)
+                .filter(line -> line.startsWith("A ") || line.startsWith("D "))
+                .collect(Collectors.toSet());
 
         Set<String> missing = new HashSet<>(expectedSet);
         missing.removeAll(actualSet);

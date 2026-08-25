@@ -17,14 +17,19 @@ import org.apache.jena.datatypes.xsd.XSDDatatype;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.graph.Triple;
+import org.apache.jena.query.ParameterizedSparqlString;
 import org.apache.jena.query.Query;
 import org.apache.jena.query.QueryExecution;
 import org.apache.jena.query.QueryExecutionFactory;
 import org.apache.jena.query.QueryFactory;
+import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.ResultSetRewindable;
 import org.apache.jena.rdfpatch.RDFPatch;
+import org.apache.jena.riot.out.NodeFmtLib;
+import org.apache.jena.riot.system.PrefixMap;
+import org.apache.jena.riot.system.PrefixMapFactory;
 import org.apache.jena.shared.PrefixMapping;
 import org.apache.jena.sparql.core.DatasetGraph;
 import org.apache.jena.sparql.core.DatasetGraphFactory;
@@ -326,7 +331,9 @@ public class RdfJsonBridge {
                 template,
                 prefixes,
                 uriSupplier,
-                payload
+                method,
+                payload,
+                datasetGraph
         );
 
         RDFChangesDistinctCollector collector = new RDFChangesDistinctCollector();
@@ -412,7 +419,9 @@ public class RdfJsonBridge {
             Object template,
             PrefixMapping prefixes,
             Supplier<String> uriSupplier,
-            DatasetGraph payload
+            String method,
+            DatasetGraph payload,
+            AticDatasetGraph datasetGraph
     ) {
 
         if (!(template instanceof JSONObject templateObj)) {
@@ -440,7 +449,9 @@ public class RdfJsonBridge {
                         parsed,
                         prefixes,
                         uriSupplier,
-                        payload
+                        method,
+                        payload,
+                        datasetGraph
                 );
 
             } else if (data instanceof JSONArray arr) {
@@ -454,9 +465,11 @@ public class RdfJsonBridge {
                                 parsed,
                                 prefixes,
                                 uriSupplier,
-                                payload
+                                method,
+                                payload,
+                                datasetGraph
                         );
-                        
+
                     } else if (item instanceof String obj) {
                         /*
                         emitObject(
@@ -466,7 +479,7 @@ public class RdfJsonBridge {
                                 uriSupplier,
                                 payload
                         );
-                        */
+                         */
                     }
                 }
             }
@@ -490,7 +503,9 @@ public class RdfJsonBridge {
                                 childTemplate,
                                 prefixes,
                                 uriSupplier,
-                                payload
+                                method,
+                                payload,
+                                datasetGraph
                         );
                     }
                 }
@@ -517,7 +532,9 @@ public class RdfJsonBridge {
                     templateObj.get(key),
                     prefixes,
                     uriSupplier,
-                    payload
+                    method,
+                    payload,
+                    datasetGraph
             );
         }
     }
@@ -527,8 +544,11 @@ public class RdfJsonBridge {
             ParsedTemplate parsed,
             PrefixMapping prefixes,
             Supplier<String> uriSupplier,
-            DatasetGraph payload
+            String method,
+            DatasetGraph payload,
+            AticDatasetGraph datasetGraph
     ) {
+        PrefixMap prefixMap = PrefixMapFactory.create(prefixes);
 
         /*
          * Variable bindings established while materializing this object.
@@ -568,8 +588,10 @@ public class RdfJsonBridge {
 
             Triple t = e.getValue();
 
-            Node object
-                    = toNode(data.get(jsonKey), prefixes);
+            Node object = toNode(
+                    data.get(jsonKey),
+                    prefixes
+            );
 
             bindings.put(
                     (Var) t.getObject(),
@@ -578,7 +600,7 @@ public class RdfJsonBridge {
         }
 
         /*
-         * Allocate remaining resource variables.
+     * Allocate remaining resource variables.
          */
         for (Triple t : parsed.whereTriples()) {
 
@@ -608,8 +630,16 @@ public class RdfJsonBridge {
         }
 
         /*
-         * Instantiate the whole graph pattern.
+         * Apply all currently known bindings to the graph pattern.
+         *
+         * If every variable is bound, the pattern can be emitted directly.
+         * Otherwise, execute the remaining pattern as a SPARQL SELECT to
+         * obtain the missing bindings.
          */
+        List<Triple> whereTriplesBound = parsed.whereTriplesBound;
+
+        boolean requiresQuery = false;
+
         for (Triple pattern : parsed.whereTriples()) {
 
             Node s = substitute(
@@ -617,21 +647,156 @@ public class RdfJsonBridge {
                     bindings
             );
 
-            Node p = pattern.getPredicate();
+            Node p = substitute(
+                    pattern.getPredicate(),
+                    bindings
+            );
 
             Node o = substitute(
                     pattern.getObject(),
                     bindings
             );
 
-            Quad q = Quad.create(
-                    Quad.defaultGraphIRI,
-                    s,
-                    p,
-                    o
-            );
+            if (s.isVariable() || 
+                p.isVariable() || 
+                o.isVariable()) {
+                requiresQuery = true;
+                break;
+            } else {
+                Triple bound = Triple.create(
+                        s,
+                        p,
+                        o
+                );
+                whereTriplesBound.add(bound);
+            }
+        }
 
-            payload.add(q);
+        /*
+         * No unresolved variables remain. Emit the instantiated graph
+         * pattern directly without executing a SPARQL query.
+         */
+        if (method.equals("PATCH") || !requiresQuery) {
+
+            for (Triple pattern : whereTriplesBound) {
+
+                payload.add(
+                        Quad.create(
+                                Quad.defaultGraphIRI,
+                                pattern.getSubject(),
+                                pattern.getPredicate(),
+                                pattern.getObject()
+                        )
+                );
+            }
+
+            return;
+        }
+
+        /*
+     * At least one variable remains unresolved. Query the dataset
+     * using the original graph pattern and the bindings established
+     * above.
+         */
+        ParameterizedSparqlString pss
+                = new ParameterizedSparqlString();
+
+        pss.setNsPrefixes(prefixes);
+
+        StringBuilder sparql
+                = new StringBuilder("SELECT * WHERE {\n");
+
+        for (Triple pattern : parsed.whereTriples()) {
+
+            sparql.append("  ")
+                    .append(NodeFmtLib.str(
+                            pattern.getSubject(),
+                            prefixMap
+                    ))
+                    .append(" ")
+                    .append(NodeFmtLib.str(
+                            pattern.getPredicate(),
+                            prefixMap
+                    ))
+                    .append(" ")
+                    .append(NodeFmtLib.str(
+                            pattern.getObject(),
+                            prefixMap
+                    ))
+                    .append(" .\n");
+        }
+
+        sparql.append("}");
+
+        pss.setCommandText(sparql.toString());
+
+        for (Map.Entry<Var, Node> entry : bindings.entrySet()) {
+
+            pss.setParam(
+                    entry.getKey().getVarName(),
+                    entry.getValue()
+            );
+        }
+
+        Query query = pss.asQuery();
+
+        try (QueryExecution qExec = QueryExecutionFactory.create(
+                query,
+                datasetGraph
+        )) {
+
+            ResultSet results = qExec.execSelect();
+
+            while (results.hasNext()) {
+
+                QuerySolution solution = results.next();
+
+                Map<Var, Node> completeBindings
+                        = new HashMap<>(bindings);
+
+                solution.varNames().forEachRemaining(varName -> {
+
+                    Node value = solution
+                            .get(varName)
+                            .asNode();
+
+                    completeBindings.put(
+                            Var.alloc(varName),
+                            value
+                    );
+                });
+
+                /*
+                 * Instantiate the complete graph pattern using all
+                 * bindings obtained from the initial bindings and query.
+                 */
+                for (Triple pattern : parsed.whereTriples()) {
+
+                    Node s = substitute(
+                            pattern.getSubject(),
+                            completeBindings
+                    );
+
+                    Node p = substitute(
+                            pattern.getPredicate(),
+                            completeBindings
+                    );
+
+                    Node o = substitute(
+                            pattern.getObject(),
+                            completeBindings
+                    );
+
+                    Quad q = Quad.create(
+                            Quad.defaultGraphIRI,
+                            s,
+                            p,
+                            o
+                    );
+
+                    payload.add(q);
+                }
+            }
         }
     }
 
@@ -644,7 +809,14 @@ public class RdfJsonBridge {
             return node;
         }
 
-        return bindings.get((Var) node);
+        Node bound = bindings.get((Var) node);
+        
+        //return variable again
+        if( bound == null) {
+            return node;
+        }
+        
+        return bound;
     }
 
     private ParsedTemplate parseWhere(
@@ -665,15 +837,15 @@ public class RdfJsonBridge {
 
         Map<String, Var> mappedVariables
                 = new HashMap<>();
-        
+
         Var directVariable = null;
-        
+
         if (map instanceof String mapString) {
-            
-            if(mapString.startsWith("?")) {
+
+            if (mapString.startsWith("?")) {
                 directVariable = Var.alloc(mapString.substring(1));
             }
-            
+
         } else if (map instanceof JSONObject mapJsonObject) {
             for (String key : mapJsonObject.keySet()) {
 
@@ -739,9 +911,9 @@ public class RdfJsonBridge {
                         literalVariables.add(ov);
                     }
                 }
-                
+
                 //direct variable
-                if(ov.equals(directVariable)) {
+                if (ov.equals(directVariable)) {
                     jsonMappings.put(
                             "$map",
                             triple
@@ -754,6 +926,7 @@ public class RdfJsonBridge {
         return new ParsedTemplate(
                 rootVariable,
                 triples,
+                new ArrayList<>(),
                 jsonMappings,
                 literalVariables
         );
@@ -762,10 +935,11 @@ public class RdfJsonBridge {
     private record ParsedTemplate(
             Var rootVariable,
             List<Triple> whereTriples,
+            List<Triple> whereTriplesBound,
             Map<String, Triple> jsonMappings,
             Set<Var> literalVariables
             ) {
-
+        
     }
 
     /*package*/ static Node parseToken(
