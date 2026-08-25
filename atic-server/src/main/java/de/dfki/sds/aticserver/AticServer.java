@@ -1418,7 +1418,7 @@ public class AticServer {
                     return rdfJsonBridge.toPatch(
                         method, 
                         queryParamsForPatch,
-                        request.getJSONObject("data"), 
+                        request.get("data"), 
                         request.getJSONObject("template"),
                         () -> "urn:atic:resource-" + UUID.randomUUID(),
                         datasetGraph,

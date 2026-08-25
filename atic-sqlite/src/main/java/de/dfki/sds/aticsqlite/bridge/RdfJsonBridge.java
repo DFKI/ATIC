@@ -30,6 +30,7 @@ import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.ResultSetRewindable;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
+import org.apache.jena.rdfpatch.changes.RDFChangesBase;
 import org.apache.jena.riot.out.NodeFmtLib;
 import org.apache.jena.riot.system.PrefixMap;
 import org.apache.jena.riot.system.PrefixMapFactory;
@@ -146,8 +147,7 @@ public class RdfJsonBridge {
                 );
             }
 
-            JSONObject result
-                    = new JSONObject();
+            JSONObject result = new JSONObject();
 
             for (String key : obj.keySet()) {
 
@@ -216,71 +216,71 @@ public class RdfJsonBridge {
 
         Query query
                 = QueryFactory.create(sparql);
-        
+
         //temporary dataset with context
         Dataset ds = DatasetFactory.wrap(datasetGraph);
         ctx.transferContext(ds.getContext());
-        
+
         try (QueryExecution qExec = QueryExecutionFactory.create(query, ds)) {
-                    ResultSet rs = qExec.execSelect();
+            ResultSet rs = qExec.execSelect();
 
-                    ResultSetRewindable rewindable = rs.rewindable();
+            ResultSetRewindable rewindable = rs.rewindable();
 
-                    if (LOG.isDebugEnabled()) {
+            if (LOG.isDebugEnabled()) {
 
-                        LOG.debug(
-                                "ResultSet:\n{}",
-                                ResultSetFormatter.asText(
-                                        rewindable
-                                )
-                        );
+                LOG.debug(
+                        "ResultSet:\n{}",
+                        ResultSetFormatter.asText(
+                                rewindable
+                        )
+                );
 
-                        rewindable.reset();
-                    }
+                rewindable.reset();
+            }
 
-                    Object json = resultSetJsonMapper.map(template,
-                                    rewindable,
-                                    queryParams,
-                                    datasetGraph,
-                                    ctx,
-                                    binding,
-                                    prefixes,
-                                    (JSONObject childTemplate, Binding childBinding) -> executeQuery(
-                                            childTemplate,
-                                            root,
-                                            queryParams,
-                                            datasetGraph,
-                                            ctx,
-                                            childBinding,
-                                            prefixes
-                                    )
-                            );
+            Object json = resultSetJsonMapper.map(template,
+                    rewindable,
+                    queryParams,
+                    datasetGraph,
+                    ctx,
+                    binding,
+                    prefixes,
+                    (JSONObject childTemplate, Binding childBinding) -> executeQuery(
+                            childTemplate,
+                            root,
+                            queryParams,
+                            datasetGraph,
+                            ctx,
+                            childBinding,
+                            prefixes
+                    )
+            );
 
-                    if (LOG.isDebugEnabled()) {
+            if (LOG.isDebugEnabled()) {
 
-                        if (json instanceof JSONObject o) {
+                if (json instanceof JSONObject o) {
 
-                            LOG.debug(
-                                    "JSON:\n{}",
-                                    o.toString(2)
-                            );
-                        } else if (json instanceof JSONArray o) {
+                    LOG.debug(
+                            "JSON:\n{}",
+                            o.toString(2)
+                    );
+                } else if (json instanceof JSONArray o) {
 
-                            LOG.debug(
-                                    "JSON:\n{}",
-                                    o.toString(2)
-                            );
-                        } else {
+                    LOG.debug(
+                            "JSON:\n{}",
+                            o.toString(2)
+                    );
+                } else {
 
-                            LOG.debug(
-                                    "JSON:\n{}",
-                                    json
-                            );
-                        }
-                    }
-
-                    return json;
+                    LOG.debug(
+                            "JSON:\n{}",
+                            json
+                    );
                 }
+            }
+
+            return json;
+        }
     }
 
     private boolean isQueryNode(Object node) {
@@ -349,75 +349,55 @@ public class RdfJsonBridge {
             }
 
             case "DELETE" -> {
-
-                payload.find()
-                        .forEachRemaining(q
-                                -> collector.delete(
-                                q.getGraph(),
-                                q.getSubject(),
-                                q.getPredicate(),
-                                q.getObject()
-                        )
-                        );
+                //you should not be able to delete something which does not exist
+                payload.find().forEachRemaining(q -> {
+                    if (datasetGraph.contains(q)) {
+                        collector.delete(q.getGraph(), q.getSubject(), q.getPredicate(), q.getObject());
+                    }
+                });
             }
 
             case "PATCH" -> {
-
                 /*
                  * PATCH replaces only the predicates present
                  * in the submitted data.
                  */
-                datasetGraph.executeRead(() -> {
+                Set<Quad> deletes = new HashSet<>();
+                Set<Quad> adds = new HashSet<>();
 
-                    payload.find()
-                            .forEachRemaining(q -> {
+                payload.find().forEachRemaining(q -> {
+                    // TODO later we need to support reverse
+                    datasetGraph.find(q.getGraph(), q.getSubject(), q.getPredicate(), Node.ANY)
+                            .forEachRemaining(deletes::add);
 
-                                //TODO later we need to support reverse
-                                datasetGraph.find(
-                                        q.getGraph(),
-                                        q.getSubject(),
-                                        q.getPredicate(),
-                                        Node.ANY
-                                ).forEachRemaining(old -> {
-
-                                    collector.delete(
-                                            old.getGraph(),
-                                            old.getSubject(),
-                                            old.getPredicate(),
-                                            old.getObject()
-                                    );
-                                });
-
-                                collector.add(
-                                        q.getGraph(),
-                                        q.getSubject(),
-                                        q.getPredicate(),
-                                        q.getObject()
-                                );
-                            });
+                    adds.add(q);
                 });
+
+                Set<Quad> cancelled = new HashSet<>(deletes);
+                cancelled.retainAll(adds);
+                deletes.removeAll(cancelled);
+                adds.removeAll(cancelled);
+
+                deletes.forEach(q -> collector.delete(q.getGraph(), q.getSubject(), q.getPredicate(), q.getObject()));
+                adds.forEach(q -> collector.add(q.getGraph(), q.getSubject(), q.getPredicate(), q.getObject()));
             }
 
             case "PUT" -> {
                 //PUT means we have to do a toJson and collect the triples if they would be queried all
                 //so we delete the queried triples and insert the given ones to simulate a PUT
-                
-                Object dataFromQuery = datasetGraph.calculateRead(() -> {
-                    return toJson(queryParams, template, datasetGraph, ctx);
-                });
-                
+
+                Object dataFromQuery = toJson(queryParams, template, datasetGraph, ctx);
+
                 RDFPatch deletePatch = toPatch("DELETE", queryParams, dataFromQuery, template, uriSupplier, datasetGraph, ctx);
-                
+
                 RDFPatch addPatch = toPatch("POST", queryParams, data, template, uriSupplier, datasetGraph, ctx);
-            
-                RDFPatch combined = RDFPatchOps.build(col -> {
-                    deletePatch.apply(col);
-                    addPatch.apply(col);
-                });
-                
+
+                //a D and A with the same quad will not be in the patch
+                RDFPatch combined = combine(deletePatch, addPatch);
+
                 return combined;
             }
-            
+
             default ->
                 throw new IllegalArgumentException(
                         "Unsupported method: " + method
@@ -425,6 +405,34 @@ public class RdfJsonBridge {
         }
 
         return collector.getRDFPatch();
+    }
+
+    private RDFPatch combine(RDFPatch deletePatch, RDFPatch addPatch) {
+        Set<Quad> deletes = new HashSet<>();
+        deletePatch.apply(new RDFChangesBase() {
+            @Override
+            public void delete(Node g, Node s, Node p, Node o) {
+                deletes.add(new Quad(g, s, p, o));
+            }
+        });
+
+        Set<Quad> adds = new HashSet<>();
+        addPatch.apply(new RDFChangesBase() {
+            @Override
+            public void add(Node g, Node s, Node p, Node o) {
+                adds.add(new Quad(g, s, p, o));
+            }
+        });
+
+        Set<Quad> cancelled = new HashSet<>(deletes);
+        cancelled.retainAll(adds);
+        deletes.removeAll(cancelled);
+        adds.removeAll(cancelled);
+
+        return RDFPatchOps.build(col -> {
+            deletes.forEach(q -> col.delete(q.getGraph(), q.getSubject(), q.getPredicate(), q.getObject()));
+            adds.forEach(q -> col.add(q.getGraph(), q.getSubject(), q.getPredicate(), q.getObject()));
+        });
     }
 
     private void walk(
@@ -676,9 +684,9 @@ public class RdfJsonBridge {
                     bindings
             );
 
-            if (s.isVariable() || 
-                p.isVariable() || 
-                o.isVariable()) {
+            if (s.isVariable()
+                    || p.isVariable()
+                    || o.isVariable()) {
                 requiresQuery = true;
                 break;
             } else {
@@ -758,7 +766,7 @@ public class RdfJsonBridge {
         }
 
         Query query = pss.asQuery();
-        
+
         //temporary dataset with context
         Dataset ds = DatasetFactory.wrap(datasetGraph);
         ctx.transferContext(ds.getContext());
@@ -830,12 +838,12 @@ public class RdfJsonBridge {
         }
 
         Node bound = bindings.get((Var) node);
-        
+
         //return variable again
-        if( bound == null) {
+        if (bound == null) {
             return node;
         }
-        
+
         return bound;
     }
 
@@ -959,7 +967,7 @@ public class RdfJsonBridge {
             Map<String, Triple> jsonMappings,
             Set<Var> literalVariables
             ) {
-        
+
     }
 
     /*package*/ static Node parseToken(

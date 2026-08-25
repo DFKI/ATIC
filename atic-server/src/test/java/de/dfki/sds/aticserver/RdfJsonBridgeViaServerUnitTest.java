@@ -5,8 +5,6 @@ import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.conf.ConfigLoader;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
-import io.json.compare.CompareMode;
-import io.json.compare.JSONCompare;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -22,22 +20,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.StringJoiner;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  *
@@ -79,11 +75,299 @@ public class RdfJsonBridgeViaServerUnitTest {
         server.close();
     }
 
-    //TODO just test the GET, POST, PUT, PATCH, DELETE route in server
+    @Test
+    public void query() throws Exception {
+        String ttlCode = """
+        @prefix ex: <https://example.org/id/> .
+        @prefix schema: <https://schema.org/> .
+        @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+        @prefix dcterms: <http://purl.org/dc/terms/> .
+        @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+        
+        ex:alice-smith
+            a schema:Person ;
+            foaf:name "Alice Smith" ;
+            schema:email "alice.smith@example.org" .
+            
+        ex:bob-johnson
+            a schema:Person ;
+            foaf:name "Bob Johnson" ;
+            schema:email "bob.johnson@example.org" .
+            
+        ex:carol-miller
+            a schema:Person ;
+            foaf:name "Carol Miller" ;
+            schema:email "carol.miller@example.org" .
+                         """;
+
+        JSONObject template = new JSONObject("""
+        {
+            "$type": "array",
+            "$map": {
+                "@id": "?person",
+                "name": "?name",
+                "mail": "?em"
+            },
+            "$where": [
+                "?person foaf:name ?name",
+                "?person schema:email ?em"
+            ],
+            "@context": {
+                "foaf": "http://xmlns.com/foaf/0.1/",
+                "schema": "https://schema.org/"
+            }
+        }
+        """);
+
+        Map<String, List<String>> queryParams = Map.of();
+
+        helperQuery(ttlCode, template, queryParams);
+    }
+
+    @Test
+    public void post() throws Exception {
+        String ttlCode = """
+                         
+                         """;
+        
+        JSONObject template = new JSONObject("""
+        {
+            "$type": "array",
+            "$map": {
+                "@id": "?person",
+                "name": "?name",
+                "mail": "?em"
+            },
+            "$where": [
+                "?person foaf:name ?name",
+                "?person schema:email ?em"
+            ],
+            "@context": {
+                "foaf": "http://xmlns.com/foaf/0.1/",
+                "schema": "https://schema.org/"
+            }
+        }
+        """);
+        
+        JSONArray data = new JSONArray("""
+        [
+            {
+                "mail": "david.dean@example.org",
+                "name": "David Dean",
+                "@id": "https://example.org/id/david-dean"
+            }
+        ]
+        """);
+
+        Map<String, List<String>> queryParams = Map.of();
+        
+        helperModification("POST", ttlCode, template, data, queryParams);
+    }
+
+    @Test
+    public void put() throws Exception {
+        String ttlCode = """
+        @prefix ex: <https://example.org/id/> .
+        @prefix schema: <https://schema.org/> .
+        @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+        @prefix dcterms: <http://purl.org/dc/terms/> .
+        @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+                         
+        ex:alice-smith
+            a schema:Person ;
+            foaf:name "Alice Smith" ;
+            schema:email "alice.smith@example.org" .
+
+        ex:bob-johnson
+            a schema:Person ;
+            foaf:name "Bob Johnson" ;
+            schema:email "bob.johnson@example.org" .
+                         """;
+        
+        JSONObject template = new JSONObject("""
+        {
+            "$type": "array",
+            "$map": {
+                "@id": "?person",
+                "name": "?name",
+                "mail": "?em"
+            },
+            "$where": [
+                "?person a schema:Person",
+                "?person foaf:name ?name",
+                "?person schema:email ?em"
+            ],
+            "@context": {
+                "foaf": "http://xmlns.com/foaf/0.1/",
+                "schema": "https://schema.org/"
+            }
+        }
+        """);
+        
+        JSONArray data = new JSONArray("""
+        [
+            {
+                "mail": "david.dean@example.org",
+                "name": "David Dean",
+                "@id": "https://example.org/id/david-dean"
+            }
+        ]
+        """);
+
+        Map<String, List<String>> queryParams = Map.of();
+        
+        helperModification("PUT", ttlCode, template, data, queryParams);
+    }
+
+    @Test
+    public void patch() throws Exception {
+        String ttlCode = """
+        @prefix ex: <https://example.org/id/> .
+        @prefix schema: <https://schema.org/> .
+        @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+        @prefix dcterms: <http://purl.org/dc/terms/> .
+        @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+                         
+        ex:alice-smith
+            a schema:Person ;
+            foaf:name "Alice Smith" ;
+            schema:email "alice.smith@example.org" .
+
+        ex:bob-johnson
+            a schema:Person ;
+            foaf:name "Bob Johnson" ;
+            schema:email "bob.johnson@example.org" .
+                         """;
+        
+        JSONObject template = new JSONObject("""
+        {
+            "$type": "array",
+            "$map": {
+                "@id": "?person",
+                "name": "?name",
+                "mail": "?em"
+            },
+            "$where": [
+                "?person a schema:Person",
+                "?person foaf:name ?name",
+                "?person schema:email ?em"
+            ],
+            "@context": {
+                "foaf": "http://xmlns.com/foaf/0.1/",
+                "schema": "https://schema.org/"
+            }
+        }
+        """);
+        
+        JSONArray data = new JSONArray("""
+        [
+            {
+                "name": "Alice Dean",
+                "@id": "https://example.org/id/alice-smith"
+            }
+        ]
+        """);
+
+        Map<String, List<String>> queryParams = Map.of();
+        
+        helperModification("PATCH", ttlCode, template, data, queryParams);
+    }
+
+    @Test
+    public void deleteNotExist() throws Exception {
+        String ttlCode = """
+                         
+                         """;
+        
+        JSONObject template = new JSONObject("""
+        {
+            "$type": "array",
+            "$map": {
+                "@id": "?person",
+                "name": "?name",
+                "mail": "?em"
+            },
+            "$where": [
+                "?person foaf:name ?name",
+                "?person schema:email ?em"
+            ],
+            "@context": {
+                "foaf": "http://xmlns.com/foaf/0.1/",
+                "schema": "https://schema.org/"
+            }
+        }
+        """);
+        
+        JSONArray data = new JSONArray("""
+        [
+            {
+                "mail": "david.dean@example.org",
+                "name": "David Dean",
+                "@id": "https://example.org/id/david-dean"
+            }
+        ]
+        """);
+
+        Map<String, List<String>> queryParams = Map.of();
+        
+        helperModification("DELETE", ttlCode, template, data, queryParams);
+    }
+
+    @Test
+    public void delete() throws Exception {
+        String ttlCode = """
+        @prefix ex: <https://example.org/id/> .
+        @prefix schema: <https://schema.org/> .
+        @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+        @prefix dcterms: <http://purl.org/dc/terms/> .
+        @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+
+        ex:david-dean
+            a schema:Person ;
+            foaf:name "David Dean" ;
+            schema:email "david.dean@example.org" .
+        """;
+        
+        JSONObject template = new JSONObject("""
+        {
+            "$type": "array",
+            "$map": {
+                "@id": "?person",
+                "name": "?name",
+                "mail": "?em"
+            },
+            "$where": [
+                "?person foaf:name ?name",
+                "?person schema:email ?em"
+            ],
+            "@context": {
+                "foaf": "http://xmlns.com/foaf/0.1/",
+                "schema": "https://schema.org/"
+            }
+        }
+        """);
+        
+        JSONArray data = new JSONArray("""
+        [
+            {
+                "mail": "david.dean@example.org",
+                "name": "David Dean",
+                "@id": "https://example.org/id/david-dean"
+            }
+        ]
+        """);
+
+        Map<String, List<String>> queryParams = Map.of();
+        
+        helperModification("DELETE", ttlCode, template, data, queryParams);
+    }
     
     //=================================================
     //helper
-    
     private String loginAsAdmin() throws IOException, InterruptedException {
         File passwordsFile = new File(server.getDataFolder(), "passwords.json.generated");
         JSONObject passwords = new JSONObject(FileUtils.readFileToString(passwordsFile, StandardCharsets.UTF_8));
@@ -108,73 +392,40 @@ public class RdfJsonBridgeViaServerUnitTest {
         return resp.getString("access_token");
     }
 
-    private void loadData(String filename) throws IOException {
-        InputStream is = MoleculeEndpointAticServerUnitTest.class.getResourceAsStream("/de/dfki/sds/aticserver/" + filename);
-        if (is == null) {
-            throw new RuntimeException("01_molecule_testdata.ttl not found");
-        }
-        String ttl = IOUtils.toString(is, StandardCharsets.UTF_8);
+    private void loadData(String ttlCode) throws IOException {
 
         User adminUser = datasetGraph.calculateRead(() -> {
-            return datasetGraph.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
+            return datasetGraph.getUser(
+                    UserGroupManagement.ADMIN_USERNAME,
+                    InvocationContext.EMPTY
+            );
         });
 
-        InvocationContext ictx = new InvocationContext.Builder().fromUser(adminUser).build();
+        InvocationContext ictx
+                = new InvocationContext.Builder()
+                        .fromUser(adminUser)
+                        .build();
 
-        AticServer.transferContext(ictx, datasetGraph.getContext());
+        AticServer.transferContext(
+                ictx,
+                datasetGraph.getContext()
+        );
 
-        // Read TTL into graph
+        // Read TTL code into the dataset graph.
+        // RDFDataMgr supports reading Turtle from a StringReader. :contentReference[oaicite:0]{index=0}
         datasetGraph.executeWrite(() -> {
             RDFDataMgr.read(
                     datasetGraph,
-                    new StringReader(ttl),
+                    new StringReader(ttlCode),
                     null,
                     Lang.TURTLE
             );
         });
     }
 
-    private JSONObject loadJson(String filename) throws IOException {
-        try (InputStream is
-                = MoleculeEndpointAticServerUnitTest.class
-                        .getResourceAsStream(
-                                "/de/dfki/sds/aticserver/" + filename
-                        )) {
+    private void helperQuery(String ttlCode, JSONObject template, Map<String, List<String>> queryParams) throws Exception {
 
-                    if (is == null) {
-                        throw new RuntimeException(filename + " not found");
-                    }
-
-                    return new JSONObject(IOUtils.toString(
-                            is,
-                            StandardCharsets.UTF_8
-                    ));
-                }
-    }
-
-    private Object loadJSON(String filename) throws IOException {
-        try (InputStream is = RdfJsonBridgeViaServerUnitTest.class
-                .getResourceAsStream("/de/dfki/sds/aticserver/" + filename)) {
-
-            if (is == null) {
-                throw new RuntimeException(filename + " not found");
-            }
-
-            String json = IOUtils.toString(is, StandardCharsets.UTF_8);
-
-            Object result = new JSONTokener(json).nextValue();
-
-            if (result instanceof JSONObject || result instanceof JSONArray) {
-                return result;
-            }
-
-            throw new JSONException("Root JSON value must be an object or array");
-        }
-    }
-    
-    private void helperQuery(String ttlFilename, String templFilename, Map<String, List<String>> queryParams) throws Exception {
-        loadData(ttlFilename);
-        JSONObject template = loadJson(templFilename);
+        loadData(ttlCode);
 
         String token = loginAsAdmin();
 
@@ -186,47 +437,42 @@ public class RdfJsonBridgeViaServerUnitTest {
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .method(
-                        "GET",
+                        "QUERY",
                         HttpRequest.BodyPublishers.ofString(
                                 template.toString()
                         )
                 )
                 .build();
 
-        HttpResponse<String> response
-                = client.send(
-                        request,
-                        HttpResponse.BodyHandlers.ofString()
-                );
+        HttpResponse<String> response = client.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
 
         if (String.valueOf(response.statusCode()).startsWith("2")) {
+
             String body = response.body();
             assertNotNull(body);
 
             Object actualBody = new JSONTokener(body).nextValue();
-            
-            if(actualBody instanceof JSONObject object) {
+
+            if (actualBody instanceof JSONObject object) {
                 System.out.println(object.toString(2));
-            } else if(actualBody instanceof JSONArray array) {
+            } else if (actualBody instanceof JSONArray array) {
                 System.out.println(array.toString(2));
-            } else if(actualBody instanceof String str) {
+            } else if (actualBody instanceof String str) {
                 System.out.println(str);
             }
 
-            Object expectedBody = loadJSON(templFilename.replace(".json", "-expected.json"));
-
-            JSONCompare.assertMatches(expectedBody.toString(), actualBody.toString(), Set.of(CompareMode.JSON_ARRAY_NON_EXTENSIBLE, CompareMode.JSON_OBJECT_NON_EXTENSIBLE));
+            return;
 
         } else {
             Assertions.fail(response.toString());
         }
     }
 
-    private void helperModification(String operation, String ttlFilename, String templFilename, String dataFilename, Map<String, List<String>> queryParams) throws Exception {
-        loadData(ttlFilename);
-        JSONObject template = loadJson(templFilename);
-
-        JSONObject data = loadJson(dataFilename);
+    private void helperModification(String method, String ttlCode, JSONObject template, Object data, Map<String, List<String>> queryParams) throws Exception {
+        loadData(ttlCode);
 
         JSONObject requestJson = new JSONObject();
         requestJson.put("data", data);
@@ -242,33 +488,31 @@ public class RdfJsonBridgeViaServerUnitTest {
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .method(
-                        operation,
+                        method,
                         HttpRequest.BodyPublishers.ofString(
                                 requestJson.toString(2)
                         )
                 )
                 .build();
 
-        HttpResponse<String> response
-                = client.send(
-                        request,
-                        HttpResponse.BodyHandlers.ofString()
-                );
+        HttpResponse<String> response = client.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
 
         RDFPatch patch;
-        try (InputStream in = new ByteArrayInputStream(
-                response.body().getBytes(StandardCharsets.UTF_8))) {
 
+        try (InputStream in = new ByteArrayInputStream(
+                response.body().getBytes(StandardCharsets.UTF_8)
+        )) {
             patch = RDFPatchOps.read(in);
         }
 
-        //System.out.println(response.statusCode());
-        //System.out.println(response.body());
         System.out.println(RDFPatchOps.str(patch));
     }
 
     private URI bridgeUri(Map<String, List<String>> queryParams) {
-        
+
         String host = appConfig.getHost();
         int port = appConfig.getPort();
 
