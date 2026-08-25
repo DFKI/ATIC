@@ -1373,8 +1373,7 @@ public class AticServer {
     private void handleBridge(Context ctx) {
         String method = ctx.method().name();
 
-        InvocationContext ictx
-                = fromJavalinContext(ctx);
+        InvocationContext ictx = fromJavalinContext(ctx);
 
         switch (method) {
 
@@ -1389,13 +1388,14 @@ public class AticServer {
                                 ctx.body()
                         );
 
-                Object result
-                        = rdfJsonBridge.toJson(
-                                queryParams,
-                                template,
-                                datasetGraph,
-                                ictx
-                        );
+                Object result = datasetGraph.calculateRead(() -> {
+                    return rdfJsonBridge.toJson(
+                            queryParams,
+                            template,
+                            datasetGraph,
+                            ictx
+                    );
+                });
 
                 ctx.json(result.toString());
 
@@ -1406,19 +1406,25 @@ public class AticServer {
             case "PATCH":
             case "DELETE":
                 
+                Map<String, List<String>> queryParamsForPatch
+                        = ctx.queryParamMap();
+                
                 JSONObject request
                         = new JSONObject(
                                 ctx.body()
                         );
 
-                RDFPatch patch = rdfJsonBridge.toPatch(
+                RDFPatch patch = datasetGraph.calculateRead(() -> {
+                    return rdfJsonBridge.toPatch(
                         method, 
+                        queryParamsForPatch,
                         request.getJSONObject("data"), 
-                        request.getJSONObject("template"), 
+                        request.getJSONObject("template"),
                         () -> "urn:atic:resource-" + UUID.randomUUID(),
                         datasetGraph,
                         ictx
-                );
+                    );
+                });
 
                 ctx.result(RDFPatchOps.str(patch));
                 

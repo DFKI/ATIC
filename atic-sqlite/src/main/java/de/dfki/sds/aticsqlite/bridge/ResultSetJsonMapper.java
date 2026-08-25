@@ -195,7 +195,7 @@ public class ResultSetJsonMapper {
     ) {
 
         /*
-     * "$map": "?name"
+         * "$map": "?name"
          */
         if (!(map instanceof JSONObject jsonMap)) {
 
@@ -236,7 +236,7 @@ public class ResultSetJsonMapper {
             }
 
             /*
-         * nested static object
+             * nested static object
              */
             if (value instanceof JSONObject child) {
 
@@ -258,7 +258,7 @@ public class ResultSetJsonMapper {
             }
 
             /*
-         * arrays
+             * arrays
              */
             if (value instanceof JSONArray arr) {
 

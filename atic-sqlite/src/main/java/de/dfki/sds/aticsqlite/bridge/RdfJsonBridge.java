@@ -17,6 +17,8 @@ import org.apache.jena.datatypes.xsd.XSDDatatype;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.graph.Triple;
+import org.apache.jena.query.Dataset;
+import org.apache.jena.query.DatasetFactory;
 import org.apache.jena.query.ParameterizedSparqlString;
 import org.apache.jena.query.Query;
 import org.apache.jena.query.QueryExecution;
@@ -27,6 +29,7 @@ import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.ResultSetRewindable;
 import org.apache.jena.rdfpatch.RDFPatch;
+import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.riot.out.NodeFmtLib;
 import org.apache.jena.riot.system.PrefixMap;
 import org.apache.jena.riot.system.PrefixMapFactory;
@@ -78,7 +81,6 @@ public class RdfJsonBridge {
             AticDatasetGraph datasetGraph,
             InvocationContext ctx
     ) {
-
         JSONObject root = template;
 
         PrefixMapping prefixes = PrefixMapping.Factory.create();
@@ -214,81 +216,71 @@ public class RdfJsonBridge {
 
         Query query
                 = QueryFactory.create(sparql);
+        
+        //temporary dataset with context
+        Dataset ds = DatasetFactory.wrap(datasetGraph);
+        ctx.transferContext(ds.getContext());
+        
+        try (QueryExecution qExec = QueryExecutionFactory.create(query, ds)) {
+                    ResultSet rs = qExec.execSelect();
 
-        return datasetGraph.calculateRead(() -> {
+                    ResultSetRewindable rewindable = rs.rewindable();
 
-            try (QueryExecution qExec
-                    = QueryExecutionFactory.create(
-                            query,
-                            datasetGraph
-                    )) {
+                    if (LOG.isDebugEnabled()) {
 
-                        ctx.transferContext(
-                                datasetGraph.getContext()
+                        LOG.debug(
+                                "ResultSet:\n{}",
+                                ResultSetFormatter.asText(
+                                        rewindable
+                                )
                         );
 
-                        ResultSet rs
-                                = qExec.execSelect();
+                        rewindable.reset();
+                    }
 
-                        ResultSetRewindable rewindable = rs.rewindable();
-
-                        if (LOG.isDebugEnabled()) {
-
-                            LOG.debug(
-                                    "ResultSet:\n{}",
-                                    ResultSetFormatter.asText(
-                                            rewindable
+                    Object json = resultSetJsonMapper.map(template,
+                                    rewindable,
+                                    queryParams,
+                                    datasetGraph,
+                                    ctx,
+                                    binding,
+                                    prefixes,
+                                    (JSONObject childTemplate, Binding childBinding) -> executeQuery(
+                                            childTemplate,
+                                            root,
+                                            queryParams,
+                                            datasetGraph,
+                                            ctx,
+                                            childBinding,
+                                            prefixes
                                     )
                             );
 
-                            rewindable.reset();
+                    if (LOG.isDebugEnabled()) {
+
+                        if (json instanceof JSONObject o) {
+
+                            LOG.debug(
+                                    "JSON:\n{}",
+                                    o.toString(2)
+                            );
+                        } else if (json instanceof JSONArray o) {
+
+                            LOG.debug(
+                                    "JSON:\n{}",
+                                    o.toString(2)
+                            );
+                        } else {
+
+                            LOG.debug(
+                                    "JSON:\n{}",
+                                    json
+                            );
                         }
-
-                        Object json
-                                = resultSetJsonMapper.map(template,
-                                        rewindable,
-                                        queryParams,
-                                        datasetGraph,
-                                        ctx,
-                                        binding,
-                                        prefixes,
-                                        (JSONObject childTemplate, Binding childBinding) -> executeQuery(
-                                                childTemplate,
-                                                root,
-                                                queryParams,
-                                                datasetGraph,
-                                                ctx,
-                                                childBinding,
-                                                prefixes
-                                        )
-                                );
-
-                        if (LOG.isDebugEnabled()) {
-
-                            if (json instanceof JSONObject o) {
-
-                                LOG.debug(
-                                        "JSON:\n{}",
-                                        o.toString(2)
-                                );
-                            } else if (json instanceof JSONArray o) {
-
-                                LOG.debug(
-                                        "JSON:\n{}",
-                                        o.toString(2)
-                                );
-                            } else {
-
-                                LOG.debug(
-                                        "JSON:\n{}",
-                                        json
-                                );
-                            }
-                        }
-
-                        return json;
                     }
-        });
+
+                    return json;
+                }
     }
 
     private boolean isQueryNode(Object node) {
@@ -310,6 +302,7 @@ public class RdfJsonBridge {
     // use for POST, PUT, PATCH, DELETE
     public RDFPatch toPatch(
             String method,
+            Map<String, List<String>> queryParams,
             Object data,
             JSONObject template,
             Supplier<String> uriSupplier,
@@ -326,6 +319,7 @@ public class RdfJsonBridge {
             loadPrefixes(context, prefixes);
         }
 
+        //TODO use queryParams
         walk(
                 data,
                 template,
@@ -333,7 +327,8 @@ public class RdfJsonBridge {
                 uriSupplier,
                 method,
                 payload,
-                datasetGraph
+                datasetGraph,
+                ctx
         );
 
         RDFChangesDistinctCollector collector = new RDFChangesDistinctCollector();
@@ -403,8 +398,26 @@ public class RdfJsonBridge {
                 });
             }
 
-            //TODO PUT means we have to do a toJson and collect the triples if they would be queried
-            //so we delete the queried triples and insert the given ones to simulate a PUT
+            case "PUT" -> {
+                //PUT means we have to do a toJson and collect the triples if they would be queried all
+                //so we delete the queried triples and insert the given ones to simulate a PUT
+                
+                Object dataFromQuery = datasetGraph.calculateRead(() -> {
+                    return toJson(queryParams, template, datasetGraph, ctx);
+                });
+                
+                RDFPatch deletePatch = toPatch("DELETE", queryParams, dataFromQuery, template, uriSupplier, datasetGraph, ctx);
+                
+                RDFPatch addPatch = toPatch("POST", queryParams, data, template, uriSupplier, datasetGraph, ctx);
+            
+                RDFPatch combined = RDFPatchOps.build(col -> {
+                    deletePatch.apply(col);
+                    addPatch.apply(col);
+                });
+                
+                return combined;
+            }
+            
             default ->
                 throw new IllegalArgumentException(
                         "Unsupported method: " + method
@@ -421,7 +434,8 @@ public class RdfJsonBridge {
             Supplier<String> uriSupplier,
             String method,
             DatasetGraph payload,
-            AticDatasetGraph datasetGraph
+            AticDatasetGraph datasetGraph,
+            InvocationContext ctx
     ) {
 
         if (!(template instanceof JSONObject templateObj)) {
@@ -451,7 +465,8 @@ public class RdfJsonBridge {
                         uriSupplier,
                         method,
                         payload,
-                        datasetGraph
+                        datasetGraph,
+                        ctx
                 );
 
             } else if (data instanceof JSONArray arr) {
@@ -467,7 +482,8 @@ public class RdfJsonBridge {
                                 uriSupplier,
                                 method,
                                 payload,
-                                datasetGraph
+                                datasetGraph,
+                                ctx
                         );
 
                     } else if (item instanceof String obj) {
@@ -505,7 +521,8 @@ public class RdfJsonBridge {
                                 uriSupplier,
                                 method,
                                 payload,
-                                datasetGraph
+                                datasetGraph,
+                                ctx
                         );
                     }
                 }
@@ -534,7 +551,8 @@ public class RdfJsonBridge {
                     uriSupplier,
                     method,
                     payload,
-                    datasetGraph
+                    datasetGraph,
+                    ctx
             );
         }
     }
@@ -546,7 +564,8 @@ public class RdfJsonBridge {
             Supplier<String> uriSupplier,
             String method,
             DatasetGraph payload,
-            AticDatasetGraph datasetGraph
+            AticDatasetGraph datasetGraph,
+            InvocationContext ctx
     ) {
         PrefixMap prefixMap = PrefixMapFactory.create(prefixes);
 
@@ -739,11 +758,12 @@ public class RdfJsonBridge {
         }
 
         Query query = pss.asQuery();
+        
+        //temporary dataset with context
+        Dataset ds = DatasetFactory.wrap(datasetGraph);
+        ctx.transferContext(ds.getContext());
 
-        try (QueryExecution qExec = QueryExecutionFactory.create(
-                query,
-                datasetGraph
-        )) {
+        try (QueryExecution qExec = QueryExecutionFactory.create(query, ds)) {
 
             ResultSet results = qExec.execSelect();
 

@@ -37,7 +37,6 @@ import org.json.JSONObject;
 import org.json.JSONTokener;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -113,32 +112,42 @@ public class RdfJsonBridgeUnitTest {
         runQueryTest("11_defaultBindings");
     }
 
+    //=========================
     //modification tests
+    
+    /*
     @Disabled //more difficult
     @Test
     public void personNameListModif() throws Exception {
-        runModifTest("01_personNameList");
+        runModifTest("01_personNameListDelete");
+    }
+    */
+
+    @Test
+    public void personListPostModif() throws Exception {
+        runModifTest("02_personListPost");
     }
 
     @Test
-    public void personListModif() throws Exception {
-        runModifTest("02_personList");
+    public void personListPostWithoutIdModif() throws Exception {
+        runModifTest("03_personListPostWithoutId");
     }
 
     @Test
-    public void personListWithoutIdModif() throws Exception {
-        runModifTest("03_personListWithoutId");
-    }
-
-    @Test
-    public void personListRemoveModif() throws Exception {
-        runModifTest("04_personListRemove");
+    public void personListDeleteModif() throws Exception {
+        runModifTest("04_personListDelete");
     }
 
     @Test
     public void personListPatchModif() throws Exception {
         runModifTest("05_personListPatch");
     }
+    
+    @Test
+    public void personListPutModif() throws Exception {
+        runModifTest("06_personListPut");
+    }
+    
     
     //Helper =============================================
     public void runQueryTest(String testName) throws Exception {
@@ -221,7 +230,7 @@ public class RdfJsonBridgeUnitTest {
         };
 
         RDFPatch actual = dataset.calculateRead(() -> {
-            return rdfJsonBridge.toPatch(method, payload, template, uriSupplier, dataset, ctx);
+            return rdfJsonBridge.toPatch(method, queryParams, payload, template, uriSupplier, dataset, ctx);
         });
 
         if (PRINT_MODIF) {
