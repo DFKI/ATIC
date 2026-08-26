@@ -12,7 +12,7 @@ import org.apache.jena.dboe.transaction.txn.TransactionException;
 import org.apache.jena.query.ReadWrite;
 import org.apache.jena.query.TxnType;
 import org.apache.jena.sparql.JenaTransactionException;
-import org.sqlite.jdbc3.JDBC3PreparedStatement;
+import org.sqlite.SQLiteConnection;
 
 public class DatabaseLongLivedConnection implements Database {
 
@@ -103,11 +103,9 @@ public class DatabaseLongLivedConnection implements Database {
             }
 
             // create new statement
-            PreparedStatement ps
-                    = conn.prepareStatement(sql);
+            AticPreparedStatement aticPs = new AticPreparedStatement((SQLiteConnection) conn, sql);
 
-            PooledPreparedStatement pps
-                    = new PooledPreparedStatement(ps);
+            PooledPreparedStatement pps = new PooledPreparedStatement(aticPs);
 
             list.add(pps);
 
@@ -408,7 +406,9 @@ public class DatabaseLongLivedConnection implements Database {
 
             bindParams(ps, params);
             
-            ResultSet rs = ((JDBC3PreparedStatement) ps).executeQuery(true);
+            AticPreparedStatement aticPs3 = (AticPreparedStatement) ps;
+            
+            ResultSet rs = aticPs3.executeQuery(true);
 
             // register active result set
             pps.registerResultSet(rs);
