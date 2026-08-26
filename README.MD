@@ -20,6 +20,7 @@ Our [demo page](https://www.dfki.uni-kl.de/~mschroeder/demo/atic/) contains a li
 
 ## Release Notes
 
+* 1.6.0 `AticPreparedStatement` extends Sqlite-JDBC's PreparedStatement to be able to skip column name retrieval
 * 1.5.0 property type awareness: URI vs Literal properties
 * 1.4.0 system graph
 * 1.3.0 atic agents
