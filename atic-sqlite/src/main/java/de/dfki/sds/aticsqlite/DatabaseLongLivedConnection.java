@@ -66,6 +66,10 @@ public class DatabaseLongLivedConnection implements Database {
         queryLogger = new QueryLogger();
     }
 
+    public DatabaseOptions getOptions() {
+        return options;
+    }
+
     // ==========================================
     // Connection Context
     // ==========================================

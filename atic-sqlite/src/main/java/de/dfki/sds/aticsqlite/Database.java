@@ -112,6 +112,8 @@ public interface Database extends Transactional, AutoCloseable {
     
     public File getFolder();
     
+    public DatabaseOptions getOptions();
+    
     //special ===================================
     
     public boolean isInTransaction(long transactionId);

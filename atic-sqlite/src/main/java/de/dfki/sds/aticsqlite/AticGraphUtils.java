@@ -9,6 +9,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -16,6 +18,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.jena.graph.Node;
+import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.shared.AddDeniedException;
 import org.apache.jena.shared.DeleteDeniedException;
@@ -906,6 +909,36 @@ import org.apache.jena.shared.DeleteDeniedException;
             return Node.ANY;
         }
         return n;
+    }
+
+    public static List<Node> resolveResourceIds(long[] ids, Database db) throws SQLException {
+        Object[] params = Arrays.stream(ids)
+                .mapToObj(id -> (Object) id)
+                .toArray();
+
+        List<Node> resources = db.read(
+                "SELECT uri, is_blank FROM resource_uri WHERE id IN ("
+                + String.join(",", Collections.nCopies(ids.length, "?"))
+                + ")",
+                rs -> {
+                    List<Node> result = new ArrayList<>();
+
+                    while (rs.next()) {
+                        String uri = rs.getString("uri");
+
+                        if (rs.getBoolean("is_blank")) {
+                            result.add(NodeFactory.createBlankNode(uri));
+                        } else {
+                            result.add(NodeFactory.createURI(uri));
+                        }
+                    }
+
+                    return result;
+                },
+                params
+        );
+        
+        return resources;
     }
 
 }

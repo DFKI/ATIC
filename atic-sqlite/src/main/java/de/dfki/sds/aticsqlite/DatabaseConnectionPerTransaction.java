@@ -31,6 +31,8 @@ public class DatabaseConnectionPerTransaction implements Database {
     private QueryLogger queryLogger;
 
     private File folder;
+    
+    private DatabaseOptions options;
 
     public DatabaseConnectionPerTransaction(DatabaseOptions options) {
         File f = new File(options.getDbFilePath());
@@ -42,6 +44,12 @@ public class DatabaseConnectionPerTransaction implements Database {
         this.enableForeignKeys = options.isEnableForeignKeys();
 
         queryLogger = new QueryLogger();
+        
+        this.options = options;
+    }
+
+    public DatabaseOptions getOptions() {
+        return options;
     }
     
     @Override

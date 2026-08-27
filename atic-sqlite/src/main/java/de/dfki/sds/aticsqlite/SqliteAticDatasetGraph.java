@@ -15,6 +15,11 @@ import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.RdfNodesAttachment;
 import de.dfki.sds.atic.agent.Session;
 import de.dfki.sds.atic.api.IdAndUri;
+import de.dfki.sds.atic.invex.ExternalComponents;
+import de.dfki.sds.atic.invex.InvexEmbedded;
+import de.dfki.sds.atic.invex.Normalizer;
+import de.dfki.sds.atic.invex.QueryOptions;
+import de.dfki.sds.atic.invex.QueryResults;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
@@ -30,6 +35,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -137,9 +143,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     private User adminUser;
 
     private SystemAticGraph systemGraph;
-    
+
     private Capabilities capabilities;
-    
+
+    private InvexEmbedded invexEmbedded;
+
     public SqliteAticDatasetGraph(Database db) {
         this(db, null);
     }
@@ -219,6 +227,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 throw new RuntimeException("Failed to bootstrap indices", ex);
             }
         });
+
+        bootstrapInvex();
     }
 
     /**
@@ -460,6 +470,36 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         );
     }
 
+    private void bootstrapInvex() {
+        ExternalComponents externalComponents = new ExternalComponents();
+        externalComponents.setNormalizer(new Normalizer() {
+            @Override
+            public String normalizeText(String text) {
+                return text;
+            }
+        });
+
+        Path invexPath = new File(db.getFolder(), "invex").toPath();
+
+        invexEmbedded = null;
+
+        try {
+            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+
+            Class<?> clazz = classLoader.loadClass(
+                    "de.dfki.sds.invex.core.InvexEmbeddedImpl"
+            );
+
+            invexEmbedded = (InvexEmbedded) clazz
+                    .getConstructor(Path.class, ExternalComponents.class)
+                    .newInstance(invexPath, externalComponents);
+
+        } catch (Throwable e) {
+            // INVEX is optional; leave invexEmbedded as null.
+        }
+
+    }
+
     /**
      * Generates a URN of the form {@code urn:atic:{type}-{UUID}} for creating unique resource identifiers.
      *
@@ -470,6 +510,68 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return "urn:atic:" + type + "-" + UUID.randomUUID();
     }
 
+    //============================================================
+    //invex
+    
+    public AticQueryResults initializeQuery(QueryOptions options) throws Exception {
+        QueryResults queryResults = invexEmbedded.initializeQuery(options);
+
+        AticQueryResults aticQueryResults = AticQueryResults.builder(queryResults).build();
+        return aticQueryResults;
+    }
+
+    public AticQueryResults proceedWithQuery(String queryProcessId) throws Exception {
+        QueryResults queryResults = invexEmbedded.proceedWithQuery(queryProcessId);
+
+        long[] foundResourceIds = queryResults.getFoundResourceIDs();
+        
+        List<Node> nodes = AticGraphUtils.resolveResourceIds(foundResourceIds, db);
+        
+        AticQueryResults aticQueryResults = AticQueryResults.builder(queryResults).foundNodes(nodes).build();
+        return aticQueryResults;
+    }
+
+    public void rebuildInvex() throws Exception {
+
+        File dbFile = new File(this.db.getOptions().getDbFilePath());
+
+        Path tempDir = Files.createTempDirectory("invex-rebuild-");
+
+        Path sourceDb = dbFile.toPath();
+        Path targetDb = tempDir.resolve(dbFile.getName());
+
+        Files.copy(
+                sourceDb,
+                targetDb,
+                StandardCopyOption.REPLACE_EXISTING
+        );
+
+        Path sourceWal = Path.of(dbFile.getAbsolutePath() + "-wal");
+        if (Files.exists(sourceWal)) {
+            Files.copy(
+                    sourceWal,
+                    tempDir.resolve(dbFile.getName() + "-wal"),
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+        }
+
+        Path sourceShm = Path.of(dbFile.getAbsolutePath() + "-shm");
+        if (Files.exists(sourceShm)) {
+            Files.copy(
+                    sourceShm,
+                    tempDir.resolve(dbFile.getName() + "-shm"),
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+        }
+
+        invexEmbedded.bootstrap(targetDb);
+    }
+
+    public boolean isInvexAvailable() {
+        return invexEmbedded != null;
+    }
+
+    //=========================================
     //query log =============================================================
     /**
      * Enables the SQLite query logger, writing all queries to the specified file path.
@@ -1007,7 +1109,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         try {
             isAgent = rs.getBoolean("is_agent");
         } catch (SQLException ignored) {
-            
+
         }
 
         if (isAgent) {
@@ -2295,10 +2397,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         for (Agent agent : agents) {
             //no message, no prompt
-            if(message == null || message.isBlank()) {
+            if (message == null || message.isBlank()) {
                 continue;
             }
-            
+
             Session session = agentSessionManager.getOrAddSession(principal, sessionId, agent, this, ctx);
 
             session.submit(
@@ -2795,7 +2897,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     public AticGraph getSystemGraph() {
         return getGraph(SystemAticGraph.node, false, InvocationContext.EMPTY);
     }
-    
+
     /**
      * Returns an {@link AticGraph} for the given node. Creates the graph if it does not exist. Handles virtual graphs and the union graph. Performs a READ
      * access control check.
@@ -2810,13 +2912,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     public AticGraph getGraph(org.apache.jena.graph.Node graphNode, InvocationContext ctx) {
         return getGraph(graphNode, true, ctx);
     }
-    
+
     public AticGraph getGraph(org.apache.jena.graph.Node graphNode, boolean createIfMissing, InvocationContext ctx) {
         //special system graph name
         if (graphNode.equals(SystemAticGraph.node)) {
             return systemGraph;
         }
-        
+
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         //special union Graph name
@@ -2852,8 +2954,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                     },
                     requestedUri
             );
-            
-            if(graphInfo == null && !createIfMissing) {
+
+            if (graphInfo == null && !createIfMissing) {
                 throw new IllegalStateException("Graph does not exist: " + graphNode);
             }
 
@@ -2969,7 +3071,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         Iterator<Node> iter = listGraphNodes(ctx, false);
-        
+
         return getUnionGraph(iter, ctx);
     }
 
@@ -3023,7 +3125,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         List<IdAndUri> idAndUris = new ArrayList<>();
 
         for (Node graphNode : requested) {
-            if(graphNode.equals(SystemAticGraph.node)) {
+            if (graphNode.equals(SystemAticGraph.node)) {
                 continue;
             }
 
@@ -3065,9 +3167,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         SqliteAticGraph sqliteAticGraph = new SqliteAticGraph(idAndUris, this);
 
         graphMap.put(key, sqliteAticGraph);
-        
+
         //in-memory union to allow to get a union of database-backed graphs and special system graph
-        if(requested.contains(SystemAticGraph.node)) {
+        if (requested.contains(SystemAticGraph.node)) {
             return new UnionAticGraph(sqliteAticGraph, systemGraph);
         }
 
@@ -3146,7 +3248,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                     },
                     params.toArray()
             );
-            
+
             //always the system graph
             nodes.add(SystemAticGraph.node);
 
@@ -3166,10 +3268,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     @Override
     public boolean containsGraph(Node graphNode, InvocationContext ctx) {
-        if(graphNode.equals(SystemAticGraph.node)) {
+        if (graphNode.equals(SystemAticGraph.node)) {
             return true;
         }
-        
+
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         boolean enableAC = !isAdmin(ctx);
@@ -3235,11 +3337,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     @Override
     public void addGraph(Node graphName, Graph graph, InvocationContext ctx) {
-        
-        if(graphName.equals(SystemAticGraph.node)) {
+
+        if (graphName.equals(SystemAticGraph.node)) {
             throw new IllegalStateException("Graph already exists: " + graphName);
         }
-        
+
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         String graphUri = graphName.getURI();
@@ -3313,10 +3415,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      * @param ctx the invocation context containing caller information
      */
     public void addVirtualGraph(Node graphName, String factoryMethodPath, JSONObject config, InvocationContext ctx) {
-        if(graphName.equals(SystemAticGraph.node)) {
+        if (graphName.equals(SystemAticGraph.node)) {
             throw new IllegalStateException("Graph already exists: " + graphName);
         }
-        
+
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         String graphUri = graphName.getURI();
@@ -3460,10 +3562,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     @Override
     public void removeGraph(Node graphName, InvocationContext ctx) {
-        if(graphName.equals(SystemAticGraph.node)) {
+        if (graphName.equals(SystemAticGraph.node)) {
             throw new IllegalArgumentException("Cannot delete system graph");
         }
-        
+
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
 
         boolean enableAC = !isAdmin(ctx);
@@ -4025,7 +4127,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         virtualGraphMap.clear();
 
         agentSessionManager.close();
-        
+
         try {
             db.close();
         } catch (Exception ex) {
