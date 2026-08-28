@@ -1,5 +1,6 @@
 package de.dfki.sds.aticsqlite;
 
+import de.dfki.sds.atic.invex.AticQueryResults;
 import burp.model.TriplesMap;
 import burp.parse.Parse;
 import de.dfki.sds.atic.ac.Agent;

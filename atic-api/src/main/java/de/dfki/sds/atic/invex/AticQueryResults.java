@@ -1,6 +1,6 @@
 
 
-package de.dfki.sds.aticsqlite;
+package de.dfki.sds.atic.invex;
 
 import de.dfki.sds.atic.invex.QueryResults;
 import java.util.List;

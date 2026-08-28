@@ -1,5 +1,6 @@
 package de.dfki.sds.aticsqlite;
 
+import de.dfki.sds.atic.invex.AticQueryResults;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.invex.QueryOptions;
