@@ -219,6 +219,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         });
 
         bootstrapSparqlFunctions();
+        
+        bootstrapInvex();
 
         this.executeWrite(() -> {
             try {
@@ -228,7 +230,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             }
         });
 
-        bootstrapInvex();
+        
     }
 
     /**
@@ -404,7 +406,12 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         // loop through definitions
         for (int i = 0; i < arr.length(); i++) {
             JSONObject idx = arr.getJSONObject(i);
-            String sql = idx.getString("sql");
+            
+            boolean load = !isInvexAvailable() || idx.optBoolean("essential", false);
+            
+            String key = load ? "create" : "drop";
+            
+            String sql = idx.getString(key);
             db.write(sql);
         }
     }
@@ -471,6 +478,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     private void bootstrapInvex() {
+        if(!capabilities.isInvexEnabled())
+            return;
+        
         ExternalComponents externalComponents = new ExternalComponents();
         externalComponents.setNormalizer(new Normalizer() {
             @Override
@@ -497,7 +507,6 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         } catch (Throwable e) {
             // INVEX is optional; leave invexEmbedded as null.
         }
-
     }
 
     /**
@@ -514,6 +523,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     //invex
     
     public AticQueryResults initializeQuery(QueryOptions options) throws Exception {
+        if(!isInvexAvailable()) {
+            throw new IllegalStateException("Invex not loaded");
+        }
+        
         QueryResults queryResults = invexEmbedded.initializeQuery(options);
 
         AticQueryResults aticQueryResults = AticQueryResults.builder(queryResults).build();
@@ -521,6 +534,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     public AticQueryResults proceedWithQuery(String queryProcessId) throws Exception {
+        if(!isInvexAvailable()) {
+            throw new IllegalStateException("Invex not loaded");
+        }
+        
         QueryResults queryResults = invexEmbedded.proceedWithQuery(queryProcessId);
 
         long[] foundResourceIds = queryResults.getFoundResourceIDs();
@@ -532,7 +549,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     public void rebuildInvex() throws Exception {
-
+        if(!isInvexAvailable()) {
+            throw new IllegalStateException("Invex not loaded");
+        }
+        
         File dbFile = new File(this.db.getOptions().getDbFilePath());
 
         Path tempDir = Files.createTempDirectory("invex-rebuild-");

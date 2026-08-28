@@ -29,7 +29,7 @@ public class PropertyTypeUnitTest {
 
     @BeforeEach
     void setup(@org.junit.jupiter.api.io.TempDir Path tempDir) throws Exception {
-        System.out.println(tempDir);
+        //System.out.println(tempDir);
 
         Path enabledPath = tempDir.resolve("enabled");
         Files.createDirectories(enabledPath);

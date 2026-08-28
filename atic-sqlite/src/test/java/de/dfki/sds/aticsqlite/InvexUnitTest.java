@@ -27,7 +27,7 @@ public class InvexUnitTest {
     @BeforeEach
     void setup(@TempDir Path tempDir) throws Exception {
         System.out.println(tempDir);
-        dataset = TL.createDatasetGraph(tempDir);
+        dataset = TL.createDatasetGraph(tempDir, Capabilities.builder().invexEnabled(true).build());
     }
 
     static boolean isInvexOnClasspath() {
@@ -99,6 +99,7 @@ public class InvexUnitTest {
         });
 
         assertTrue(results.isQueryAccepted());
+        assertTrue(results.isSuccess());
 
         assertEquals(2, results.getFoundNodes().size());
 

@@ -1,44 +1,54 @@
 [
     {
         "name": "idx_resource",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_resource ON resource_uri(uri, id);"
+        "create": "CREATE INDEX IF NOT EXISTS idx_resource ON resource_uri(uri, id);",
+        "drop": "DROP INDEX IF EXISTS idx_resource;",
+        "essential": true
     },
     {
         "name": "idx_property",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_property ON property(uri, id);"
+        "create": "CREATE INDEX IF NOT EXISTS idx_property ON property(uri, id);",
+        "drop": "DROP INDEX IF EXISTS idx_property;",
+        "essential": true
     },
-    
     {
         "name": "idx_gspo",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_gspl ON splg(g, p);"
+        "create": "CREATE INDEX IF NOT EXISTS idx_splg_splg ON splg(g, p);",
+        "drop": "DROP INDEX IF EXISTS idx_splg_splg;"
     },
     {
         "name": "idx_gpos",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_gpls ON splg(g, lex);"
+        "create": "CREATE INDEX IF NOT EXISTS idx_splg_gpls ON splg(g, lex);",
+        "drop": "DROP INDEX IF EXISTS idx_splg_gpls;"
     },
     {
         "name": "idx_gosp",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_glsp ON splg(g, s, lex);"
+        "create": "CREATE INDEX IF NOT EXISTS idx_splg_glsp ON splg(g, s, lex);",
+        "drop": "DROP INDEX IF EXISTS idx_splg_glsp;"
     },
     {
-        "name": "idx_gosp",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_splg_glsp ON splg(g, p, lex);"
+        "name": "idx_gosp_gp",
+        "create": "CREATE INDEX IF NOT EXISTS idx_splg_gp ON splg(g, p, lex);",
+        "drop": "DROP INDEX IF EXISTS idx_splg_gp;"
     },
-    
     {
         "name": "idx_spog_gp",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_gp ON spog(g, p);"
+        "create": "CREATE INDEX IF NOT EXISTS idx_spog_gp ON spog(g, p);",
+        "drop": "DROP INDEX IF EXISTS idx_spog_gp;"
     },
     {
         "name": "idx_spog_go",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_go ON spog(g, o);"
+        "create": "CREATE INDEX IF NOT EXISTS idx_spog_go ON spog(g, o);",
+        "drop": "DROP INDEX IF EXISTS idx_spog_go;"
     },
     {
         "name": "idx_spog_so",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_so ON spog(g, s, o);"
+        "create": "CREATE INDEX IF NOT EXISTS idx_spog_so ON spog(g, s, o);",
+        "drop": "DROP INDEX IF EXISTS idx_spog_so;"
     },
     {
         "name": "idx_spog_po",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_spog_po ON spog(g, p, o);"
+        "create": "CREATE INDEX IF NOT EXISTS idx_spog_po ON spog(g, p, o);",
+        "drop": "DROP INDEX IF EXISTS idx_spog_po;"
     }
 ]

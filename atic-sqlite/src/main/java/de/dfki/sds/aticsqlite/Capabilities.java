@@ -9,10 +9,12 @@ public final class Capabilities {
 
     private final boolean rdfStarEnabled;
     private final boolean propertyTypeAware;
+    private final boolean invexEnabled;
 
     private Capabilities(Builder builder) {
         this.rdfStarEnabled = builder.rdfStarEnabled;
         this.propertyTypeAware = builder.propertyTypeAware;
+        this.invexEnabled = builder.invexEnabled;
     }
 
     public boolean isRdfStarEnabled() {
@@ -21,6 +23,10 @@ public final class Capabilities {
 
     public boolean isPropertyTypeAware() {
         return propertyTypeAware;
+    }
+
+    public boolean isInvexEnabled() {
+        return invexEnabled;
     }
 
     public static Builder builder() {
@@ -33,6 +39,7 @@ public final class Capabilities {
 
         private boolean rdfStarEnabled = true;
         private boolean propertyTypeAware = false;
+        private boolean invexEnabled = false;
 
         private Builder() {
         }
@@ -44,6 +51,11 @@ public final class Capabilities {
 
         public Builder propertyTypeAware(boolean enabled) {
             this.propertyTypeAware = enabled;
+            return this;
+        }
+        
+        public Builder invexEnabled(boolean enabled) {
+            this.invexEnabled = enabled;
             return this;
         }
 
