@@ -1,8 +1,8 @@
 package de.dfki.sds.aticsqlite;
 
-import de.dfki.sds.atic.invex.AticQueryResults;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
+import de.dfki.sds.atic.invex.AticQueryResults;
 import de.dfki.sds.atic.invex.QueryOptions;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
@@ -78,7 +78,7 @@ public class InvexUnitTest {
         QueryOptions options = new QueryOptions();
         options.setSearchString("alice");
         options.setUserID(adminUser.getId());
-        options.setLimit(100000);
+        options.setLimit(100);
 
         AticQueryResults results = null;
         try {
@@ -88,6 +88,7 @@ public class InvexUnitTest {
         }
 
         assertTrue(results.isSuccess());
+        assertTrue(results.isQueryAccepted());
 
         String procID = results.getQueryProcessID();
         results = dataset.calculateRead(() -> {
