@@ -28,6 +28,8 @@ import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.ResultSetRewindable;
+import org.apache.jena.rdf.model.Model;
+import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.rdfpatch.changes.RDFChangesBase;
@@ -54,6 +56,8 @@ public class RdfJsonBridge {
 
     private final SparqlQueryBuilder sparqlQueryBuilder;
     private final ResultSetJsonMapper resultSetJsonMapper;
+
+    private final Model tmpModel = ModelFactory.createDefaultModel();
 
     public RdfJsonBridge() {
         this(
@@ -367,7 +371,7 @@ public class RdfJsonBridge {
 
                 payload.find().forEachRemaining(q -> {
                     // TODO later we need to support reverse
-                    datasetGraph.find(q.getGraph(), q.getSubject(), q.getPredicate(), Node.ANY)
+                    datasetGraph.find(q.getGraph(), q.getSubject(), q.getPredicate(), Node.ANY, ctx)
                             .forEachRemaining(deletes::add);
 
                     adds.add(q);
@@ -389,7 +393,7 @@ public class RdfJsonBridge {
                 //we modify the template: we remove limit so everything is queried and overwritten by PUT
                 JSONObject templateCopy = new JSONObject(template.toString());
                 removeAll(templateCopy, "$limit");
-                
+
                 Object dataFromQuery = toJson(queryParams, templateCopy, datasetGraph, ctx);
 
                 RDFPatch deletePatch = toPatch("DELETE", queryParams, dataFromQuery, template, uriSupplier, datasetGraph, ctx);
@@ -589,7 +593,8 @@ public class RdfJsonBridge {
         /*
          * Variable bindings established while materializing this object.
          */
-        Map<Var, Node> bindings = new HashMap<>();
+        //Map<Var, Node> bindings = new HashMap<>();
+        Map<Var, List<Node>> bindings = new HashMap<>();
 
         /*
          * Root subject.
@@ -609,7 +614,7 @@ public class RdfJsonBridge {
             );
         }
 
-        bindings.put(parsed.rootVariable(), subject);
+        bindings.put(parsed.rootVariable(), List.of(subject));
 
         /*
          * Bind JSON values.
@@ -624,6 +629,11 @@ public class RdfJsonBridge {
 
             Triple t = e.getValue();
 
+            List<Node> objects = toNodes(
+                    data.get(jsonKey),
+                    prefixes
+            );
+
             Node object = toNode(
                     data.get(jsonKey),
                     prefixes
@@ -631,12 +641,12 @@ public class RdfJsonBridge {
 
             bindings.put(
                     (Var) t.getObject(),
-                    object
+                    objects
             );
         }
 
         /*
-     * Allocate remaining resource variables.
+         * Allocate remaining resource variables.
          */
         for (Triple t : parsed.whereTriples()) {
 
@@ -646,7 +656,7 @@ public class RdfJsonBridge {
 
                 bindings.computeIfAbsent(
                         v,
-                        x -> NodeFactory.createBlankNode()
+                        x -> List.of(NodeFactory.createBlankNode())
                 );
             }
 
@@ -659,7 +669,7 @@ public class RdfJsonBridge {
 
                     bindings.put(
                             v,
-                            NodeFactory.createBlankNode()
+                            List.of(NodeFactory.createBlankNode())
                     );
                 }
             }
@@ -678,33 +688,39 @@ public class RdfJsonBridge {
 
         for (Triple pattern : parsed.whereTriples()) {
 
-            Node s = substitute(
+            List<Node> ss = substitute(
                     pattern.getSubject(),
                     bindings
             );
 
-            Node p = substitute(
+            List<Node> ps = substitute(
                     pattern.getPredicate(),
                     bindings
             );
 
-            Node o = substitute(
+            List<Node> os = substitute(
                     pattern.getObject(),
                     bindings
             );
 
-            if (s.isVariable()
-                    || p.isVariable()
-                    || o.isVariable()) {
+            if (ss.get(0).isVariable()
+                    || ps.get(0).isVariable()
+                    || os.get(0).isVariable()) {
                 requiresQuery = true;
                 break;
             } else {
-                Triple bound = Triple.create(
-                        s,
-                        p,
-                        o
-                );
-                whereTriplesBound.add(bound);
+                for (Node s : ss) {
+                    for (Node p : ps) {
+                        for (Node o : os) {
+                            Triple bound = Triple.create(
+                                    s,
+                                    p,
+                                    o
+                            );
+                            whereTriplesBound.add(bound);
+                        }
+                    }
+                }
             }
         }
 
@@ -730,17 +746,35 @@ public class RdfJsonBridge {
         }
 
         /*
-     * At least one variable remains unresolved. Query the dataset
-     * using the original graph pattern and the bindings established
-     * above.
+         * At least one variable remains unresolved. Query the dataset
+         * using the original graph pattern and the bindings established
+         * above.
          */
         ParameterizedSparqlString pss
                 = new ParameterizedSparqlString();
 
         pss.setNsPrefixes(prefixes);
 
-        StringBuilder sparql
-                = new StringBuilder("SELECT * WHERE {\n");
+        StringBuilder sparql = new StringBuilder("SELECT *\n");
+        
+        sparql.append("FROM <").append(graph).append(">\n");
+
+        sparql.append("WHERE {\n");
+        
+
+        for (Map.Entry<Var, List<Node>> entry : bindings.entrySet()) {
+
+            sparql.append(" VALUES ?")
+                    .append(entry.getKey().getVarName())
+                    .append(" { ");
+
+            for (Node node : entry.getValue()) {
+                sparql.append(NodeFmtLib.str(node, prefixMap))
+                      .append(" ");
+            }
+
+            sparql.append("}\n");
+        }
 
         for (Triple pattern : parsed.whereTriples()) {
 
@@ -766,14 +800,6 @@ public class RdfJsonBridge {
 
         pss.setCommandText(sparql.toString());
 
-        for (Map.Entry<Var, Node> entry : bindings.entrySet()) {
-
-            pss.setParam(
-                    entry.getKey().getVarName(),
-                    entry.getValue()
-            );
-        }
-
         Query query = pss.asQuery();
 
         //temporary dataset with context
@@ -788,8 +814,7 @@ public class RdfJsonBridge {
 
                 QuerySolution solution = results.next();
 
-                Map<Var, Node> completeBindings
-                        = new HashMap<>(bindings);
+                Map<Var, List<Node>> completeBindings = new HashMap<>(bindings);
 
                 solution.varNames().forEachRemaining(varName -> {
 
@@ -799,7 +824,7 @@ public class RdfJsonBridge {
 
                     completeBindings.put(
                             Var.alloc(varName),
-                            value
+                            List.of(value)
                     );
                 });
 
@@ -809,29 +834,36 @@ public class RdfJsonBridge {
                  */
                 for (Triple pattern : parsed.whereTriples()) {
 
-                    Node s = substitute(
+                    List<Node> ss = substitute(
                             pattern.getSubject(),
                             completeBindings
                     );
 
-                    Node p = substitute(
+                    List<Node> ps = substitute(
                             pattern.getPredicate(),
                             completeBindings
                     );
 
-                    Node o = substitute(
+                    List<Node> os = substitute(
                             pattern.getObject(),
                             completeBindings
                     );
 
-                    Quad q = Quad.create(
-                            graph,
-                            s,
-                            p,
-                            o
-                    );
+                    for (Node s : ss) {
+                        for (Node p : ps) {
+                            for (Node o : os) {
+                                Quad q = Quad.create(
+                                        graph,
+                                        s,
+                                        p,
+                                        o
+                                );
 
-                    payload.add(q);
+                                payload.add(q);
+                            }
+                        }
+                    }
+
                 }
             }
         }
@@ -868,7 +900,7 @@ public class RdfJsonBridge {
         return NodeFactory.createURI(graph);
     }
 
-    private Node substitute(
+    private Node substituteSingle(
             Node node,
             Map<Var, Node> bindings
     ) {
@@ -885,6 +917,20 @@ public class RdfJsonBridge {
         }
 
         return bound;
+    }
+
+    private List<Node> substitute(
+            Node node,
+            Map<Var, List<Node>> bindings
+    ) {
+        if (!node.isVariable()) {
+            return List.of(node);
+        }
+
+        return bindings.getOrDefault(
+                (Var) node,
+                List.of(node)
+        );
     }
 
     private ParsedTemplate parseWhere(
@@ -1199,6 +1245,204 @@ public class RdfJsonBridge {
         return NodeFactory.createLiteralString(
                 value.toString()
         );
+    }
+
+    private List<Node> toNodes(
+            Object value,
+            PrefixMapping prefixes
+    ) {
+
+        List<Node> nodes = new ArrayList<>();
+
+        if (value == null
+                || value == JSONObject.NULL) {
+
+            return nodes;
+        }
+
+        /*
+     * JSON array
+         */
+        if (value instanceof JSONArray array) {
+
+            for (int i = 0; i < array.length(); i++) {
+
+                nodes.addAll(
+                        toNodes(
+                                array.get(i),
+                                prefixes
+                        )
+                );
+            }
+
+            return nodes;
+        }
+
+        /*
+     * JSON-LD resource
+         */
+        if (value instanceof JSONObject obj
+                && obj.has("@id")) {
+
+            String uri = obj.getString("@id");
+
+            uri = expandUri(uri, prefixes);
+
+            nodes.add(NodeFactory.createURI(uri));
+
+            return nodes;
+        }
+
+        /*
+     * JSON-LD literal
+         */
+        if (value instanceof JSONObject obj
+                && obj.has("@value")) {
+
+            Object lexical = obj.get("@value");
+
+            String lang = obj.optString("@language", null);
+
+            if (lang != null && !lang.isBlank()) {
+
+                nodes.add(
+                        NodeFactory.createLiteralLang(
+                                lexical.toString(),
+                                lang
+                        )
+                );
+
+                return nodes;
+            }
+
+            String datatype = obj.optString("@type", null);
+
+            if (datatype != null && !datatype.isBlank()) {
+
+                datatype = expandUri(
+                        datatype,
+                        prefixes
+                );
+
+                nodes.add(
+                        NodeFactory.createLiteralDT(
+                                lexical.toString(),
+                                new BaseDatatype(datatype)
+                        )
+                );
+
+                return nodes;
+            }
+
+            nodes.add(
+                    NodeFactory.createLiteralString(
+                            lexical.toString()
+                    )
+            );
+
+            return nodes;
+        }
+
+        /*
+     * Native JSON values.
+         */
+        if (value instanceof Integer i) {
+
+            nodes.add(
+                    NodeFactory.createLiteralByValue(
+                            i,
+                            XSDDatatype.XSDinteger
+                    )
+            );
+
+            return nodes;
+        }
+
+        if (value instanceof Long l) {
+
+            nodes.add(
+                    NodeFactory.createLiteralByValue(
+                            l,
+                            XSDDatatype.XSDlong
+                    )
+            );
+
+            return nodes;
+        }
+
+        if (value instanceof Double d) {
+
+            nodes.add(
+                    NodeFactory.createLiteralByValue(
+                            d,
+                            XSDDatatype.XSDdouble
+                    )
+            );
+
+            return nodes;
+        }
+
+        if (value instanceof Float f) {
+
+            nodes.add(
+                    NodeFactory.createLiteralByValue(
+                            f,
+                            XSDDatatype.XSDfloat
+                    )
+            );
+
+            return nodes;
+        }
+
+        if (value instanceof Boolean b) {
+
+            nodes.add(
+                    NodeFactory.createLiteralByValue(
+                            b,
+                            XSDDatatype.XSDboolean
+                    )
+            );
+
+            return nodes;
+        }
+
+        /*
+     * String:
+     *  - full URI
+     *  - CURIE
+     *  - prefix name
+     *  - otherwise plain string
+         */
+        if (value instanceof String s) {
+
+            String expanded = expandUri(
+                    s,
+                    prefixes
+            );
+
+            if (!expanded.equals(s)) {
+
+                nodes.add(
+                        NodeFactory.createURI(expanded)
+                );
+
+                return nodes;
+            }
+
+            nodes.add(
+                    NodeFactory.createLiteralString(s)
+            );
+
+            return nodes;
+        }
+
+        nodes.add(
+                NodeFactory.createLiteralString(
+                        value.toString()
+                )
+        );
+
+        return nodes;
     }
 
     private String expandUri(
