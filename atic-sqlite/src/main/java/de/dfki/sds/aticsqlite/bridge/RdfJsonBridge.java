@@ -386,7 +386,11 @@ public class RdfJsonBridge {
                 //PUT means we have to do a toJson and collect the triples if they would be queried all
                 //so we delete the queried triples and insert the given ones to simulate a PUT
 
-                Object dataFromQuery = toJson(queryParams, template, datasetGraph, ctx);
+                //we modify the template: we remove limit so everything is queried and overwritten by PUT
+                JSONObject templateCopy = new JSONObject(template.toString());
+                removeAll(templateCopy, "$limit");
+                
+                Object dataFromQuery = toJson(queryParams, templateCopy, datasetGraph, ctx);
 
                 RDFPatch deletePatch = toPatch("DELETE", queryParams, dataFromQuery, template, uriSupplier, datasetGraph, ctx);
 
@@ -450,8 +454,10 @@ public class RdfJsonBridge {
             return;
         }
 
+        Node graph = getGraph(templateObj);
+
         /*
-     * Query node
+         * Query node
          */
         if (templateObj.has("$map")) {
 
@@ -468,6 +474,7 @@ public class RdfJsonBridge {
 
                 emitObject(
                         obj,
+                        graph,
                         parsed,
                         prefixes,
                         uriSupplier,
@@ -485,6 +492,7 @@ public class RdfJsonBridge {
 
                         emitObject(
                                 obj,
+                                graph,
                                 parsed,
                                 prefixes,
                                 uriSupplier,
@@ -567,6 +575,7 @@ public class RdfJsonBridge {
 
     private void emitObject(
             JSONObject data,
+            Node graph,
             ParsedTemplate parsed,
             PrefixMapping prefixes,
             Supplier<String> uriSupplier,
@@ -709,7 +718,7 @@ public class RdfJsonBridge {
 
                 payload.add(
                         Quad.create(
-                                Quad.defaultGraphIRI,
+                                graph,
                                 pattern.getSubject(),
                                 pattern.getPredicate(),
                                 pattern.getObject()
@@ -816,7 +825,7 @@ public class RdfJsonBridge {
                     );
 
                     Quad q = Quad.create(
-                            Quad.defaultGraphIRI,
+                            graph,
                             s,
                             p,
                             o
@@ -826,6 +835,37 @@ public class RdfJsonBridge {
                 }
             }
         }
+    }
+
+    private Node getGraph(JSONObject template) {
+        Object value = template.opt("$to");
+
+        if (value == null) {
+            value = template.opt("$from");
+        }
+
+        if (value == null) {
+            return Quad.defaultGraphIRI;
+        }
+
+        String graph;
+
+        if (value instanceof String) {
+            graph = (String) value;
+        } else if (value instanceof JSONArray array) {
+            if (array.length() != 1 || !(array.get(0) instanceof String)) {
+                throw new IllegalArgumentException(
+                        "$from or $to must be a string or an array containing exactly one string"
+                );
+            }
+            graph = array.getString(0);
+        } else {
+            throw new IllegalArgumentException(
+                    "$from or $to must be a string or an array containing exactly one string"
+            );
+        }
+
+        return NodeFactory.createURI(graph);
     }
 
     private Node substitute(
@@ -1195,4 +1235,29 @@ public class RdfJsonBridge {
         return key;
     }
 
+    private static void removeAll(Object value, String key) {
+        if (value instanceof JSONObject jsonObject) {
+            // Copy the keys because we modify the object while traversing it.
+            for (String currentKey : jsonObject.keySet().toArray(new String[0])) {
+                Object child = jsonObject.opt(currentKey);
+
+                if (currentKey.equals(key)) {
+                    jsonObject.remove(currentKey);
+                    continue;
+                }
+
+                if (child instanceof JSONObject || child instanceof JSONArray) {
+                    removeAll(child, key);
+                }
+            }
+        } else if (value instanceof JSONArray jsonArray) {
+            for (int i = 0; i < jsonArray.length(); i++) {
+                Object child = jsonArray.get(i);
+
+                if (child instanceof JSONObject || child instanceof JSONArray) {
+                    removeAll(child, key);
+                }
+            }
+        }
+    }
 }
