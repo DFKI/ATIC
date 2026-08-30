@@ -1370,8 +1370,33 @@ public class AticServer {
 
     //------------------------------------
     //bridge
-    private void handleBridge(Context ctx) {
+    private void handleBridge(Context ctx) throws IOException {
         String method = ctx.method().name();
+        
+        String accept = ctx.header("Accept");
+
+        if (method.equals("GET") && accept != null && accept.contains("text/html")) {
+
+            try (InputStream is = AticServer.class.getResourceAsStream(
+                    "/de/dfki/sds/aticserver/www/app/bridge.html")) {
+
+                if (is == null) {
+                    ctx.status(404).result("bridge.html not found");
+                    return;
+                }
+
+                String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+
+                //TODO later use better html render engine
+                html = html.replace("{{defaultTimeout}}", "" + config.bridgeTimeout);
+                html = html.replace("{{defaultTemplate}}", config.bridgeDefaulTemplate.trim());
+                html = html.replace("{{instanceName}}", config.instanceName);
+                html = html.replace("{{token}}", getToken(ctx));
+
+                ctx.html(html);
+                return;
+            }
+        }
 
         InvocationContext ictx = fromJavalinContext(ctx);
 
@@ -1426,6 +1451,7 @@ public class AticServer {
                     );
                 });
 
+                ctx.contentType("application/rdf-patch");
                 ctx.result(RDFPatchOps.str(patch));
                 
                 break;

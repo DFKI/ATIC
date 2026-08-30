@@ -62,6 +62,28 @@ PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 PREFIX dcat: <http://www.w3.org/ns/dcat#>
 PREFIX ex: <http://example.org/>
 """;
+    
+    @Config(value = "bridge.timeout", description = "Timeout in ms when bridge calculation should be canceled")
+    int bridgeTimeout = 30000;
+    
+    @Config(value = "bridge.defaulttemplate", description = "The default template in Bridge UI")
+    String bridgeDefaulTemplate = """
+{
+    "$type": "array",
+    "$map": {
+        "@id": "?subject",
+        "name": "?label"
+    },
+    "$from": ["urn:graph:sds"],
+    "$where": [
+        "?subject rdfs:label ?label"
+    ],
+    "$limit": 5,
+    "@context": {
+        "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+    }
+}                                                                  
+""";
 
     @Config(value = "rdfpatch.rotationinterval", description = "RDFPatch rotation interval in seconds")
     long rdfpatchRotationinterval = 60 * 60 * 24;

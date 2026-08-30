@@ -11,6 +11,7 @@ import org.apache.jena.sparql.core.Var;
 import org.apache.jena.sparql.engine.binding.Binding;
 import org.json.JSONArray;
 import org.json.JSONObject;
+
 public class SparqlQueryBuilder {
 
     public String build(
@@ -21,41 +22,33 @@ public class SparqlQueryBuilder {
     ) {
         JSONObject context = root.optJSONObject("@context");
 
-        ParameterizedSparqlString pss =
-                new ParameterizedSparqlString();
-
+        ParameterizedSparqlString pss
+                = new ParameterizedSparqlString();
 
         appendPrefixes(
                 pss,
                 context
         );
 
-
-        StringBuilder sparql =
-                new StringBuilder();
-
+        StringBuilder sparql
+                = new StringBuilder();
 
         sparql.append("SELECT ");
-
 
         if (template.optBoolean("$distinct", false)) {
             sparql.append("DISTINCT ");
         }
 
-
         sparql.append(
                 buildSelectClause(template)
         );
-
 
         appendFrom(
                 sparql,
                 template
         );
 
-
         sparql.append("\nWHERE {\n");
-
 
         appendValues(
                 sparql,
@@ -63,48 +56,39 @@ public class SparqlQueryBuilder {
                 binding
         );
 
-
         appendWhere(
                 sparql,
                 template
         );
-
 
         appendFilters(
                 sparql,
                 template
         );
 
-
         sparql.append("}\n");
-
 
         appendGroupBy(
                 sparql,
                 template
         );
 
-
         appendOrderBy(
                 sparql,
                 template
         );
-
 
         appendLimitOffset(
                 sparql,
                 template
         );
 
-
         pss.setCommandText(
                 sparql.toString()
         );
 
-
         return pss.toString();
     }
-
 
     private void appendPrefixes(
             ParameterizedSparqlString pss,
@@ -114,23 +98,19 @@ public class SparqlQueryBuilder {
             return;
         }
 
-
         for (String key : context.keySet()) {
 
-            Object value =
-                    context.get(key);
-
+            Object value
+                    = context.get(key);
 
             if (!(value instanceof String uri)) {
                 continue;
             }
 
-
             if (!uri.endsWith("#")
                     && !uri.endsWith("/")) {
                 continue;
             }
-
 
             pss.setNsPrefix(
                     key,
@@ -139,41 +119,34 @@ public class SparqlQueryBuilder {
         }
     }
 
-
     private String buildSelectClause(
             JSONObject template
     ) {
 
-        JSONObject map =
-                template.optJSONObject("$map");
-
+        JSONObject map
+                = template.optJSONObject("$map");
 
         if (map == null) {
             return "*";
         }
 
-
-        Set<String> vars =
-                new LinkedHashSet<>();
-
+        Set<String> vars
+                = new LinkedHashSet<>();
 
         collectVariables(
                 map,
                 vars
         );
 
-
         if (vars.isEmpty()) {
             return "*";
         }
-
 
         return String.join(
                 " ",
                 vars
         );
     }
-
 
     private void collectVariables(
             JSONObject obj,
@@ -182,9 +155,8 @@ public class SparqlQueryBuilder {
 
         for (String key : obj.keySet()) {
 
-            Object value =
-                    obj.get(key);
-
+            Object value
+                    = obj.get(key);
 
             if (value instanceof String s) {
 
@@ -195,7 +167,6 @@ public class SparqlQueryBuilder {
                 continue;
             }
 
-
             if (value instanceof JSONObject child) {
 
                 /*
@@ -205,13 +176,11 @@ public class SparqlQueryBuilder {
                     continue;
                 }
 
-
                 collectVariables(
                         child,
                         vars
                 );
             }
-
 
             if (value instanceof JSONArray array) {
 
@@ -222,7 +191,6 @@ public class SparqlQueryBuilder {
             }
         }
     }
-
 
     private void collectVariables(
             JSONArray array,
@@ -241,25 +209,27 @@ public class SparqlQueryBuilder {
         }
     }
 
-
     private void appendFrom(
             StringBuilder sparql,
             JSONObject template
     ) {
-
-        JSONArray from =
-                template.optJSONArray("$from");
-
+        Object from = template.opt("$from");
 
         if (from == null) {
             return;
         }
 
+        if (from instanceof JSONArray) {
+            JSONArray fromArray = (JSONArray) from;
 
-        for (int i = 0; i < from.length(); i++) {
-
-            sparql.append("FROM <")
-                    .append(from.getString(i))
+            for (int i = 0; i < fromArray.length(); i++) {
+                sparql.append("\nFROM <")
+                        .append(fromArray.getString(i))
+                        .append(">\n");
+            }
+        } else {
+            sparql.append("\nFROM <")
+                    .append(from.toString())
                     .append(">\n");
         }
     }
@@ -274,62 +244,50 @@ public class SparqlQueryBuilder {
         if (binding != null
                 && !binding.isEmpty()) {
 
-            Iterator<Var> vars =
-                    binding.vars();
-
+            Iterator<Var> vars
+                    = binding.vars();
 
             while (vars.hasNext()) {
 
-                Var var =
-                        vars.next();
+                Var var
+                        = vars.next();
 
-
-                Node node =
-                        binding.get(var);
-
+                Node node
+                        = binding.get(var);
 
                 sparql.append("VALUES ")
                         .append(var)
                         .append(" { ");
-
 
                 appendNode(
                         sparql,
                         node
                 );
 
-
                 sparql.append(" }\n");
             }
         }
-
 
         if (queryParams == null) {
             return;
         }
 
+        for (Map.Entry<String, List<String>> entry
+                : queryParams.entrySet()) {
 
-        for (Map.Entry<String,List<String>> entry :
-                queryParams.entrySet()) {
-
-
-            String variable =
-                    entry.getKey();
-
+            String variable
+                    = entry.getKey();
 
             if (!variable.startsWith("?")) {
                 variable = "?" + variable;
             }
 
-
             sparql.append("VALUES ")
                     .append(variable)
                     .append(" {\n");
 
-
-            for (String value :
-                    entry.getValue()) {
-
+            for (String value
+                    : entry.getValue()) {
 
                 sparql.append("  ");
 
@@ -341,59 +299,49 @@ public class SparqlQueryBuilder {
                 sparql.append("\n");
             }
 
-
             sparql.append("}\n");
         }
     }
-
 
     private void appendWhere(
             StringBuilder sparql,
             JSONObject template
     ) {
 
-        JSONArray where =
-                template.optJSONArray("$where");
-
+        JSONArray where
+                = template.optJSONArray("$where");
 
         if (where == null) {
             return;
         }
 
-
         for (int i = 0; i < where.length(); i++) {
 
-            String pattern =
-                    where.getString(i);
-
+            String pattern
+                    = where.getString(i);
 
             sparql.append("  ")
                     .append(pattern);
-
 
             if (!pattern.trim().endsWith(".")) {
                 sparql.append(" .");
             }
 
-
             sparql.append("\n");
         }
     }
-
 
     private void appendFilters(
             StringBuilder sparql,
             JSONObject template
     ) {
 
-        JSONArray filters =
-                template.optJSONArray("$filter");
-
+        JSONArray filters
+                = template.optJSONArray("$filter");
 
         if (filters == null) {
             return;
         }
-
 
         for (int i = 0; i < filters.length(); i++) {
 
@@ -402,7 +350,6 @@ public class SparqlQueryBuilder {
                     .append(")\n");
         }
     }
-
 
     private void appendGroupBy(
             StringBuilder sparql,
@@ -416,7 +363,6 @@ public class SparqlQueryBuilder {
         );
     }
 
-
     private void appendOrderBy(
             StringBuilder sparql,
             JSONObject template
@@ -429,7 +375,6 @@ public class SparqlQueryBuilder {
         );
     }
 
-
     private void appendExpressionList(
             StringBuilder sparql,
             JSONArray array,
@@ -440,10 +385,8 @@ public class SparqlQueryBuilder {
             return;
         }
 
-
         sparql.append(keyword)
                 .append(" ");
-
 
         for (int i = 0; i < array.length(); i++) {
 
@@ -454,10 +397,8 @@ public class SparqlQueryBuilder {
             sparql.append(" ");
         }
 
-
         sparql.append("\n");
     }
-
 
     private void appendLimitOffset(
             StringBuilder sparql,
@@ -471,7 +412,6 @@ public class SparqlQueryBuilder {
                     .append("\n");
         }
 
-
         if (template.has("$offset")) {
 
             sparql.append("OFFSET ")
@@ -479,7 +419,6 @@ public class SparqlQueryBuilder {
                     .append("\n");
         }
     }
-
 
     private void appendNode(
             StringBuilder sparql,
@@ -498,7 +437,6 @@ public class SparqlQueryBuilder {
         }
     }
 
-
     private void appendValue(
             StringBuilder sparql,
             String value
@@ -513,7 +451,6 @@ public class SparqlQueryBuilder {
 
             return;
         }
-
 
         sparql.append(value);
     }
