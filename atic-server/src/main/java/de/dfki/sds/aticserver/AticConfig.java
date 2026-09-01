@@ -91,6 +91,28 @@ PREFIX ex: <http://example.org/>
     @Config(value = "rdf-star", description = "Enable RDF-Star support")
     boolean rdfStarEnabled = true;
     
+    @Config(value = "cors.allowhost", description = "Use this to set a URL that is allowed to access ATIC server")
+    String corsAllowHost = null;
+    
+    @Config(value = "cors.allowcredentials", description = "Use this to allow login to ATIC server with CORS")
+    boolean corsAllowCredentials = true;
+
+    public int getBridgeTimeout() {
+        return bridgeTimeout;
+    }
+
+    public String getBridgeDefaulTemplate() {
+        return bridgeDefaulTemplate;
+    }
+
+    public String getCorsAllowHost() {
+        return corsAllowHost;
+    }
+
+    public boolean isCorsAllowCredentials() {
+        return corsAllowCredentials;
+    }
+    
     public int getPort() {
         return port;
     }

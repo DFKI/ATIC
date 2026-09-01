@@ -213,6 +213,17 @@ public class AticServer {
                 staticFiles.location = Location.CLASSPATH;
             });
 
+            if(config.getCorsAllowHost() != null) {
+                javalinConf.bundledPlugins.enableCors(cors -> {
+                    cors.addRule(rule -> {
+                            rule.allowHost(config.getCorsAllowHost());
+                            rule.allowCredentials = config.isCorsAllowCredentials();
+                        }
+                    );
+                });
+                javalinConf.bundledPlugins.enableHttpAllowedMethodsOnRoutes();
+            }
+            
             javalinConf.routes.exception(PermissionDeniedException.class, (e, ctx) -> {
                 ctx.status(HttpStatus.FORBIDDEN);
                 ctx.result(e.getMessage());
@@ -231,18 +242,18 @@ public class AticServer {
                     ctx.redirect(path.substring(0, path.length() - 1));
                 }
             });
-            
+
             initRoutes(javalinConf.routes);
-            
+
             initCDCE(javalinConf.routes);
-            
+
             initMoleculeEndpoint(javalinConf.routes);
-            
+
             if (additionalInit != null) {
                 additionalInit.accept(javalinConf, config);
             }
         });
-        
+
         app.start(config.getHost(), config.getPort());
         LOGGER.info(() -> "atic server running at http://" + config.getHost() + ":" + config.getPort());
     }
@@ -1372,7 +1383,7 @@ public class AticServer {
     //bridge
     private void handleBridge(Context ctx) throws IOException {
         String method = ctx.method().name();
-        
+
         String accept = ctx.header("Accept");
 
         if (method.equals("GET") && accept != null && accept.contains("text/html")) {
@@ -1430,10 +1441,10 @@ public class AticServer {
             case "PUT":
             case "PATCH":
             case "DELETE":
-                
+
                 Map<String, List<String>> queryParamsForPatch
                         = ctx.queryParamMap();
-                
+
                 JSONObject request
                         = new JSONObject(
                                 ctx.body()
@@ -1441,19 +1452,19 @@ public class AticServer {
 
                 RDFPatch patch = datasetGraph.calculateRead(() -> {
                     return rdfJsonBridge.toPatch(
-                        method, 
-                        queryParamsForPatch,
-                        request.get("data"), 
-                        request.getJSONObject("template"),
-                        () -> "urn:atic:resource-" + UUID.randomUUID(),
-                        datasetGraph,
-                        ictx
+                            method,
+                            queryParamsForPatch,
+                            request.get("data"),
+                            request.getJSONObject("template"),
+                            () -> "urn:atic:resource-" + UUID.randomUUID(),
+                            datasetGraph,
+                            ictx
                     );
                 });
 
                 ctx.contentType("application/rdf-patch");
                 ctx.result(RDFPatchOps.str(patch));
-                
+
                 break;
 
             default:
@@ -1886,6 +1897,10 @@ public class AticServer {
     }
 
     private void authorizationMiddleware(Context ctx) {
+        if(ctx.method() == HandlerType.OPTIONS) {
+            return;
+        }
+        
         // Allow static files without auth
         String path = ctx.path();
         // Skip JWT auth for public static paths
