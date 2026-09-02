@@ -1,6 +1,5 @@
 package de.dfki.sds.aticsqlite;
 
-import de.dfki.sds.atic.invex.AticQueryResults;
 import burp.model.TriplesMap;
 import burp.parse.Parse;
 import de.dfki.sds.atic.ac.Agent;
@@ -16,6 +15,7 @@ import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.RdfNodesAttachment;
 import de.dfki.sds.atic.agent.Session;
 import de.dfki.sds.atic.api.IdAndUri;
+import de.dfki.sds.atic.invex.AticQueryResults;
 import de.dfki.sds.atic.invex.ExternalComponents;
 import de.dfki.sds.atic.invex.InvexEmbedded;
 import de.dfki.sds.atic.invex.Normalizer;
@@ -4148,6 +4148,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         virtualGraphMap.clear();
 
         agentSessionManager.close();
+        
+        if(invexEmbedded != null) {
+            try {
+                invexEmbedded.shutdown();
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        }
 
         try {
             db.close();

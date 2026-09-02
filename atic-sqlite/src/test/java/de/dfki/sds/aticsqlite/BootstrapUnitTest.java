@@ -57,6 +57,8 @@ public class BootstrapUnitTest {
         } finally {
             dataset.end();
         }
+        
+        dataset.close();
     }
 
     @Test
@@ -89,6 +91,8 @@ public class BootstrapUnitTest {
         } finally {
             dataset.end();
         }
+        
+        dataset.close();
     }
 
     @Test
@@ -105,6 +109,8 @@ public class BootstrapUnitTest {
                 dataset.end();
             }
         });
+        
+        dataset.close();
     }
 
     @Test
@@ -137,7 +143,15 @@ public class BootstrapUnitTest {
         } finally {
             dataset.end();
         }
+        
+        dataset.close();
     }
     
-    
+    @Test
+    void testInvexClose(@TempDir Path tempDir) throws Exception {
+        Capabilities cap = Capabilities.builder().invexEnabled(true).build();
+        SqliteAticDatasetGraph dataset = TL.createDatasetGraph(tempDir, cap);
+        dataset.close();
+    }
+
 }
