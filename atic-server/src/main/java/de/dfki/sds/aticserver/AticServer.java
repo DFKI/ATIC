@@ -599,7 +599,7 @@ public class AticServer {
                     "Location",
                     "/graph/" + URLEncoder.encode(graphNode.getURI(), StandardCharsets.UTF_8)
             );
-            ctx.header("Atic-Resource-URI", graphNode.getURI());
+            ctx.header(AticHeaders.RESOURCE_URI, graphNode.getURI());
 
             ctx.status(201).json(Map.of(
                     "success", true,
@@ -959,7 +959,7 @@ public class AticServer {
         Dataset dataset = DatasetFactory.wrap(datasetGraph);
         AticServer.transferContext(ctx, dataset.getContext());
 
-        String timeoutHeader = ctx.header("Atic-Timeout");
+        String timeoutHeader = ctx.header(AticHeaders.TIMEOUT);
 
         // Parse timeout safely
         int timeout;
@@ -1058,7 +1058,7 @@ public class AticServer {
         Dataset dataset = DatasetFactory.wrap(datasetGraph);
         AticServer.transferContext(ctx, dataset.getContext());
 
-        String timeoutHeader = ctx.header("Atic-Timeout");
+        String timeoutHeader = ctx.header(AticHeaders.TIMEOUT);
 
         // Parse timeout safely
         int timeout;
@@ -1456,15 +1456,40 @@ public class AticServer {
                             queryParamsForPatch,
                             request.get("data"),
                             request.getJSONObject("template"),
-                            () -> "urn:atic:resource-" + UUID.randomUUID(),
+                            () -> SqliteAticDatasetGraph.createURNForResource(),
                             datasetGraph,
                             ictx
                     );
                 });
+                
+                //dry run is by default on false, only when explicitly set in headers
+                boolean dryRun = "true".equalsIgnoreCase(ctx.header(AticHeaders.DRY_RUN));
+                if (!dryRun) {
+                    datasetGraph.executeWrite(() -> {
+                        datasetGraph.apply(patch, ictx);
+                    });
+                }
+                
+                String rdfPatchResp = RDFPatchOps.str(patch);
+                
+                //TODO if we use another mime type like application/rdf-patch it is base64 encoded...
+                ctx.contentType("text/plain");
+                ctx.result(rdfPatchResp);
+                
+                //ctx.header("Content-Type", "application/rdf-patch");
+                
+                //ctx.contentType("application/rdf-patch; charset=utf-8");
+                //ctx.result(rdfPatchResp.getBytes(StandardCharsets.UTF_8));
+                
+                //ctx.res().setContentType("application/rdf-patch; charset=UTF-8");
+                //ctx.res().getOutputStream().write(rdfPatchResp.getBytes(StandardCharsets.UTF_8));
 
-                ctx.contentType("application/rdf-patch");
-                ctx.result(RDFPatchOps.str(patch));
-
+                //ctx.res().setContentType("application/rdf-patch");
+                //ctx.res().setCharacterEncoding("UTF-8");
+                //ctx.res().getOutputStream().write(
+                //    rdfPatchResp.getBytes(StandardCharsets.UTF_8)
+                //);
+                
                 break;
 
             default:

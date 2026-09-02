@@ -470,11 +470,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     /**
      * Generates a URN of the form {@code urn:atic:{type}-{UUID}} for creating unique resource identifiers.
      *
-     * @param type the type prefix for the URN (e.g., "user", "group", "graph")
+     * @param type the type prefix for the URN (e.g., "resource", "blanknode", "user", "group", "graph", "session")
      * @return the generated URN string
      */
-    /*package*/ String createURN(String type) {
+    public static String createURN(String type) {
         return "urn:atic:" + type + "-" + UUID.randomUUID();
+    }
+    
+    public static String createURNForResource() {
+        return createURN("resource");
     }
 
     //query log =============================================================

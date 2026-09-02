@@ -229,7 +229,7 @@ public class ConfigDrivenCrudEndpointsUnitTest {
         String location = response.headers().firstValue("Location").get();
         assertTrue(location.startsWith("/person/"));
 
-        String resURI = response.headers().firstValue("Atic-Resource-URI").get();
+        String resURI = response.headers().firstValue(AticHeaders.RESOURCE_URI).get();
         assertTrue(resURI.startsWith("urn:atic:"));
 
         url = "http://" + host + ":" + port + "/person";
@@ -314,8 +314,8 @@ public class ConfigDrivenCrudEndpointsUnitTest {
         String personLocation = locationHeader.get();
         assertNotNull(personLocation);
 
-        Optional<String> aticResourceUriHeader = response.headers().firstValue("Atic-Resource-URI");
-        assertTrue(aticResourceUriHeader.isPresent(), "POST response should contain Atic-Resource-URI header");
+        Optional<String> aticResourceUriHeader = response.headers().firstValue(AticHeaders.RESOURCE_URI);
+        assertTrue(aticResourceUriHeader.isPresent(), "POST response should contain "+ AticHeaders.RESOURCE_URI +" header");
 
         String aticResourceUri = aticResourceUriHeader.get();
         assertNotNull(aticResourceUri);
@@ -682,7 +682,7 @@ public class ConfigDrivenCrudEndpointsUnitTest {
 
         assertTrue(response.statusCode() == 200 || response.statusCode() == 201 || response.statusCode() == 204);
 
-        String resURI = response.headers().firstValue("Atic-Resource-URI").get();
+        String resURI = response.headers().firstValue(AticHeaders.RESOURCE_URI).get();
         assertTrue(resURI.startsWith("urn:atic:"));
     }
 
@@ -752,7 +752,7 @@ public class ConfigDrivenCrudEndpointsUnitTest {
         );
 
         String location = postResponse.headers().firstValue("Location").get();
-        String aticUri = postResponse.headers().firstValue("Atic-Resource-URI").get();
+        String aticUri = postResponse.headers().firstValue(AticHeaders.RESOURCE_URI).get();
 
         // ---- VERIFY PERSON ----
         HttpRequest getRequest = HttpRequest.newBuilder()

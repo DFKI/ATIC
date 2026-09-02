@@ -236,7 +236,7 @@ public class GraphEndpointAticServerUnitTest {
         // ---- extract generated URI from header ----
         String generatedUri = postResponse.headers()
                 .firstValue("Atic-Resource-URI")
-                .orElseThrow(() -> new AssertionError("Missing Atic-Resource-URI header"));
+                .orElseThrow(() -> new AssertionError("Missing "+ AticHeaders.RESOURCE_URI +" header"));
 
         System.out.println("Generated graph URI: " + generatedUri);
 

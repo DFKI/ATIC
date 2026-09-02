@@ -403,8 +403,7 @@ public class ConfigDrivenCrudEndpoints {
                 ctx.status(HttpStatus.NO_CONTENT);
                 Entry<Resource, String> entry = res2url.entrySet().iterator().next();
                 ctx.header("Location", entry.getValue());
-                //TODO should also be a public final static attribute somewhere
-                ctx.header("Atic-Resource-URI", entry.getKey().getURI());
+                ctx.header(AticHeaders.RESOURCE_URI, entry.getKey().getURI());
 
             } else {
                 //created when more then one is created
