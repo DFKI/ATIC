@@ -352,6 +352,11 @@ public class ResultSetJsonMapper {
         json.put("@id", subject.getURI());
 
         for (FragmentProperty fp : fragmentSetting) {
+            
+            //we do not need again @type for a type
+            if(fp.key().equals("@type") && !expandType) {
+                continue;
+            }
 
             Node predicate = fp.property;
 
@@ -378,14 +383,11 @@ public class ResultSetJsonMapper {
             }
 
             if (object != null) {
-                
-                //TODO for @type get fragment to have more info about it
-
                 Object o = toJson(ModelFactory.createDefaultModel().asRDFNode(object));
                 
                 json.put(fp.key, o);
                 
-                if(fp.key.equals("@type") && expandType) {
+                if(fp.key.equals("@type")) {
                     resolveFragment((JSONObject) o, object.getURI(), qs, datasetGraph, ctx, binding, prefixes, false);
                 }
             }

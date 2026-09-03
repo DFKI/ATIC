@@ -250,7 +250,7 @@ public class RdfJsonBridge {
                     binding,
                     prefixes,
                     (JSONObject childTemplate, Binding childBinding) -> executeQuery(
-                            childTemplate,
+                            inherit(template, childTemplate),
                             root,
                             queryParams,
                             datasetGraph,
@@ -299,6 +299,19 @@ public class RdfJsonBridge {
                 JSONObject template,
                 Binding binding
         );
+    }
+
+    private JSONObject inherit(JSONObject parentTemplate, JSONObject childTemplate) {
+        JSONObject retTemplate = new JSONObject(childTemplate.toString());
+
+        if (parentTemplate.has("$from")
+                && !retTemplate.has("$from")
+                && retTemplate.has("$where")) {
+
+            retTemplate.put("$from", parentTemplate.get("$from"));
+        }
+
+        return retTemplate;
     }
 
     //====================================================================
@@ -528,7 +541,7 @@ public class RdfJsonBridge {
 
                     Object childTemplate = mapJsonObject.get(key);
 
-                    if (!(childTemplate instanceof JSONObject)) {
+                    if (!(childTemplate instanceof JSONObject childTemplateObj)) {
                         continue;
                     }
 
@@ -536,7 +549,7 @@ public class RdfJsonBridge {
 
                         walk(
                                 obj.get(key),
-                                childTemplate,
+                                inherit(templateObj, childTemplateObj),
                                 prefixes,
                                 uriSupplier,
                                 method,
@@ -756,11 +769,10 @@ public class RdfJsonBridge {
         pss.setNsPrefixes(prefixes);
 
         StringBuilder sparql = new StringBuilder("SELECT *\n");
-        
+
         sparql.append("FROM <").append(graph).append(">\n");
 
         sparql.append("WHERE {\n");
-        
 
         for (Map.Entry<Var, List<Node>> entry : bindings.entrySet()) {
 
@@ -770,7 +782,7 @@ public class RdfJsonBridge {
 
             for (Node node : entry.getValue()) {
                 sparql.append(NodeFmtLib.str(node, prefixMap))
-                      .append(" ");
+                        .append(" ");
             }
 
             sparql.append("}\n");
