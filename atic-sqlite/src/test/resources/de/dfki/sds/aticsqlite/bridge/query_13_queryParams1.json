@@ -1,0 +1,21 @@
+{
+    "template": {
+        "$type": "array",
+        "$map": {
+            "@id": "?person"
+        },
+        "$where": [
+            "?person a schema:Person"
+        ],
+        "@context": {
+            "foaf": "http://xmlns.com/foaf/0.1/",
+            "schema": "https://schema.org/",
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+        }
+    },
+    "expected": [{"@id": "https://example.org/id/alice-smith"}],
+    "data": "data_01_bridge_persons.ttl",
+    "params": {
+        "person": "https://example.org/id/alice-smith"
+    }
+}

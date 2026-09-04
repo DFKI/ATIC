@@ -47,6 +47,7 @@ public class RdfJsonBridgeUnitTest {
     private RdfJsonBridge rdfJsonBridge;
     private SqliteAticDatasetGraph dataset;
     
+    private static final boolean PRINT_QUERY = true;
     private static final boolean PRINT_MODIF = true;
 
     @BeforeEach
@@ -111,6 +112,22 @@ public class RdfJsonBridgeUnitTest {
     public void defaultBindings() throws Exception {
         runQueryTest("11_defaultBindings");
     }
+    
+    @Test
+    public void pagination() throws Exception {
+        runQueryTest("12_pagination");
+    }
+    
+    @Test
+    public void queryParams1() throws Exception {
+        runQueryTest("13_queryParams1");
+    }
+    
+    @Test
+    public void queryParams2() throws Exception {
+        runQueryTest("14_queryParams2");
+    }
+    
 
     //=========================
     //modification tests
@@ -183,6 +200,16 @@ public class RdfJsonBridgeUnitTest {
             return rdfJsonBridge.toJson(queryParams, template, dataset, ctx);
         });
 
+        if(PRINT_QUERY) {
+            if(actual instanceof JSONObject jo) {
+                System.out.println(jo.toString(4));
+            } else if(actual instanceof JSONArray ja) {
+                System.out.println(ja.toString(4));
+            } else {
+                System.out.println(actual);
+            }
+        }
+        
         JSONCompare.assertMatches(expected.toString(), actual.toString(),
                 Set.of(
                         CompareMode.JSON_ARRAY_NON_EXTENSIBLE,
@@ -251,7 +278,7 @@ public class RdfJsonBridgeUnitTest {
     private void loadData(String filename) throws IOException {
         InputStream is = RdfJsonBridgeUnitTest.class.getResourceAsStream("/de/dfki/sds/aticsqlite/bridge/" + filename);
         if (is == null) {
-            throw new RuntimeException("01_molecule_testdata.ttl not found");
+            throw new RuntimeException(filename + " not found");
         }
         String ttl = IOUtils.toString(is, StandardCharsets.UTF_8);
 

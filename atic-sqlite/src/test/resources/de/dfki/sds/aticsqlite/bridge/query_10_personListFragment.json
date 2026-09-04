@@ -16,16 +16,14 @@
     },
     "expected": [
         {
+            "@id": "https://example.org/id/alice-smith",
             "@type": {
-                "@type": {
-                    "@id": "http://www.w3.org/2000/01/rdf-schema#Class"
-                },
+                "@id": "https://schema.org/Person",
                 "icon": "https://example.org/icon/person",
                 "comment": {
                     "@value": "A person",
                     "@language": "en"
                 },
-                "@id": "https://schema.org/Person",
                 "label": "Person"
             },
             "icon": "https://example.org/icon/alice",
@@ -33,20 +31,17 @@
                 "@value": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects.",
                 "@language": "en"
             },
-            "@id": "https://example.org/id/alice-smith",
             "label": "Alice Smith"
         },
         {
+            "@id": "https://example.org/id/bob-johnson",
             "@type": {
-                "@type": {
-                    "@id": "http://www.w3.org/2000/01/rdf-schema#Class"
-                },
+                "@id": "https://schema.org/Person",
                 "icon": "https://example.org/icon/person",
                 "comment": {
                     "@value": "A person",
                     "@language": "en"
                 },
-                "@id": "https://schema.org/Person",
                 "label": "Person"
             },
             "icon": "https://example.org/icon/bob",
@@ -54,20 +49,17 @@
                 "@value": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software.",
                 "@language": "en"
             },
-            "@id": "https://example.org/id/bob-johnson",
             "label": "Bob Johnson"
         },
         {
+            "@id": "https://example.org/id/carol-miller",
             "@type": {
-                "@type": {
-                    "@id": "http://www.w3.org/2000/01/rdf-schema#Class"
-                },
+                "@id": "https://schema.org/Person",
                 "icon": "https://example.org/icon/person",
                 "comment": {
                     "@value": "A person",
                     "@language": "en"
                 },
-                "@id": "https://schema.org/Person",
                 "label": "Person"
             },
             "icon": "https://example.org/icon/carol",
@@ -75,7 +67,6 @@
                 "@value": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning.",
                 "@language": "en"
             },
-            "@id": "https://example.org/id/carol-miller",
             "label": "Carol Miller"
         }
     ],

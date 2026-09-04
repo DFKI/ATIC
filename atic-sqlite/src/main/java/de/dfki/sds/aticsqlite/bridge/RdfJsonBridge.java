@@ -1,5 +1,6 @@
 package de.dfki.sds.aticsqlite.bridge;
 
+import de.dfki.sds.atic.helper.JSONUtils;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.RDFChangesDistinctCollector;
@@ -28,6 +29,7 @@ import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.ResultSetRewindable;
+import org.apache.jena.rdf.model.Literal;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
@@ -213,7 +215,8 @@ public class RdfJsonBridge {
                         template,
                         root,
                         queryParams,
-                        binding
+                        binding,
+                        false
                 );
 
         LOG.debug("SPARQL:\n{}", sparql);
@@ -225,6 +228,7 @@ public class RdfJsonBridge {
         Dataset ds = DatasetFactory.wrap(datasetGraph);
         ctx.transferContext(ds.getContext());
 
+        Object json;
         try (QueryExecution qExec = QueryExecutionFactory.create(query, ds)) {
             ResultSet rs = qExec.execSelect();
 
@@ -242,7 +246,7 @@ public class RdfJsonBridge {
                 rewindable.reset();
             }
 
-            Object json = resultSetJsonMapper.map(template,
+            json = resultSetJsonMapper.map(template,
                     rewindable,
                     queryParams,
                     datasetGraph,
@@ -282,9 +286,189 @@ public class RdfJsonBridge {
                     );
                 }
             }
+        }
 
+        json = processPagination(json, template, root, queryParams, datasetGraph, ctx, binding, prefixes);
+
+        return json;
+    }
+
+    private Object processPagination(
+            Object json,
+            JSONObject template,
+            JSONObject root,
+            Map<String, List<String>> queryParams,
+            AticDatasetGraph datasetGraph,
+            InvocationContext ctx,
+            Binding binding,
+            PrefixMapping prefixes) {
+
+        if (!template.has("$pagination")) {
             return json;
         }
+
+        JSONObject paginationConfig = template.getJSONObject("$pagination");
+
+        int offset = resolvePaginationInt(
+                paginationConfig,
+                "offset",
+                binding
+        );
+
+        int size = resolvePaginationInt(
+                paginationConfig,
+                "limit",
+                binding
+        );
+
+        if (offset < 0) {
+            throw new IllegalArgumentException(
+                    "$pagination.offset must be >= 0: " + offset
+            );
+        }
+
+        if (size <= 0) {
+            throw new IllegalArgumentException(
+                    "$pagination.size must be > 0: " + size
+            );
+        }
+
+        /*
+         * Build and execute the equivalent COUNT query.
+         */
+        String countSparql = sparqlQueryBuilder.build(
+                template,
+                root,
+                queryParams,
+                binding,
+                true
+        );
+
+        LOG.debug("Pagination COUNT SPARQL:\n{}", countSparql);
+
+        Query countQuery = QueryFactory.create(countSparql);
+
+        Dataset ds = DatasetFactory.wrap(datasetGraph);
+        ctx.transferContext(ds.getContext());
+
+        long total;
+
+        try (QueryExecution qExec
+                = QueryExecutionFactory.create(countQuery, ds)) {
+
+            ResultSet rs = qExec.execSelect();
+
+            if (!rs.hasNext()) {
+                total = 0;
+            } else {
+                QuerySolution solution = rs.next();
+
+                Literal count = solution.getLiteral(SparqlQueryBuilder.COUNT_VARNAME);
+
+                if (count == null) {
+                    throw new IllegalStateException(
+                            "Count query did not return ?" + SparqlQueryBuilder.COUNT_VARNAME + ":\n"
+                            + countSparql
+                    );
+                }
+
+                total = count.getLong();
+            }
+        }
+
+        // Calculate everything.
+        long currentPage = (offset / size) + 1;
+        long totalPages = total == 0 ? 0 : (total + size - 1) / size;
+        long firstOffset = 0;
+        long lastOffset = total == 0 ? 0 : ((total - 1) / size) * size;
+
+        JSONArray pages = new JSONArray();
+        for (long page = 1; page <= totalPages; page++) {
+            long pageOffset = (page - 1) * size;
+            pages.put(new JSONObject()
+                    .put("offset", pageOffset)
+                    .put("label", String.valueOf(page))
+                    .put("number", page));
+        }
+
+        int currentPageIndex = totalPages == 0 ? -1 : (int) (currentPage - 1);
+
+        JSONObject firstPage = totalPages == 0 ? null : pages.getJSONObject(0);
+        JSONObject currentPageObject = currentPageIndex >= 0 && currentPageIndex < totalPages
+                ? pages.getJSONObject(currentPageIndex)
+                : null;
+        JSONObject lastPage = totalPages == 0 ? null : pages.getJSONObject((int) totalPages - 1);
+
+        JSONObject pagination = JSONUtils.createJSONObject()
+                .put("limit", size)
+                .put("total", total)
+                .put("totalPages", totalPages)
+                .put("currentPageIndex", currentPageIndex)
+                .put("firstPage", firstPage)
+                .put("currentPage", currentPageObject)
+                .put("lastPage", lastPage)
+                .put("pages", pages);
+
+        return JSONUtils.createJSONObject()
+                .put("data", json)
+                .put("pagination", pagination);
+    }
+
+    private int resolvePaginationInt(
+            JSONObject config,
+            String key,
+            Binding binding) {
+
+        if (!config.has(key)) {
+            throw new IllegalArgumentException(
+                    "$pagination requires '" + key + "'"
+            );
+        }
+
+        Object value = config.get(key);
+
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+
+        if (value instanceof String string
+                && string.startsWith("?")) {
+
+            String variableName = string.substring(1);
+
+            Var var = Var.alloc(variableName);
+
+            if (!binding.contains(var)) {
+                throw new IllegalArgumentException(
+                        "Pagination variable not found in binding: "
+                        + string
+                );
+            }
+
+            Node node = binding.get(var);
+
+            if (!node.isLiteral()) {
+                throw new IllegalArgumentException(
+                        "Pagination variable is not a literal: "
+                        + string
+                );
+            }
+
+            try {
+                return (Integer) node.getLiteral().getValue();
+            } catch (Exception e) {
+                throw new IllegalArgumentException(
+                        "Pagination variable is not an integer: "
+                        + string,
+                        e
+                );
+            }
+        }
+
+        throw new IllegalArgumentException(
+                "$pagination." + key
+                + " must be an integer or variable such as '?offset'"
+        );
     }
 
     private boolean isQueryNode(Object node) {

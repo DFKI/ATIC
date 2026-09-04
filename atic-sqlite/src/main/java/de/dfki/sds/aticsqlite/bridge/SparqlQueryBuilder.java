@@ -14,11 +14,14 @@ import org.json.JSONObject;
 
 public class SparqlQueryBuilder {
 
+    public static final String COUNT_VARNAME = "sparqlQueryBuilderCount";
+
     public String build(
             JSONObject template,
             JSONObject root,
             Map<String, List<String>> queryParams,
-            Binding binding
+            Binding binding,
+            boolean asCountQuery
     ) {
         JSONObject context = root.optJSONObject("@context");
 
@@ -33,15 +36,24 @@ public class SparqlQueryBuilder {
         StringBuilder sparql
                 = new StringBuilder();
 
-        sparql.append("SELECT ");
+        if (asCountQuery) {
+            if (template.optBoolean("$distinct", false)) {
+                sparql.append("SELECT (COUNT(DISTINCT *) AS ?" + COUNT_VARNAME + ")");
+            } else {
+                sparql.append("SELECT (COUNT(*) AS ?" + COUNT_VARNAME + ")");
+            }
 
-        if (template.optBoolean("$distinct", false)) {
-            sparql.append("DISTINCT ");
+        } else {
+            sparql.append("SELECT ");
+
+            if (template.optBoolean("$distinct", false)) {
+                sparql.append("DISTINCT ");
+            }
+
+            sparql.append(
+                    buildSelectClause(template)
+            );
         }
-
-        sparql.append(
-                buildSelectClause(template)
-        );
 
         appendFrom(
                 sparql,
@@ -73,15 +85,18 @@ public class SparqlQueryBuilder {
                 template
         );
 
-        appendOrderBy(
-                sparql,
-                template
-        );
+        if (!asCountQuery) {
+            appendOrderBy(
+                    sparql,
+                    template
+            );
 
-        appendLimitOffset(
-                sparql,
-                template
-        );
+            appendLimitOffset(
+                    sparql,
+                    template,
+                    binding
+            );
+        }
 
         pss.setCommandText(
                 sparql.toString()
@@ -400,22 +415,16 @@ public class SparqlQueryBuilder {
         sparql.append("\n");
     }
 
-    private void appendLimitOffset(
-            StringBuilder sparql,
-            JSONObject template
-    ) {
-
+    private void appendLimitOffset(StringBuilder sparql, JSONObject template, Binding binding) {
         if (template.has("$limit")) {
-
             sparql.append("LIMIT ")
-                    .append(template.getInt("$limit"))
+                    .append(resolveInt(template.get("$limit"), binding))
                     .append("\n");
         }
 
         if (template.has("$offset")) {
-
             sparql.append("OFFSET ")
-                    .append(template.getInt("$offset"))
+                    .append(resolveInt(template.get("$offset"), binding))
                     .append("\n");
         }
     }
@@ -454,4 +463,41 @@ public class SparqlQueryBuilder {
 
         sparql.append(value);
     }
+    
+    private int resolveInt(Object value, Binding binding) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+
+        if (value instanceof String string && string.startsWith("?")) {
+            Var var = Var.alloc(string.substring(1));
+
+            if (!binding.contains(var)) {
+                throw new IllegalArgumentException(
+                        "Variable not found in binding: " + string
+                );
+            }
+
+            Node node = binding.get(var);
+
+            if (!node.isLiteral()) {
+                throw new IllegalArgumentException(
+                        "Variable is not a literal: " + string
+                );
+            }
+
+            try {
+                return (Integer) node.getLiteral().getValue();
+            } catch (Exception e) {
+                throw new IllegalArgumentException(
+                        "Variable is not an integer: " + string, e
+                );
+            }
+        }
+
+        throw new IllegalArgumentException(
+                "Expected integer or variable, got: " + value
+        );
+    }
+
 }
