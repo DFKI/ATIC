@@ -47,8 +47,8 @@ public class RdfJsonBridgeUnitTest {
     private RdfJsonBridge rdfJsonBridge;
     private SqliteAticDatasetGraph dataset;
     
-    private static final boolean PRINT_QUERY = true;
-    private static final boolean PRINT_MODIF = true;
+    private static final boolean PRINT_QUERY = false;
+    private static final boolean PRINT_MODIF = false;
 
     @BeforeEach
     void setup(@org.junit.jupiter.api.io.TempDir Path tempDir) throws Exception {
@@ -132,6 +132,13 @@ public class RdfJsonBridgeUnitTest {
     public void paginationQueryParam() throws Exception {
         runQueryTest("15_paginationQueryParam");
     }
+    
+    @Test
+    public void personListFragmentAdditional() throws Exception {
+        runQueryTest("16_personListFragmentAdditional");
+    }
+    
+    
 
     //=========================
     //modification tests

@@ -37,6 +37,9 @@ public class ResultSetJsonMapper {
 
     private final List<FragmentProperty> fragmentSetting = new ArrayList<>();
 
+    //language aware does only select best language but still shows the language
+    //TODO we need another setting like hideLanguage, so it is just a string
+    //actually: we have to make sure to interpret strings always the same way
     public record FragmentProperty(String key, Node property, boolean languageAware) {
 
     }
@@ -648,7 +651,7 @@ public class ResultSetJsonMapper {
         Literal lit = node.asLiteral();
 
         /*
-     * Native JSON values.
+         * Native JSON values.
          */
         Object value = lit.getValue();
 
@@ -659,7 +662,7 @@ public class ResultSetJsonMapper {
         }
 
         /*
-     * Language-tagged literal.
+         * Language-tagged literal.
          */
         String lang = lit.getLanguage();
 
@@ -671,9 +674,9 @@ public class ResultSetJsonMapper {
         }
 
         /*
-     * Typed literal.
-     *
-     * xsd:string is represented as a plain JSON string.
+         * Typed literal.
+         *
+         * xsd:string is represented as a plain JSON string.
          */
         String datatype = lit.getDatatypeURI();
 
@@ -686,7 +689,7 @@ public class ResultSetJsonMapper {
         }
 
         /*
-     * Plain string literal.
+         * Plain string literal.
          */
         return lit.getLexicalForm();
     }
