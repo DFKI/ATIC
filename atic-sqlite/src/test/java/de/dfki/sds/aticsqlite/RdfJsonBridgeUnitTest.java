@@ -128,6 +128,10 @@ public class RdfJsonBridgeUnitTest {
         runQueryTest("14_queryParams2");
     }
     
+    @Test
+    public void paginationQueryParam() throws Exception {
+        runQueryTest("15_paginationQueryParam");
+    }
 
     //=========================
     //modification tests

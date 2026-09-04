@@ -188,7 +188,7 @@ public class RdfJsonBridge {
     ) {
 
         Map<Var, List<Node>> bindingCopy = new HashMap<>(binding);
-        
+
         String sparql
                 = sparqlQueryBuilder.build(
                         template,
@@ -421,10 +421,9 @@ public class RdfJsonBridge {
 
             List<Node> nodes = binding.get(var);
 
-            if (!nodes.isEmpty()) {
+            if (nodes.isEmpty()) {
                 throw new IllegalArgumentException(
-                        "Pagination variable is not a literal: "
-                        + string
+                        "No binding found for: " + var
                 );
             }
 
@@ -503,13 +502,31 @@ public class RdfJsonBridge {
             List<Node> nodes = new ArrayList<>();
 
             for (String value : entry.getValue()) {
-                Object parsed = value;
+                if (value == null) {
+                    continue;
+                }
 
-                if (value != null && !value.isBlank()) {
-                    String trimmed = value.trim();
+                String trimmed = value.trim();
+                Object parsed = trimmed;
 
-                    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-                        parsed = new JSONObject(trimmed);
+                if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                    parsed = new JSONObject(trimmed);
+                } else if ("true".equalsIgnoreCase(trimmed)
+                        || "false".equalsIgnoreCase(trimmed)) {
+                    parsed = Boolean.parseBoolean(trimmed);
+                } else {
+                    try {
+                        parsed = Integer.valueOf(trimmed);
+                    } catch (NumberFormatException e1) {
+                        try {
+                            parsed = Long.valueOf(trimmed);
+                        } catch (NumberFormatException e2) {
+                            try {
+                                parsed = Double.valueOf(trimmed);
+                            } catch (NumberFormatException e3) {
+                                // Keep it as a String.
+                            }
+                        }
                     }
                 }
 
@@ -520,7 +537,7 @@ public class RdfJsonBridge {
                 }
             }
 
-            if(!nodes.isEmpty()) {
+            if (!nodes.isEmpty()) {
                 bindings.put(var, nodes);
             }
         }

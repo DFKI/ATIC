@@ -1,0 +1,67 @@
+{
+    "template": {
+        "$type": "array",
+        "$map": {
+            "@id": "?person"
+        },
+        "$where": [
+            "?person a schema:Person"
+        ],
+        "$pagination": {
+            "offset": "?offset",
+            "limit": 2
+        },
+        "$offset": "?offset",
+        "$limit": 2,
+        "$default": {
+            "offset": 2
+        },
+        "@context": {
+            "foaf": "http://xmlns.com/foaf/0.1/",
+            "schema": "https://schema.org/",
+            "xsd": "http://www.w3.org/2001/XMLSchema#"
+        }
+    },
+    "expected": {
+        "data": [{
+                "@id": "https://example.org/id/carol-miller"
+            }],
+        "pagination": {
+            "limit": 2,
+            "total": 3,
+            "totalPages": 2,
+            "currentPageIndex": 1,
+            "firstPage": {
+                "number": 1,
+                "offset": 0,
+                "label": "1"
+            },
+            "currentPage": {
+                "number": 2,
+                "offset": 2,
+                "label": "2"
+            },
+            "lastPage": {
+                "number": 2,
+                "offset": 2,
+                "label": "2"
+            },
+            "pages": [
+                {
+                    "number": 1,
+                    "offset": 0,
+                    "label": "1"
+                },
+                {
+                    "number": 2,
+                    "offset": 2,
+                    "label": "2"
+                }
+            ]
+        }
+    },
+    "data": "data_01_bridge_persons.ttl",
+    "params": {
+        "offset": 2
+    }
+}
