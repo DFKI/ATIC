@@ -372,6 +372,9 @@ public class RdfJsonBridge {
                 ? pages.getJSONObject(currentPageIndex)
                 : null;
         JSONObject lastPage = totalPages == 0 ? null : pages.getJSONObject((int) totalPages - 1);
+        
+        JSONObject prevPage = currentPageIndex > 0 ? pages.getJSONObject(currentPageIndex - 1) : null; 
+        JSONObject nextPage = currentPageIndex >= 0 && currentPageIndex < totalPages - 1 ? pages.getJSONObject(currentPageIndex + 1) : null;
 
         JSONObject pagination = JSONUtils.createJSONObject()
                 .put("limit", size)
@@ -379,7 +382,9 @@ public class RdfJsonBridge {
                 .put("totalPages", totalPages)
                 .put("currentPageIndex", currentPageIndex)
                 .put("firstPage", firstPage)
+                .put("prevPage", prevPage)
                 .put("currentPage", currentPageObject)
+                .put("nextPage", nextPage)
                 .put("lastPage", lastPage)
                 .put("pages", pages);
 

@@ -36,6 +36,11 @@
                 "offset": 0,
                 "label": "1"
             },
+            "prevPage": {
+                "number": 1,
+                "offset": 0,
+                "label": "1"
+            },
             "currentPage": {
                 "number": 2,
                 "offset": 2,

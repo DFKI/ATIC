@@ -4,6 +4,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.jena.datatypes.xsd.XSDDatatype;
 import org.apache.jena.graph.Node;
 import org.apache.jena.query.ParameterizedSparqlString;
 import org.apache.jena.sparql.core.Var;
@@ -379,19 +380,20 @@ public class SparqlQueryBuilder {
         }
     }
 
-    private void appendNode(
-            StringBuilder sparql,
-            Node node
-    ) {
-
+    private void appendNode(StringBuilder sparql, Node node) {
         if (node.isURI()) {
-
-            sparql.append("<")
-                    .append(node.getURI())
-                    .append(">");
-
+            sparql.append("<").append(node.getURI()).append(">");
+        } else if (node.isLiteral()) {
+            String datatype = node.getLiteralDatatypeURI();
+            if (XSDDatatype.XSDinteger.getURI().equals(datatype)
+                    || XSDDatatype.XSDdecimal.getURI().equals(datatype)
+                    || XSDDatatype.XSDdouble.getURI().equals(datatype)
+                    || XSDDatatype.XSDboolean.getURI().equals(datatype)) {
+                sparql.append(node.getLiteralLexicalForm());
+            } else {
+                sparql.append(node);
+            }
         } else {
-
             sparql.append(node);
         }
     }
@@ -429,8 +431,8 @@ public class SparqlQueryBuilder {
             }
 
             List<Node> nodes = binding.get(var);
-            
-            if(nodes.isEmpty()) {
+
+            if (nodes.isEmpty()) {
                 throw new IllegalArgumentException(
                         "No binding found for " + var
                 );
