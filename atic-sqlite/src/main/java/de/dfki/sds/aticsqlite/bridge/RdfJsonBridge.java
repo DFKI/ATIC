@@ -30,8 +30,6 @@ import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.ResultSetRewindable;
 import org.apache.jena.rdf.model.Literal;
-import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.rdfpatch.changes.RDFChangesBase;
@@ -43,8 +41,6 @@ import org.apache.jena.sparql.core.DatasetGraph;
 import org.apache.jena.sparql.core.DatasetGraphFactory;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.core.Var;
-import org.apache.jena.sparql.engine.binding.Binding;
-import org.apache.jena.sparql.engine.binding.BindingBuilder;
 import org.apache.jena.vocabulary.RDF;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -58,8 +54,6 @@ public class RdfJsonBridge {
 
     private final SparqlQueryBuilder sparqlQueryBuilder;
     private final ResultSetJsonMapper resultSetJsonMapper;
-
-    private final Model tmpModel = ModelFactory.createDefaultModel();
 
     public RdfJsonBridge() {
         this(
@@ -97,25 +91,14 @@ public class RdfJsonBridge {
             loadPrefixes(context, prefixes);
         }
 
-        BindingBuilder defaults = Binding.builder();
+        Map<Var, List<Node>> binding = new HashMap<>();
 
-        JSONObject defaultObj = template.optJSONObject("$default");
-        if (defaultObj != null) {
-            for (String key : defaultObj.keySet()) {
+        //if $default is there bindings are set
+        initDefault(template, prefixes, binding);
 
-                Node node = toNode(
-                        defaultObj.get(key),
-                        prefixes
-                );
-
-                if (node != null) {
-                    defaults.add(
-                            Var.alloc(key),
-                            node
-                    );
-                }
-            }
-        }
+        //turn query params to bindings
+        //here query params get higher priority and overwrite $default
+        initQueryParams(queryParams, prefixes, binding);
 
         return evaluate(
                 template,
@@ -123,7 +106,7 @@ public class RdfJsonBridge {
                 queryParams,
                 datasetGraph,
                 ctx,
-                defaults.build(),
+                binding,
                 prefixes
         );
     }
@@ -134,7 +117,7 @@ public class RdfJsonBridge {
             Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
-            Binding binding,
+            Map<Var, List<Node>> binding,
             PrefixMapping prefixes
     ) {
 
@@ -206,10 +189,12 @@ public class RdfJsonBridge {
             Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
-            Binding binding,
+            Map<Var, List<Node>> binding,
             PrefixMapping prefixes
     ) {
 
+        Map<Var, List<Node>> bindingCopy = new HashMap<>(binding);
+        
         String sparql
                 = sparqlQueryBuilder.build(
                         template,
@@ -253,7 +238,7 @@ public class RdfJsonBridge {
                     ctx,
                     binding,
                     prefixes,
-                    (JSONObject childTemplate, Binding childBinding) -> executeQuery(
+                    (JSONObject childTemplate, Map<Var, List<Node>> childBinding) -> executeQuery(
                             inherit(template, childTemplate),
                             root,
                             queryParams,
@@ -288,7 +273,7 @@ public class RdfJsonBridge {
             }
         }
 
-        json = processPagination(json, template, root, queryParams, datasetGraph, ctx, binding, prefixes);
+        json = processPagination(json, template, root, queryParams, datasetGraph, ctx, bindingCopy, prefixes);
 
         return json;
     }
@@ -300,7 +285,7 @@ public class RdfJsonBridge {
             Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
-            Binding binding,
+            Map<Var, List<Node>> binding,
             PrefixMapping prefixes) {
 
         if (!template.has("$pagination")) {
@@ -417,7 +402,7 @@ public class RdfJsonBridge {
     private int resolvePaginationInt(
             JSONObject config,
             String key,
-            Binding binding) {
+            Map<Var, List<Node>> binding) {
 
         if (!config.has(key)) {
             throw new IllegalArgumentException(
@@ -438,16 +423,16 @@ public class RdfJsonBridge {
 
             Var var = Var.alloc(variableName);
 
-            if (!binding.contains(var)) {
+            if (!binding.containsKey(var)) {
                 throw new IllegalArgumentException(
                         "Pagination variable not found in binding: "
                         + string
                 );
             }
 
-            Node node = binding.get(var);
+            List<Node> nodes = binding.get(var);
 
-            if (!node.isLiteral()) {
+            if (!nodes.isEmpty()) {
                 throw new IllegalArgumentException(
                         "Pagination variable is not a literal: "
                         + string
@@ -455,7 +440,7 @@ public class RdfJsonBridge {
             }
 
             try {
-                return (Integer) node.getLiteral().getValue();
+                return (Integer) nodes.get(0).getLiteral().getValue();
             } catch (Exception e) {
                 throw new IllegalArgumentException(
                         "Pagination variable is not an integer: "
@@ -481,7 +466,7 @@ public class RdfJsonBridge {
 
         Object execute(
                 JSONObject template,
-                Binding binding
+                Map<Var, List<Node>> binding
         );
     }
 
@@ -496,6 +481,60 @@ public class RdfJsonBridge {
         }
 
         return retTemplate;
+    }
+
+    private void initDefault(JSONObject template, PrefixMapping prefixes, Map<Var, List<Node>> bindings) {
+        JSONObject defaultObj = template.optJSONObject("$default");
+        if (defaultObj != null) {
+            for (String key : defaultObj.keySet()) {
+
+                Node node = toNode(
+                        defaultObj.get(key),
+                        prefixes
+                );
+
+                if (node != null) {
+                    bindings.computeIfAbsent(Var.alloc(key), v -> new ArrayList<>()).add(node);
+                }
+            }
+        }
+    }
+
+    private void initQueryParams(
+            Map<String, List<String>> queryParams,
+            PrefixMapping prefixes,
+            Map<Var, List<Node>> bindings
+    ) {
+        if (queryParams == null || queryParams.isEmpty()) {
+            return;
+        }
+
+        for (Map.Entry<String, List<String>> entry : queryParams.entrySet()) {
+            Var var = Var.alloc(entry.getKey());
+            List<Node> nodes = new ArrayList<>();
+
+            for (String value : entry.getValue()) {
+                Object parsed = value;
+
+                if (value != null && !value.isBlank()) {
+                    String trimmed = value.trim();
+
+                    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                        parsed = new JSONObject(trimmed);
+                    }
+                }
+
+                Node node = toNode(parsed, prefixes);
+
+                if (node != null) {
+                    nodes.add(node);
+                }
+            }
+
+            if(!nodes.isEmpty()) {
+                bindings.put(var, nodes);
+            }
+        }
     }
 
     //====================================================================
@@ -1094,25 +1133,6 @@ public class RdfJsonBridge {
         }
 
         return NodeFactory.createURI(graph);
-    }
-
-    private Node substituteSingle(
-            Node node,
-            Map<Var, Node> bindings
-    ) {
-
-        if (!node.isVariable()) {
-            return node;
-        }
-
-        Node bound = bindings.get((Var) node);
-
-        //return variable again
-        if (bound == null) {
-            return node;
-        }
-
-        return bound;
     }
 
     private List<Node> substitute(

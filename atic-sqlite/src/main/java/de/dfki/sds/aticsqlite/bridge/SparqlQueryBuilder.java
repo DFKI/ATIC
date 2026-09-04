@@ -1,6 +1,5 @@
 package de.dfki.sds.aticsqlite.bridge;
 
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -8,7 +7,6 @@ import java.util.Set;
 import org.apache.jena.graph.Node;
 import org.apache.jena.query.ParameterizedSparqlString;
 import org.apache.jena.sparql.core.Var;
-import org.apache.jena.sparql.engine.binding.Binding;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -20,7 +18,7 @@ public class SparqlQueryBuilder {
             JSONObject template,
             JSONObject root,
             Map<String, List<String>> queryParams,
-            Binding binding,
+            Map<Var, List<Node>> binding,
             boolean asCountQuery
     ) {
         JSONObject context = root.optJSONObject("@context");
@@ -64,7 +62,6 @@ public class SparqlQueryBuilder {
 
         appendValues(
                 sparql,
-                queryParams,
                 binding
         );
 
@@ -249,68 +246,22 @@ public class SparqlQueryBuilder {
         }
     }
 
-    //TODO improve: better queryParams value parsing and bindings can be overwritten by queryParams
     private void appendValues(
             StringBuilder sparql,
-            Map<String, List<String>> queryParams,
-            Binding binding
+            Map<Var, List<Node>> binding
     ) {
-
-        if (binding != null
-                && !binding.isEmpty()) {
-
-            Iterator<Var> vars
-                    = binding.vars();
-
-            while (vars.hasNext()) {
-
-                Var var
-                        = vars.next();
-
-                Node node
-                        = binding.get(var);
-
-                sparql.append("VALUES ")
-                        .append(var)
-                        .append(" { ");
-
-                appendNode(
-                        sparql,
-                        node
-                );
-
-                sparql.append(" }\n");
-            }
-        }
-
-        if (queryParams == null) {
+        if (binding == null || binding.isEmpty()) {
             return;
         }
 
-        for (Map.Entry<String, List<String>> entry
-                : queryParams.entrySet()) {
-
-            String variable
-                    = entry.getKey();
-
-            if (!variable.startsWith("?")) {
-                variable = "?" + variable;
-            }
-
+        for (Map.Entry<Var, List<Node>> entry : binding.entrySet()) {
             sparql.append("VALUES ")
-                    .append(variable)
+                    .append(entry.getKey())
                     .append(" {\n");
 
-            for (String value
-                    : entry.getValue()) {
-
+            for (Node node : entry.getValue()) {
                 sparql.append("  ");
-
-                appendValue(
-                        sparql,
-                        value
-                );
-
+                appendNode(sparql, node);
                 sparql.append("\n");
             }
 
@@ -415,7 +366,7 @@ public class SparqlQueryBuilder {
         sparql.append("\n");
     }
 
-    private void appendLimitOffset(StringBuilder sparql, JSONObject template, Binding binding) {
+    private void appendLimitOffset(StringBuilder sparql, JSONObject template, Map<Var, List<Node>> binding) {
         if (template.has("$limit")) {
             sparql.append("LIMIT ")
                     .append(resolveInt(template.get("$limit"), binding))
@@ -463,8 +414,8 @@ public class SparqlQueryBuilder {
 
         sparql.append(value);
     }
-    
-    private int resolveInt(Object value, Binding binding) {
+
+    private int resolveInt(Object value, Map<Var, List<Node>> binding) {
         if (value instanceof Number number) {
             return number.intValue();
         }
@@ -472,22 +423,28 @@ public class SparqlQueryBuilder {
         if (value instanceof String string && string.startsWith("?")) {
             Var var = Var.alloc(string.substring(1));
 
-            if (!binding.contains(var)) {
+            if (!binding.containsKey(var)) {
                 throw new IllegalArgumentException(
                         "Variable not found in binding: " + string
                 );
             }
 
-            Node node = binding.get(var);
+            List<Node> nodes = binding.get(var);
+            
+            if(nodes.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "No binding found for " + var
+                );
+            }
 
-            if (!node.isLiteral()) {
+            if (!nodes.get(0).isLiteral()) {
                 throw new IllegalArgumentException(
                         "Variable is not a literal: " + string
                 );
             }
 
             try {
-                return (Integer) node.getLiteral().getValue();
+                return (Integer) nodes.get(0).getLiteral().getValue();
             } catch (Exception e) {
                 throw new IllegalArgumentException(
                         "Variable is not an integer: " + string, e

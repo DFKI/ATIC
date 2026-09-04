@@ -21,8 +21,6 @@ import org.apache.jena.rdf.model.Resource;
 import org.apache.jena.shared.PrefixMapping;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.core.Var;
-import org.apache.jena.sparql.engine.binding.Binding;
-import org.apache.jena.sparql.engine.binding.BindingBuilder;
 import org.apache.jena.sparql.vocabulary.FOAF;
 import org.apache.jena.util.iterator.ExtendedIterator;
 import org.apache.jena.vocabulary.RDF;
@@ -38,9 +36,9 @@ public class ResultSetJsonMapper {
     private final Model model = ModelFactory.createDefaultModel();
 
     private final List<FragmentProperty> fragmentSetting = new ArrayList<>();
-    
+
     public record FragmentProperty(String key, Node property, boolean languageAware) {
-        
+
     }
 
     public ResultSetJsonMapper() {
@@ -104,7 +102,7 @@ public class ResultSetJsonMapper {
             Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
-            Binding initalBinding,
+            Map<Var, List<Node>> binding,
             PrefixMapping prefixes,
             RdfJsonBridge.TemplateExecutor executor
     ) {
@@ -117,16 +115,19 @@ public class ResultSetJsonMapper {
 
             QuerySolution qs = rs.next();
 
-            Binding binding = createBinding(qs, initalBinding);
-
             Object value;
 
             if (map instanceof JSONObject obj) {
 
+                //we make a copy so we do not change the upper binding
+                //so for each query solution binding is fresh
+                Map<Var, List<Node>> bindingCopy = new HashMap<>(binding);
+                fillBinding(qs, bindingCopy);
+                
                 value = instantiate(
                         obj,
                         qs,
-                        binding,
+                        bindingCopy,
                         executor,
                         queryParams,
                         datasetGraph,
@@ -166,11 +167,11 @@ public class ResultSetJsonMapper {
         }
 
         /*
-     * automatic behavior:
-     *
-     * 0 -> null
-     * 1 -> value
-     * n -> array
+         * automatic behavior:
+         *
+         * 0 -> null
+         * 1 -> value
+         * n -> array
          */
         if (array.isEmpty()) {
             return JSONObject.NULL;
@@ -186,7 +187,7 @@ public class ResultSetJsonMapper {
     private Object instantiate(
             Object map,
             QuerySolution qs,
-            Binding binding,
+            Map<Var, List<Node>> binding,
             RdfJsonBridge.TemplateExecutor executor,
             Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
@@ -217,7 +218,7 @@ public class ResultSetJsonMapper {
             Object value = jsonMap.get(key);
 
             /*
-         * nested query object
+             * nested query object
              */
             if (value instanceof JSONObject child
                     && child.has("$where")) {
@@ -318,7 +319,7 @@ public class ResultSetJsonMapper {
             QuerySolution qs,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
-            Binding binding,
+            Map<Var, List<Node>> binding,
             PrefixMapping prefixes,
             boolean expandType
     ) {
@@ -327,34 +328,30 @@ public class ResultSetJsonMapper {
 
         if (subject.isVariable()) {
 
-            subject = binding.get((Var) subject);
+            List<Node> subjects = binding.get((Var) subject);
 
-            if (subject == null) {
+            if (subjects == null || subjects.isEmpty()) {
                 return;
             }
+            
+            subject = subjects.get(0);
         }
 
+        //get locale from binding
         String locale = "en";
-
         if (binding != null) {
-
-            Node localeNode
-                    = binding.get(Var.alloc("locale"));
-
-            if (localeNode != null
-                    && localeNode.isLiteral()) {
-
-                locale
-                        = localeNode.getLiteralLexicalForm();
+            List<Node> localeNodes = binding.get(Var.alloc("locale"));
+            if (localeNodes != null && !localeNodes.isEmpty() && localeNodes.get(0).isLiteral()) {
+                locale = localeNodes.get(0).getLiteralLexicalForm();
             }
         }
-        
+
         json.put("@id", subject.getURI());
 
         for (FragmentProperty fp : fragmentSetting) {
-            
+
             //we do not need again @type for a type
-            if(fp.key().equals("@type") && !expandType) {
+            if (fp.key().equals("@type") && !expandType) {
                 continue;
             }
 
@@ -384,10 +381,10 @@ public class ResultSetJsonMapper {
 
             if (object != null) {
                 Object o = toJson(ModelFactory.createDefaultModel().asRDFNode(object));
-                
+
                 json.put(fp.key, o);
-                
-                if(fp.key.equals("@type")) {
+
+                if (fp.key.equals("@type")) {
                     resolveFragment((JSONObject) o, object.getURI(), qs, datasetGraph, ctx, binding, prefixes, false);
                 }
             }
@@ -579,7 +576,7 @@ public class ResultSetJsonMapper {
         Node current = node.asNode();
 
         /*
-     * Apply modifiers.
+         * Apply modifiers.
          */
         for (int i = 1; i < parts.length; i++) {
 
@@ -615,35 +612,24 @@ public class ResultSetJsonMapper {
             return current.getURI();
         }
 
-        return toJson(model.asRDFNode(current)
-        );
+        return toJson(model.asRDFNode(current));
     }
 
-    //create a binding from an existing one
-    private Binding createBinding(
+    private void fillBinding(
             QuerySolution qs,
-            Binding initialBinding
+            Map<Var, List<Node>> binding
     ) {
-
-        BindingBuilder builder
-                = initialBinding != null
-                        ? Binding.builder(initialBinding)
-                        : Binding.builder();
-
-        Iterator<String> vars
-                = qs.varNames();
+        Iterator<String> vars = qs.varNames();
 
         while (vars.hasNext()) {
+            String varName = vars.next();
+            Node node = qs.get(varName).asNode();
 
-            String var = vars.next();
-
-            builder.add(
-                    Var.alloc(var),
-                    qs.get(var).asNode()
+            binding.put(
+                    Var.alloc(varName),
+                    List.of(node)
             );
         }
-
-        return builder.build();
     }
 
     //turn rdf node to json

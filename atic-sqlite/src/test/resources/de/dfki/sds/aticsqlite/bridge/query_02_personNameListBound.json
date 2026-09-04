@@ -14,6 +14,6 @@
     ],
     "data": "data_01_bridge_persons.ttl",
     "params": { 
-        "person": "https://example.org/id/alice-smith"
+        "person": { "@id": "https://example.org/id/alice-smith" }
     }
 }
