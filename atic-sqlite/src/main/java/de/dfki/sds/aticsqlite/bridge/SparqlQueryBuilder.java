@@ -17,7 +17,6 @@ public class SparqlQueryBuilder {
     public String build(
             JSONObject template,
             JSONObject root,
-            Map<String, List<String>> queryParams,
             Map<Var, List<Node>> binding,
             boolean asCountQuery
     ) {

@@ -99,7 +99,6 @@ public class ResultSetJsonMapper {
     public Object map(
             JSONObject queryNode,
             ResultSet rs,
-            Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
             Map<Var, List<Node>> binding,
@@ -129,7 +128,6 @@ public class ResultSetJsonMapper {
                         qs,
                         bindingCopy,
                         executor,
-                        queryParams,
                         datasetGraph,
                         ctx,
                         prefixes
@@ -189,7 +187,6 @@ public class ResultSetJsonMapper {
             QuerySolution qs,
             Map<Var, List<Node>> binding,
             RdfJsonBridge.TemplateExecutor executor,
-            Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
             PrefixMapping prefixes
@@ -248,7 +245,6 @@ public class ResultSetJsonMapper {
                                 qs,
                                 binding,
                                 executor,
-                                queryParams,
                                 datasetGraph,
                                 ctx,
                                 prefixes
@@ -273,7 +269,6 @@ public class ResultSetJsonMapper {
                                     qs,
                                     binding,
                                     executor,
-                                    queryParams,
                                     datasetGraph,
                                     ctx,
                                     prefixes

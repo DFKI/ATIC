@@ -103,7 +103,6 @@ public class RdfJsonBridge {
         return evaluate(
                 template,
                 root,
-                queryParams,
                 datasetGraph,
                 ctx,
                 binding,
@@ -114,7 +113,6 @@ public class RdfJsonBridge {
     private Object evaluate(
             Object node,
             JSONObject root,
-            Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
             Map<Var, List<Node>> binding,
@@ -128,7 +126,6 @@ public class RdfJsonBridge {
                 return executeQuery(
                         obj,
                         root,
-                        queryParams,
                         datasetGraph,
                         ctx,
                         binding,
@@ -145,7 +142,6 @@ public class RdfJsonBridge {
                         evaluate(
                                 obj.get(key),
                                 root,
-                                queryParams,
                                 datasetGraph,
                                 ctx,
                                 binding,
@@ -168,7 +164,6 @@ public class RdfJsonBridge {
                         evaluate(
                                 item,
                                 root,
-                                queryParams,
                                 datasetGraph,
                                 ctx,
                                 binding,
@@ -186,7 +181,6 @@ public class RdfJsonBridge {
     private Object executeQuery(
             JSONObject template,
             JSONObject root,
-            Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
             Map<Var, List<Node>> binding,
@@ -199,7 +193,6 @@ public class RdfJsonBridge {
                 = sparqlQueryBuilder.build(
                         template,
                         root,
-                        queryParams,
                         binding,
                         false
                 );
@@ -233,7 +226,6 @@ public class RdfJsonBridge {
 
             json = resultSetJsonMapper.map(template,
                     rewindable,
-                    queryParams,
                     datasetGraph,
                     ctx,
                     binding,
@@ -241,7 +233,6 @@ public class RdfJsonBridge {
                     (JSONObject childTemplate, Map<Var, List<Node>> childBinding) -> executeQuery(
                             inherit(template, childTemplate),
                             root,
-                            queryParams,
                             datasetGraph,
                             ctx,
                             childBinding,
@@ -273,7 +264,7 @@ public class RdfJsonBridge {
             }
         }
 
-        json = processPagination(json, template, root, queryParams, datasetGraph, ctx, bindingCopy, prefixes);
+        json = processPagination(json, template, root, datasetGraph, ctx, bindingCopy, prefixes);
 
         return json;
     }
@@ -282,7 +273,6 @@ public class RdfJsonBridge {
             Object json,
             JSONObject template,
             JSONObject root,
-            Map<String, List<String>> queryParams,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
             Map<Var, List<Node>> binding,
@@ -324,7 +314,6 @@ public class RdfJsonBridge {
         String countSparql = sparqlQueryBuilder.build(
                 template,
                 root,
-                queryParams,
                 binding,
                 true
         );
