@@ -70,13 +70,14 @@ public class ConfigDrivenCrudEndpointsUnitTest {
         // Create temp directory
         tempDir = Files.createTempDirectory("atic-test-");
 
-        System.out.println(tempDir);
+        //System.out.println(tempDir);
 
         // Set as working directory
         System.setProperty("user.dir", tempDir.toAbsolutePath().toString());
 
         String[] args = new String[]{
-            "--home", tempDir.toAbsolutePath().toString()
+            "--home", tempDir.toAbsolutePath().toString(),
+            "--no-print.log"
         };
 
         appConfig = ConfigLoader.load(AticConfig.class, args);
@@ -186,7 +187,7 @@ public class ConfigDrivenCrudEndpointsUnitTest {
 
         JSONObject bodyObj = new JSONObject(body);
 
-        System.out.println(bodyObj.toString(2));
+        //System.out.println(bodyObj.toString(2));
     }
 
     @Test
@@ -249,7 +250,7 @@ public class ConfigDrivenCrudEndpointsUnitTest {
         assertFalse(body.isEmpty(), "Response body should not be empty");
 
         JSONObject bodyObj = new JSONObject(body);
-        System.out.println(bodyObj.toString(2));
+        //System.out.println(bodyObj.toString(2));
 
         Model model = ModelFactory.createDefaultModel();
         RDFDataMgr.read(model, new StringReader(body), null, Lang.JSONLD);
@@ -545,7 +546,7 @@ public class ConfigDrivenCrudEndpointsUnitTest {
         Model modelPage1 = ModelFactory.createDefaultModel();
         RDFDataMgr.read(modelPage1, new StringReader(responsePage1.body()), null, Lang.JSONLD);
 
-        modelPage1.write(System.out, "TTL");
+        //modelPage1.write(System.out, "TTL");
 
         List<Resource> personsPage1
                 = modelPage1.listResourcesWithProperty(RDF.type, FOAF.Person).toList();
@@ -567,7 +568,7 @@ public class ConfigDrivenCrudEndpointsUnitTest {
         Model modelPage2 = ModelFactory.createDefaultModel();
         RDFDataMgr.read(modelPage2, new StringReader(responsePage2.body()), null, Lang.JSONLD);
 
-        modelPage2.write(System.out, "TTL");
+        //modelPage2.write(System.out, "TTL");
 
         List<Resource> personsPage2
                 = modelPage2.listResourcesWithProperty(RDF.type, FOAF.Person).toList();
@@ -641,7 +642,7 @@ public class ConfigDrivenCrudEndpointsUnitTest {
         assertFalse(body.isEmpty());
 
         JSONObject bodyObj = new JSONObject(body);
-        System.out.println(bodyObj.toString(2));
+        //System.out.println(bodyObj.toString(2));
     }
 
     @Test

@@ -53,13 +53,14 @@ public class UploadUnitTest {
         // Create temp directory
         tempDir = Files.createTempDirectory("atic-test-");
 
-        System.out.println(tempDir);
+        //System.out.println(tempDir);
 
         // Set as working directory
         System.setProperty("user.dir", tempDir.toAbsolutePath().toString());
 
         String[] args = new String[]{
-            "--home", tempDir.toAbsolutePath().toString()
+            "--home", tempDir.toAbsolutePath().toString(),
+            "--no-print.log"
         };
 
         appConfig = ConfigLoader.load(AticConfig.class, args);

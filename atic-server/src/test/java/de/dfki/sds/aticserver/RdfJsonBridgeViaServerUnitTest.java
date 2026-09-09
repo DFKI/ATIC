@@ -45,6 +45,8 @@ public class RdfJsonBridgeViaServerUnitTest {
     private static AticServer server;
     private static SqliteAticDatasetGraph datasetGraph;
 
+    private static final boolean PRINT = false;
+
     @BeforeEach
     public void setUp() throws Exception {
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error");
@@ -52,13 +54,13 @@ public class RdfJsonBridgeViaServerUnitTest {
         // Create temp directory
         tempDir = Files.createTempDirectory("bridge-test-");
 
-        System.out.println(tempDir);
-
+        //System.out.println(tempDir);
         // Set as working directory
         System.setProperty("user.dir", tempDir.toAbsolutePath().toString());
 
         String[] args = new String[]{
-            "--home", tempDir.toAbsolutePath().toString()
+            "--home", tempDir.toAbsolutePath().toString(),
+            "--no-print.log"
         };
 
         appConfig = ConfigLoader.load(AticConfig.class, args);
@@ -130,7 +132,7 @@ public class RdfJsonBridgeViaServerUnitTest {
         String ttlCode = """
                          
                          """;
-        
+
         JSONObject template = new JSONObject("""
         {
             "$type": "array",
@@ -149,7 +151,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             }
         }
         """);
-        
+
         JSONArray data = new JSONArray("""
         [
             {
@@ -161,7 +163,7 @@ public class RdfJsonBridgeViaServerUnitTest {
         """);
 
         Map<String, List<String>> queryParams = Map.of();
-        
+
         helperModification("POST", ttlCode, template, data, queryParams);
     }
 
@@ -185,7 +187,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             foaf:name "Bob Johnson" ;
             schema:email "bob.johnson@example.org" .
                          """;
-        
+
         JSONObject template = new JSONObject("""
         {
             "$type": "array",
@@ -205,7 +207,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             }
         }
         """);
-        
+
         JSONArray data = new JSONArray("""
         [
             {
@@ -217,7 +219,7 @@ public class RdfJsonBridgeViaServerUnitTest {
         """);
 
         Map<String, List<String>> queryParams = Map.of();
-        
+
         helperModification("PUT", ttlCode, template, data, queryParams);
     }
 
@@ -241,7 +243,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             foaf:name "Bob Johnson" ;
             schema:email "bob.johnson@example.org" .
                          """;
-        
+
         JSONObject template = new JSONObject("""
         {
             "$type": "array",
@@ -261,7 +263,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             }
         }
         """);
-        
+
         JSONArray data = new JSONArray("""
         [
             {
@@ -272,7 +274,7 @@ public class RdfJsonBridgeViaServerUnitTest {
         """);
 
         Map<String, List<String>> queryParams = Map.of();
-        
+
         helperModification("PATCH", ttlCode, template, data, queryParams);
     }
 
@@ -281,7 +283,7 @@ public class RdfJsonBridgeViaServerUnitTest {
         String ttlCode = """
                          
                          """;
-        
+
         JSONObject template = new JSONObject("""
         {
             "$type": "array",
@@ -300,7 +302,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             }
         }
         """);
-        
+
         JSONArray data = new JSONArray("""
         [
             {
@@ -312,7 +314,7 @@ public class RdfJsonBridgeViaServerUnitTest {
         """);
 
         Map<String, List<String>> queryParams = Map.of();
-        
+
         helperModification("DELETE", ttlCode, template, data, queryParams);
     }
 
@@ -331,7 +333,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             foaf:name "David Dean" ;
             schema:email "david.dean@example.org" .
         """;
-        
+
         JSONObject template = new JSONObject("""
         {
             "$type": "array",
@@ -350,7 +352,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             }
         }
         """);
-        
+
         JSONArray data = new JSONArray("""
         [
             {
@@ -362,10 +364,10 @@ public class RdfJsonBridgeViaServerUnitTest {
         """);
 
         Map<String, List<String>> queryParams = Map.of();
-        
+
         helperModification("DELETE", ttlCode, template, data, queryParams);
     }
-    
+
     //=================================================
     //helper
     private String loginAsAdmin() throws IOException, InterruptedException {
@@ -456,12 +458,14 @@ public class RdfJsonBridgeViaServerUnitTest {
 
             Object actualBody = new JSONTokener(body).nextValue();
 
-            if (actualBody instanceof JSONObject object) {
-                System.out.println(object.toString(2));
-            } else if (actualBody instanceof JSONArray array) {
-                System.out.println(array.toString(2));
-            } else if (actualBody instanceof String str) {
-                System.out.println(str);
+            if (PRINT) {
+                if (actualBody instanceof JSONObject object) {
+                    System.out.println(object.toString(2));
+                } else if (actualBody instanceof JSONArray array) {
+                    System.out.println(array.toString(2));
+                } else if (actualBody instanceof String str) {
+                    System.out.println(str);
+                }
             }
 
             return;
@@ -508,7 +512,9 @@ public class RdfJsonBridgeViaServerUnitTest {
             patch = RDFPatchOps.read(in);
         }
 
-        System.out.println(RDFPatchOps.str(patch));
+        if (PRINT) {
+            System.out.println(RDFPatchOps.str(patch));
+        }
     }
 
     private URI bridgeUri(Map<String, List<String>> queryParams) {
