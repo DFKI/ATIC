@@ -1,0 +1,34 @@
+{
+    "template": {
+        "$map": {
+            "@id": "?person",
+            "desc": "?desc$string"
+        },
+        "$where": [
+            "?person a schema:Person",
+            "?person schema:description ?desc"
+        ],
+        "$filter": [
+            "LANG(?desc) = 'en'"
+        ],
+        "@context": {
+            "schema": "https://schema.org/"
+        }
+    },
+    "expected": [
+        {
+            "@id": "https://example.org/id/alice-smith",
+            "desc": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects."
+        },
+        {
+            "@id": "https://example.org/id/bob-johnson",
+            "desc": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software."
+        },
+        {
+            "@id": "https://example.org/id/carol-miller",
+            "desc": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning."
+        }
+    ],
+    "data": "data_01_bridge_persons.ttl",
+    "params": {}
+}

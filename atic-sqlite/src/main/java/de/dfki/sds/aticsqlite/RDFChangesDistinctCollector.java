@@ -1,4 +1,4 @@
-package de.dfki.sds.aticsqlite.agent;
+package de.dfki.sds.aticsqlite;
 
 import java.util.LinkedHashSet;
 import java.util.Set;

@@ -27,8 +27,11 @@ import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
 import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
+import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import de.dfki.sds.rdfpatchsqlite.Converter;
 import io.javalin.Javalin;
+import io.javalin.config.JavalinConfig;
+import io.javalin.config.RoutesConfig;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import io.javalin.http.Cookie;
@@ -128,6 +131,7 @@ public class AticServer {
 
     private SqliteAticDatasetGraph datasetGraph;
     private MoleculeEndpoint moleculeEndpoint;
+    private final RdfJsonBridge rdfJsonBridge;
 
     private RDFPatchWriter rdfPatchWriter;
 
@@ -155,6 +159,8 @@ public class AticServer {
         capBuilder.propertyTypeAware(config.isPropertyTypeAware());
 
         datasetGraph = new SqliteAticDatasetGraph(database, rdfPatchWriter, capBuilder.build());
+
+        rdfJsonBridge = new RdfJsonBridge();
     }
 
     private void initFolders() {
@@ -204,51 +210,62 @@ public class AticServer {
         init(null);
     }
 
-    public void init(BiConsumer<Javalin, AticConfig> additionalInit) {
-        app = Javalin.create(config -> {
-            config.http.defaultContentType = "application/json";
-            config.staticFiles.add(staticFiles -> {
+    public void init(BiConsumer<JavalinConfig, AticConfig> additionalInit) {
+        app = Javalin.create(javalinConf -> {
+            javalinConf.http.defaultContentType = "application/json";
+            javalinConf.staticFiles.add(staticFiles -> {
                 staticFiles.hostedPath = "/app";        // endpoints under /app
                 staticFiles.directory = "/de/dfki/sds/aticserver/www/app";
                 staticFiles.location = Location.CLASSPATH;
             });
-        });
 
-        app.exception(PermissionDeniedException.class, (e, ctx) -> {
-            ctx.status(HttpStatus.FORBIDDEN);
-            ctx.result(e.getMessage());
-        });
-        
-        app.exception(Exception.class, (e, ctx) -> {
-            System.err.println("==========================================");
-            System.err.println(LocalDateTime.now().toString());
-            e.printStackTrace();
-            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR);
-            ctx.result(e.getMessage());
-        });
+            if(config.getCorsAllowHost() != null) {
+                javalinConf.bundledPlugins.enableCors(cors -> {
+                    cors.addRule(rule -> {
+                            rule.allowHost(config.getCorsAllowHost());
+                            rule.allowCredentials = config.isCorsAllowCredentials();
+                        }
+                    );
+                });
+                javalinConf.bundledPlugins.enableHttpAllowedMethodsOnRoutes();
+            }
+            
+            javalinConf.routes.exception(PermissionDeniedException.class, (e, ctx) -> {
+                ctx.status(HttpStatus.FORBIDDEN);
+                ctx.result(e.getMessage());
+            });
+            javalinConf.routes.exception(Exception.class, (e, ctx) -> {
+                System.err.println("==========================================");
+                System.err.println(LocalDateTime.now().toString());
+                e.printStackTrace();
+                ctx.status(HttpStatus.INTERNAL_SERVER_ERROR);
+                ctx.result(e.getMessage());
+            });
 
-        app.before(ctx -> {
-            String path = ctx.path();
-            if (!path.equals("/") && path.endsWith("/")) {
-                ctx.redirect(path.substring(0, path.length() - 1));
+            javalinConf.routes.before(ctx -> {
+                String path = ctx.path();
+                if (!path.equals("/") && path.endsWith("/")) {
+                    ctx.redirect(path.substring(0, path.length() - 1));
+                }
+            });
+
+            initRoutes(javalinConf.routes);
+
+            initCDCE(javalinConf.routes);
+
+            initMoleculeEndpoint(javalinConf.routes);
+
+            if (additionalInit != null) {
+                additionalInit.accept(javalinConf, config);
             }
         });
-
-        initRoutes();
-
-        initCDCE();
-        initMoleculeEndpoint();
-
-        if (additionalInit != null) {
-            additionalInit.accept(app, config);
-        }
 
         app.start(config.getHost(), config.getPort());
         LOGGER.info(() -> "atic server running at http://" + config.getHost() + ":" + config.getPort());
     }
 
     // Configuration-Driven CRUD Endpoints (CDCE)
-    private void initCDCE() {
+    private void initCDCE(RoutesConfig routes) {
         if (!cdceFolder.exists() || !cdceFolder.isDirectory()) {
             LOGGER.warning("CDCE folder not found: " + cdceFolder.getAbsolutePath());
             return;
@@ -260,7 +277,7 @@ public class AticServer {
             LOGGER.info("Load CDCE config from resources: " + resourceName);
 
             ConfigDrivenCrudEndpoints cdce = new ConfigDrivenCrudEndpoints(resourcePath + resourceName);
-            cdce.register(app, config.cdceEndpointPath, getDatasetGraph());
+            cdce.register(routes, config.cdceEndpointPath, getDatasetGraph());
         }
 
         File[] files = cdceFolder.listFiles();
@@ -277,84 +294,91 @@ public class AticServer {
                 LOGGER.info("Found CDCE config: " + file.getAbsolutePath());
 
                 ConfigDrivenCrudEndpoints cdce = new ConfigDrivenCrudEndpoints(file);
-                cdce.register(app, config.cdceEndpointPath, getDatasetGraph());
+                cdce.register(routes, config.cdceEndpointPath, getDatasetGraph());
             }
         }
     }
 
-    private void initMoleculeEndpoint() {
+    private void initMoleculeEndpoint(RoutesConfig routes) {
         moleculeEndpoint = new MoleculeEndpoint();
-        moleculeEndpoint.register(app, "", datasetGraph);
+        moleculeEndpoint.register(routes, "", datasetGraph);
     }
 
     public void close() {
         app.stop();
     }
 
-    private void initRoutes() {
-        app.before("/*", this::authorizationMiddleware);
+    private void initRoutes(RoutesConfig routes) {
+        routes.before("/*", this::authorizationMiddleware);
 
-        app.get("/", ctx -> ctx.redirect("/app"));
-        app.get("/app", ctx -> ctx.redirect("/app/login.html"));
-        app.get("/app/login.html", this::getAppLogin);
+        routes.get("/", ctx -> ctx.redirect("/app"));
+        routes.get("/app", ctx -> ctx.redirect("/app/login.html"));
+        routes.get("/app/login.html", this::getAppLogin);
 
-        app.get("/about", this::getAbout);
+        routes.get("/about", this::getAbout);
 
-        app.post("/auth/token", this::postToken);
-        app.post("/auth/register", this::postRegister);
-        app.get("/auth/me", this::getAuthMe);
-        app.post("/auth/logout", this::postLogout);
-        app.put("/auth/password", this::putPassword);
+        routes.post("/auth/token", this::postToken);
+        routes.post("/auth/register", this::postRegister);
+        routes.get("/auth/me", this::getAuthMe);
+        routes.post("/auth/logout", this::postLogout);
+        routes.put("/auth/password", this::putPassword);
 
-        app.get("/config", this::getAllConfig);
-        app.get("/config/{name}", this::getSingleConfig);
+        routes.get("/config", this::getAllConfig);
+        routes.get("/config/{name}", this::getSingleConfig);
 
         // SPARQL endpoint (supports GET + POST)
-        app.get("/sparql", this::handleSparql);
-        app.post("/sparql", this::handleSparql);
+        routes.get("/sparql", this::handleSparql);
+        routes.post("/sparql", this::handleSparql);
         // SPARQL update endpoint
-        app.post("/update", this::handleSparqlUpdate);
+        routes.post("/update", this::handleSparqlUpdate);
 
-        app.patch("/dataset", this::patchDataset);
+        routes.patch("/dataset", this::patchDataset);
 
         //Share/Unshare Graphs
-        app.post("/graph/share", this::postShareGraphs);
-        app.delete("/graph/share", this::deleteShareGraphs);
-        app.get("/graph/access", this::getGraphAccess);
+        routes.post("/graph/share", this::postShareGraphs);
+        routes.delete("/graph/share", this::deleteShareGraphs);
+        routes.get("/graph/access", this::getGraphAccess);
 
         //Share/Unshare Resources
-        app.post("/resource/share", this::postShareResources);
-        app.delete("/resource/share", this::deleteShareResources);
-        app.get("/resource/access", this::getResourceAccess);
+        routes.post("/resource/share", this::postShareResources);
+        routes.delete("/resource/share", this::deleteShareResources);
+        routes.get("/resource/access", this::getResourceAccess);
 
-        app.get("/graph", this::getGraph);
-        app.post("/graph", this::postGraph);
-        app.delete("/graph/{uri}", this::deleteGraph);
+        routes.get("/graph", this::getGraph);
+        routes.post("/graph", this::postGraph);
+        routes.delete("/graph/{uri}", this::deleteGraph);
 
-        app.post("/rml/execution", this::postRmlExecution);
+        routes.post("/rml/execution", this::postRmlExecution);
 
-        app.post("/querylogger:enable", this::postQueryLoggerEnable);
-        app.post("/querylogger:disable", this::postQueryLoggerDisable);
+        routes.post("/querylogger:enable", this::postQueryLoggerEnable);
+        routes.post("/querylogger:disable", this::postQueryLoggerDisable);
 
-        app.post("/agent:enable", this::postAgentEnable);
-        app.post("/agent:disable", this::postAgentDisable);
+        routes.post("/agent:enable", this::postAgentEnable);
+        routes.post("/agent:disable", this::postAgentDisable);
 
-        app.post("/session", this::postSessionAdd);
-        app.post("/session/{agentUsername}/{sessionId}/messages", this::postSessionMessage);
-        app.sse("/session/{agentUsername}/{sessionId}/stream", this::sessionStream);
-        app.get("/session", this::getSessionList);
-        app.get("/session/{agentUsername}/{sessionId}", this::getSessionGet);
-        app.delete("/session/{agentUsername}/{sessionId}", this::postSessionRemove);
-        app.put("/session/{agentUsername}/{sessionId}/title", this::putSessionTitle);
+        routes.post("/session", this::postSessionAdd);
+        routes.post("/session/{agentUsername}/{sessionId}/messages", this::postSessionMessage);
+        routes.sse("/session/{agentUsername}/{sessionId}/stream", this::sessionStream);
+        routes.get("/session", this::getSessionList);
+        routes.get("/session/{agentUsername}/{sessionId}", this::getSessionGet);
+        routes.delete("/session/{agentUsername}/{sessionId}", this::postSessionRemove);
+        routes.put("/session/{agentUsername}/{sessionId}/title", this::putSessionTitle);
 
-        app.post("/upload", this::postUpload);
+        routes.post("/upload", this::postUpload);
 
-        app.get("/user", this::getQueryUser);
-        app.get("/users", this::getUsers);
-        app.get("/agents", this::getAgents);
-        app.get("/principal", this::getQueryPrincipal);
+        routes.get("/user", this::getQueryUser);
+        routes.get("/users", this::getUsers);
+        routes.get("/agents", this::getAgents);
+        routes.get("/principal", this::getQueryPrincipal);
 
-        app.get("/vkg/{uri}/**", this::handleVirtualGraphRequest);
+        routes.get("/vkg/{uri}/**", this::handleVirtualGraphRequest);
+
+        routes.get("/bridge", this::handleBridge); //TODO GET is legacy, is done by QUERY
+        routes.query("/bridge", this::handleBridge);
+        routes.post("/bridge", this::handleBridge);
+        routes.put("/bridge", this::handleBridge);
+        routes.patch("/bridge", this::handleBridge);
+        routes.delete("/bridge", this::handleBridge);
     }
 
     private void getAppLogin(Context ctx) throws IOException {
@@ -581,7 +605,7 @@ public class AticServer {
                     "Location",
                     "/graph/" + URLEncoder.encode(graphNode.getURI(), StandardCharsets.UTF_8)
             );
-            ctx.header("Atic-Resource-URI", graphNode.getURI());
+            ctx.header(AticHeaders.RESOURCE_URI, graphNode.getURI());
 
             ctx.status(201).json(Map.of(
                     "success", true,
@@ -941,7 +965,7 @@ public class AticServer {
         Dataset dataset = DatasetFactory.wrap(datasetGraph);
         AticServer.transferContext(ctx, dataset.getContext());
 
-        String timeoutHeader = ctx.header("Atic-Timeout");
+        String timeoutHeader = ctx.header(AticHeaders.TIMEOUT);
 
         // Parse timeout safely
         int timeout;
@@ -1040,7 +1064,7 @@ public class AticServer {
         Dataset dataset = DatasetFactory.wrap(datasetGraph);
         AticServer.transferContext(ctx, dataset.getContext());
 
-        String timeoutHeader = ctx.header("Atic-Timeout");
+        String timeoutHeader = ctx.header(AticHeaders.TIMEOUT);
 
         // Parse timeout safely
         int timeout;
@@ -1101,7 +1125,6 @@ public class AticServer {
         ctx.status(HttpStatus.NO_CONTENT);
     }
 
-    
     //-----------------------------------------
     //vkg
     private void handleVirtualGraphRequest(Context ctx) {
@@ -1360,6 +1383,128 @@ public class AticServer {
         }
 
         ctx.status(200).result("Upload successful");
+    }
+
+    //------------------------------------
+    //bridge
+    private void handleBridge(Context ctx) throws IOException {
+        String method = ctx.method().name();
+
+        String accept = ctx.header("Accept");
+
+        if (method.equals("GET") && accept != null && accept.contains("text/html")) {
+
+            try (InputStream is = AticServer.class.getResourceAsStream(
+                    "/de/dfki/sds/aticserver/www/app/bridge.html")) {
+
+                if (is == null) {
+                    ctx.status(404).result("bridge.html not found");
+                    return;
+                }
+
+                String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+
+                //TODO later use better html render engine
+                html = html.replace("{{defaultTimeout}}", "" + config.bridgeTimeout);
+                html = html.replace("{{defaultTemplate}}", config.bridgeDefaulTemplate.trim());
+                html = html.replace("{{instanceName}}", config.instanceName);
+                html = html.replace("{{token}}", getToken(ctx));
+
+                ctx.html(html);
+                return;
+            }
+        }
+
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        switch (method) {
+
+            case "GET": //GET is legacy
+            case "QUERY":
+
+                Map<String, List<String>> queryParams
+                        = ctx.queryParamMap();
+
+                JSONObject template
+                        = new JSONObject(
+                                ctx.body()
+                        );
+
+                Object result = datasetGraph.calculateRead(() -> {
+                    return rdfJsonBridge.toJson(
+                            queryParams,
+                            template,
+                            datasetGraph,
+                            ictx
+                    );
+                });
+
+                ctx.json(result.toString());
+
+                break;
+
+            case "POST":
+            case "PUT":
+            case "PATCH":
+            case "DELETE":
+
+                Map<String, List<String>> queryParamsForPatch
+                        = ctx.queryParamMap();
+
+                JSONObject request
+                        = new JSONObject(
+                                ctx.body()
+                        );
+
+                RDFPatch patch = datasetGraph.calculateRead(() -> {
+                    return rdfJsonBridge.toPatch(
+                            method,
+                            queryParamsForPatch,
+                            request.get("data"),
+                            request.getJSONObject("template"),
+                            () -> SqliteAticDatasetGraph.createURNForResource(),
+                            datasetGraph,
+                            ictx
+                    );
+                });
+                
+                //dry run is by default on false, only when explicitly set in headers
+                boolean dryRun = "true".equalsIgnoreCase(ctx.header(AticHeaders.DRY_RUN));
+                if (!dryRun) {
+                    datasetGraph.executeWrite(() -> {
+                        datasetGraph.apply(patch, ictx);
+                    });
+                }
+                
+                String rdfPatchResp = RDFPatchOps.str(patch);
+                
+                //TODO if we use another mime type like application/rdf-patch it is base64 encoded...
+                ctx.contentType("text/plain");
+                ctx.result(rdfPatchResp);
+                
+                //ctx.header("Content-Type", "application/rdf-patch");
+                
+                //ctx.contentType("application/rdf-patch; charset=utf-8");
+                //ctx.result(rdfPatchResp.getBytes(StandardCharsets.UTF_8));
+                
+                //ctx.res().setContentType("application/rdf-patch; charset=UTF-8");
+                //ctx.res().getOutputStream().write(rdfPatchResp.getBytes(StandardCharsets.UTF_8));
+
+                //ctx.res().setContentType("application/rdf-patch");
+                //ctx.res().setCharacterEncoding("UTF-8");
+                //ctx.res().getOutputStream().write(
+                //    rdfPatchResp.getBytes(StandardCharsets.UTF_8)
+                //);
+                
+                break;
+
+            default:
+
+                ctx.status(405)
+                        .result(
+                                "Method not supported"
+                        );
+        }
     }
 
     //-------------------------------------
@@ -1783,6 +1928,10 @@ public class AticServer {
     }
 
     private void authorizationMiddleware(Context ctx) {
+        if(ctx.method() == HandlerType.OPTIONS) {
+            return;
+        }
+        
         // Allow static files without auth
         String path = ctx.path();
         // Skip JWT auth for public static paths
@@ -1904,6 +2053,10 @@ public class AticServer {
 
     /*package*/ RDFPatchWriter getRdfPatchWriter() {
         return rdfPatchWriter;
+    }
+
+    public RdfJsonBridge getRdfJsonBridge() {
+        return rdfJsonBridge;
     }
 
 }

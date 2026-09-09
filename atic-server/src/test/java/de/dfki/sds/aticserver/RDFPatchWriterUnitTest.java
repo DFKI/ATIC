@@ -57,14 +57,15 @@ public class RDFPatchWriterUnitTest {
         // Create temp directory
         tempDir = Files.createTempDirectory("atic-test-");
 
-        System.out.println(tempDir);
+        //System.out.println(tempDir);
 
         // Set as working directory
         System.setProperty("user.dir", tempDir.toAbsolutePath().toString());
 
         String[] args = new String[]{
             "--home", tempDir.toAbsolutePath().toString(),
-            "--rdfpatch.rotationinterval", "1"
+            "--rdfpatch.rotationinterval", "1",
+            "--no-print.log"
         };
 
         appConfig = ConfigLoader.load(AticConfig.class, args);

@@ -1,0 +1,32 @@
+{
+    "method": "POST",
+    "payload": [
+        {
+            "mail": "david.dean@example.org",
+            "name": "David Dean",
+            "@id": "https://example.org/id/david-dean"
+        }
+    ],
+    "template": {
+        "$type": "array",
+        "$map": {
+            "@id": "?person",
+            "name": "?name",
+            "mail": "?em"
+        },
+        "$where": [
+            "?person foaf:name ?name",
+            "?person schema:email ?em"
+        ],
+        "@context": {
+            "foaf": "http://xmlns.com/foaf/0.1/",
+            "schema": "https://schema.org/"
+        }
+    },
+    "expected": [
+        "A <https://example.org/id/david-dean> <https://schema.org/email> \"david.dean@example.org\" .",
+        "A <https://example.org/id/david-dean> <http://xmlns.com/foaf/0.1/name> \"David Dean\" ."
+    ],
+    "data": "data_01_bridge_persons.ttl",
+    "params": { }
+}

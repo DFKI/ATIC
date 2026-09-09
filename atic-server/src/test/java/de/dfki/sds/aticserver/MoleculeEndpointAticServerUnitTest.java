@@ -60,13 +60,14 @@ public class MoleculeEndpointAticServerUnitTest {
         // Create temp directory
         tempDir = Files.createTempDirectory("atic-test-");
 
-        System.out.println(tempDir);
+        //System.out.println(tempDir);
 
         // Set as working directory
         System.setProperty("user.dir", tempDir.toAbsolutePath().toString());
 
         String[] args = new String[]{
-            "--home", tempDir.toAbsolutePath().toString()
+            "--home", tempDir.toAbsolutePath().toString(),
+            "--no-print.log"
         };
 
         appConfig = ConfigLoader.load(AticConfig.class, args);
@@ -420,7 +421,7 @@ public class MoleculeEndpointAticServerUnitTest {
             String body = response.body();
             assertNotNull(body);
 
-            System.out.println(body);
+            //System.out.println(body);
 
             assertNotNull(expectedBody, "expected body not set");
 

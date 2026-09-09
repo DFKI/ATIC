@@ -53,13 +53,14 @@ public class UploadUnitTest {
         // Create temp directory
         tempDir = Files.createTempDirectory("atic-test-");
 
-        System.out.println(tempDir);
+        //System.out.println(tempDir);
 
         // Set as working directory
         System.setProperty("user.dir", tempDir.toAbsolutePath().toString());
 
         String[] args = new String[]{
-            "--home", tempDir.toAbsolutePath().toString()
+            "--home", tempDir.toAbsolutePath().toString(),
+            "--no-print.log"
         };
 
         appConfig = ConfigLoader.load(AticConfig.class, args);
@@ -71,11 +72,11 @@ public class UploadUnitTest {
             userPassword = server.getDatasetGraph().addUser("John", "Doe", "john.doe@example.org", userUsername, InvocationContext.EMPTY);
         });
 
-        server.init((app, conf) -> {
+        server.init((javalinConf, aticConf) -> {
             //person
             ConfigDrivenCrudEndpoints personCDCE = new ConfigDrivenCrudEndpoints("/de/dfki/sds/aticserver/cdce/person.yml");
             personCDCE.setGlobalDefaultLimit(5);
-            personCDCE.register(app, "", server.getDatasetGraph());
+            personCDCE.register(javalinConf.routes, "", server.getDatasetGraph());
         });
     }
 

@@ -1,0 +1,38 @@
+{
+    "method": "PUT",
+    "payload": [
+        {
+            "@id": "https://example.org/id/alice-smith",
+            "name": "Alice Johnson",
+            "mail": "another@mail.de"
+        }
+    ],
+    "template": {
+        "$type": "array",
+        "$map": {
+            "@id": "?person",
+            "name": "?name",
+            "mail": "?em"
+        },
+        "$where": [
+            "?person foaf:name ?name",
+            "?person schema:email ?em"
+        ],
+        "@context": {
+            "foaf": "http://xmlns.com/foaf/0.1/",
+            "schema": "https://schema.org/"
+        }
+    },
+    "expected": [
+        "D <https://example.org/id/carol-miller> <https://schema.org/email> \"carol.miller@example.org\" .",
+        "D <https://example.org/id/carol-miller> <http://xmlns.com/foaf/0.1/name> \"Carol Miller\" .",
+        "D <https://example.org/id/bob-johnson> <https://schema.org/email> \"bob.johnson@example.org\" .",
+        "D <https://example.org/id/bob-johnson> <http://xmlns.com/foaf/0.1/name> \"Bob Johnson\" .",
+        "D <https://example.org/id/alice-smith> <https://schema.org/email> \"alice.smith@example.org\" .",
+        "D <https://example.org/id/alice-smith> <http://xmlns.com/foaf/0.1/name> \"Alice Smith\" .",
+        "A <https://example.org/id/alice-smith> <https://schema.org/email> \"another@mail.de\" .",
+        "A <https://example.org/id/alice-smith> <http://xmlns.com/foaf/0.1/name> \"Alice Johnson\" ."
+    ],
+    "data": "data_01_bridge_persons.ttl",
+    "params": { }
+}

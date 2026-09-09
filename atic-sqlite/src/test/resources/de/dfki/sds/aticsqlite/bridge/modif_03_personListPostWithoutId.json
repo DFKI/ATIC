@@ -1,0 +1,31 @@
+{
+    "method": "POST",
+    "payload": [
+        {
+            "mail": "david.dean@example.org",
+            "name": "David Dean"
+        }
+    ],
+    "template": {
+        "$type": "array",
+        "$map": {
+            "@id": "?person",
+            "name": "?name",
+            "mail": "?em"
+        },
+        "$where": [
+            "?person foaf:name ?name",
+            "?person schema:email ?em"
+        ],
+        "@context": {
+            "foaf": "http://xmlns.com/foaf/0.1/",
+            "schema": "https://schema.org/"
+        }
+    },
+    "expected": [
+        "A <urn:gen-id:1> <https://schema.org/email> \"david.dean@example.org\" .",
+        "A <urn:gen-id:1> <http://xmlns.com/foaf/0.1/name> \"David Dean\" ."
+    ],
+    "data": "data_01_bridge_persons.ttl",
+    "params": { }
+}

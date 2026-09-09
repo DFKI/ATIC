@@ -43,13 +43,14 @@ public class GraphEndpointAticServerUnitTest {
         // Create temp directory
         tempDir = Files.createTempDirectory("atic-test-");
 
-        System.out.println(tempDir);
+        //System.out.println(tempDir);
 
         // Set as working directory
         System.setProperty("user.dir", tempDir.toAbsolutePath().toString());
 
         String[] args = new String[]{
-            "--home", tempDir.toAbsolutePath().toString()
+            "--home", tempDir.toAbsolutePath().toString(),
+            "--no-print.log"
         };
 
         appConfig = ConfigLoader.load(AticConfig.class, args);
@@ -125,7 +126,7 @@ public class GraphEndpointAticServerUnitTest {
         assertNotNull(body);
         assertFalse(body.isEmpty(), "Response body should not be empty");
 
-        System.out.println(body);
+        //System.out.println(body);
 
         // Since endpoint returns JSON-LD, we can still parse it as JSON
         JSONObject bodyObj = new JSONObject(body);
@@ -181,7 +182,7 @@ public class GraphEndpointAticServerUnitTest {
         assertNotNull(body);
         assertFalse(body.isEmpty());
 
-        System.out.println(body);
+        //System.out.println(body);
 
         JSONObject bodyObj = new JSONObject(body);
 
@@ -236,9 +237,9 @@ public class GraphEndpointAticServerUnitTest {
         // ---- extract generated URI from header ----
         String generatedUri = postResponse.headers()
                 .firstValue("Atic-Resource-URI")
-                .orElseThrow(() -> new AssertionError("Missing Atic-Resource-URI header"));
+                .orElseThrow(() -> new AssertionError("Missing "+ AticHeaders.RESOURCE_URI +" header"));
 
-        System.out.println("Generated graph URI: " + generatedUri);
+        //System.out.println("Generated graph URI: " + generatedUri);
 
         // ---- GET /graph ----
         String getUrl = "http://" + host + ":" + port + "/graph";
@@ -258,7 +259,7 @@ public class GraphEndpointAticServerUnitTest {
         assertNotNull(body);
         assertFalse(body.isEmpty());
 
-        System.out.println(body);
+        //System.out.println(body);
 
         JSONObject bodyObj = new JSONObject(body);
 
@@ -343,7 +344,7 @@ public class GraphEndpointAticServerUnitTest {
         assertNotNull(body);
         assertFalse(body.isEmpty());
 
-        System.out.println(body);
+        //System.out.println(body);
 
         JSONObject bodyObj = new JSONObject(body);
         JSONArray items = bodyObj.getJSONArray("items");

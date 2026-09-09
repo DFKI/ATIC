@@ -80,6 +80,12 @@
             <version>4.3.0</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.github.fslev</groupId>
+            <artifactId>json-compare</artifactId>
+            <version>7.2</version>
+            <scope>test</scope>
+        </dependency>
         
         <!-- Nextcloud -->
         <dependency>

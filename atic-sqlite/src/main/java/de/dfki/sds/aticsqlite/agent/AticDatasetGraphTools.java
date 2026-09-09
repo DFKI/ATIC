@@ -1,5 +1,6 @@
 package de.dfki.sds.aticsqlite.agent;
 
+import de.dfki.sds.aticsqlite.RDFChangesDistinctCollector;
 import de.dfki.sds.atic.agent.RdfDatasetAttachment;
 import de.dfki.sds.atic.agent.RdfPatchAttachment;
 import de.dfki.sds.atic.jenatic.InvocationContext;

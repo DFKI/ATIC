@@ -1,0 +1,93 @@
+{
+    "template": {
+        "$type": "array",
+        "$map": {
+            "$fragment": "?person"
+        },
+        "$where": [
+            "?person a schema:Person"
+        ],
+        "$limit": 10,
+        "$offset": 0,
+        "@context": {
+            "foaf": "http://xmlns.com/foaf/0.1/",
+            "schema": "https://schema.org/"
+        }
+    },
+    "expected": [
+        {
+            "@id": "https://example.org/id/alice-smith",
+            "@type": {
+                "@id": "https://schema.org/Person",
+                "icon": "https://example.org/icon/person",
+                "comment": {
+                    "@value": "A person",
+                    "@language": "en"
+                },
+                "label": "Person"
+            },
+            "icon": "https://example.org/icon/alice",
+            "comment": {
+                "@value": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects.",
+                "@language": "en"
+            },
+            "label": "Alice Smith"
+        },
+        {
+            "@id": "https://example.org/id/bob-johnson",
+            "@type": {
+                "@id": "https://schema.org/Person",
+                "icon": "https://example.org/icon/person",
+                "comment": {
+                    "@value": "A person",
+                    "@language": "en"
+                },
+                "label": "Person"
+            },
+            "icon": "https://example.org/icon/bob",
+            "comment": {
+                "@value": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software.",
+                "@language": "en"
+            },
+            "label": "Bob Johnson"
+        },
+        {
+            "@id": "https://example.org/id/carol-miller",
+            "@type": {
+                "@id": "https://schema.org/Person",
+                "icon": "https://example.org/icon/person",
+                "comment": {
+                    "@value": "A person",
+                    "@language": "en"
+                },
+                "label": "Person"
+            },
+            "icon": "https://example.org/icon/carol",
+            "comment": {
+                "@value": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning.",
+                "@language": "en"
+            },
+            "label": "Carol Miller"
+        }
+    ],
+    "data": "data_01_bridge_persons.ttl",
+    "params": {},
+    "fragmentSettings": {
+        "@type": {
+            "uri": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            "languageAware": false
+        },
+        "icon": {
+            "uri": "https://schema.org/icon",
+            "languageAware": false
+        },
+        "label": {
+            "uri": "http://xmlns.com/foaf/0.1/name",
+            "languageAware": true
+        },
+        "comment": {
+            "uri": "https://schema.org/description",
+            "languageAware": true
+        }
+    }
+}

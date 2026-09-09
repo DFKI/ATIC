@@ -1,0 +1,60 @@
+{
+    "template": {
+        "$type": "array",
+        "$map": {
+            "$fragment": "?person",
+            "additional": "?gender"
+        },
+        "$where": [
+            "?person a schema:Person",
+            "?person schema:gender ?gender"
+        ],
+        "$limit": 10,
+        "$offset": 0,
+        "@context": {
+            "foaf": "http://xmlns.com/foaf/0.1/",
+            "schema": "https://schema.org/"
+        }
+    },
+    "expected": [
+        {
+            "@id": "https://example.org/id/alice-smith",
+            "comment": {
+                "@value": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects.",
+                "@language": "en"
+            },
+            "label": "Alice Smith",
+            "additional": "Female"
+        },
+        {
+            "@id": "https://example.org/id/bob-johnson",
+            "comment": {
+                "@value": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software.",
+                "@language": "en"
+            },
+            "label": "Bob Johnson",
+            "additional": "Male"
+        },
+        {
+            "@id": "https://example.org/id/carol-miller",
+            "comment": {
+                "@value": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning.",
+                "@language": "en"
+            },
+            "label": "Carol Miller",
+            "additional": "Female"
+        }
+    ],
+    "data": "data_01_bridge_persons.ttl",
+    "params": {},
+    "fragmentSettings": {
+        "label": {
+            "uri": "http://xmlns.com/foaf/0.1/name",
+            "languageAware": true
+        },
+        "comment": {
+            "uri": "https://schema.org/description",
+            "languageAware": true
+        }
+    }
+}
