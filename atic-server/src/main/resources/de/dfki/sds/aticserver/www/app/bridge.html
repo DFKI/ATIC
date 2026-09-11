@@ -111,7 +111,19 @@
                             <option value="PATCH">PATCH</option>
                             <option value="DELETE">DELETE</option>
                         </select>
-                        
+
+                        <div class="form-check mb-0">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="dryRun"
+                                v-model="activeQuery.dryRun"
+                                >
+                            <label class="form-check-label" for="dryRun">
+                                Dry Run
+                            </label>
+                        </div>
+
                         <button
                             class="btn btn-primary btn-sm"
                             @click="sendQuery"
@@ -121,7 +133,6 @@
                     </div>
                 </div>
             </div>
-
             <div class="row mb-3">
                 <div class="col">
                     <label>Template</label>
@@ -393,6 +404,14 @@ var app = createApp({
                 const method = this.activeQuery.method;
                 const template = JSON.parse(this.activeQuery.content);
 
+                const headers = {
+                    "Content-Type": "application/json"
+                };
+
+                if (this.activeQuery.dryRun) {
+                    headers["Atic-Dry-Run"] = "true";
+                }
+
                 let response;
 
                 if (method === "QUERY") {
@@ -400,9 +419,7 @@ var app = createApp({
                         method: method,
                         url: "/bridge",
                         data: template,
-                        headers: {
-                            "Content-Type": "application/json"
-                        }
+                        headers
                     });
 
                     this.jsonData = response.data;
@@ -417,9 +434,7 @@ var app = createApp({
                             template,
                             data
                         },
-                        headers: {
-                            "Content-Type": "application/json"
-                        }
+                        headers
                     });
 
                     this.rdfPatchResult = response.data;
@@ -480,7 +495,8 @@ var app = createApp({
                         name: `Bridge ${this.nextQueryNumber}`,
                         content: this.defaultTemplate,
                         method: "QUERY",
-                        data: ""
+                        data: "",
+                        dryRun: false
                     }
                 ];
 

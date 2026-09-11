@@ -152,7 +152,7 @@ public class AticServer {
                         .enableForeignKeys(config.databaseForeignKeysEnabled)
                         .build();
         Database database = new DatabaseLongLivedConnection(options);
-        
+
         //from config to capabilities
         Capabilities.Builder capBuilder = Capabilities.builder();
         capBuilder.rdfStarEnabled(config.isRdfStarEnabled());
@@ -219,17 +219,18 @@ public class AticServer {
                 staticFiles.location = Location.CLASSPATH;
             });
 
-            if(config.getCorsAllowHost() != null) {
+            if (config.getCorsAllowHost() != null) {
                 javalinConf.bundledPlugins.enableCors(cors -> {
                     cors.addRule(rule -> {
-                            rule.allowHost(config.getCorsAllowHost());
-                            rule.allowCredentials = config.isCorsAllowCredentials();
-                        }
+                        rule.allowHost(config.getCorsAllowHost(),
+                                "http://" + config.getHost() + ":" + config.getPort());
+                        rule.allowCredentials = config.isCorsAllowCredentials();
+                    }
                     );
                 });
                 javalinConf.bundledPlugins.enableHttpAllowedMethodsOnRoutes();
             }
-            
+
             javalinConf.routes.exception(PermissionDeniedException.class, (e, ctx) -> {
                 ctx.status(HttpStatus.FORBIDDEN);
                 ctx.result(e.getMessage());
@@ -1467,7 +1468,7 @@ public class AticServer {
                             ictx
                     );
                 });
-                
+
                 //dry run is by default on false, only when explicitly set in headers
                 boolean dryRun = "true".equalsIgnoreCase(ctx.header(AticHeaders.DRY_RUN));
                 if (!dryRun) {
@@ -1475,27 +1476,23 @@ public class AticServer {
                         datasetGraph.apply(patch, ictx);
                     });
                 }
-                
+
                 String rdfPatchResp = RDFPatchOps.str(patch);
-                
+
                 //TODO if we use another mime type like application/rdf-patch it is base64 encoded...
                 ctx.contentType("text/plain");
                 ctx.result(rdfPatchResp);
-                
+
                 //ctx.header("Content-Type", "application/rdf-patch");
-                
                 //ctx.contentType("application/rdf-patch; charset=utf-8");
                 //ctx.result(rdfPatchResp.getBytes(StandardCharsets.UTF_8));
-                
                 //ctx.res().setContentType("application/rdf-patch; charset=UTF-8");
                 //ctx.res().getOutputStream().write(rdfPatchResp.getBytes(StandardCharsets.UTF_8));
-
                 //ctx.res().setContentType("application/rdf-patch");
                 //ctx.res().setCharacterEncoding("UTF-8");
                 //ctx.res().getOutputStream().write(
                 //    rdfPatchResp.getBytes(StandardCharsets.UTF_8)
                 //);
-                
                 break;
 
             default:
@@ -1928,10 +1925,10 @@ public class AticServer {
     }
 
     private void authorizationMiddleware(Context ctx) {
-        if(ctx.method() == HandlerType.OPTIONS) {
+        if (ctx.method() == HandlerType.OPTIONS) {
             return;
         }
-        
+
         // Allow static files without auth
         String path = ctx.path();
         // Skip JWT auth for public static paths

@@ -9,7 +9,7 @@ public class AticConfig {
     int port = 'A' * 100 + 'S'; //Atic Server: 6583
 
     @Config(value = "host", description = "Host address")
-    String host = "127.0.0.1";
+    String host = "localhost";
 
     @Config(value = "debug", description = "Enable debug mode")
     boolean debug = false;

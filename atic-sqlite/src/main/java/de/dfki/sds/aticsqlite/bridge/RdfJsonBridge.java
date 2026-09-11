@@ -602,7 +602,7 @@ public class RdfJsonBridge {
             case "DELETE" -> {
                 //you should not be able to delete something which does not exist
                 payload.find().forEachRemaining(q -> {
-                    if (datasetGraph.contains(q)) {
+                    if (datasetGraph.contains(q, ctx)) {
                         collector.delete(q.getGraph(), q.getSubject(), q.getPredicate(), q.getObject());
                     }
                 });
