@@ -19,6 +19,7 @@ import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticsqlite.AticGraphUtils;
 import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
@@ -1463,7 +1464,7 @@ public class AticServer {
                             queryParamsForPatch,
                             request.get("data"),
                             request.getJSONObject("template"),
-                            () -> SqliteAticDatasetGraph.createURNForResource(),
+                            () -> AticGraphUtils.createURNForResource(),
                             datasetGraph,
                             ictx
                     );

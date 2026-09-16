@@ -7,6 +7,7 @@ import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import java.awt.Rectangle;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.jena.graph.Graph;
@@ -17,6 +18,14 @@ import org.apache.jena.graph.TransactionHandler;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.graph.impl.GraphMatcher;
 import org.apache.jena.graph.impl.SimpleEventManager;
+import org.apache.jena.query.Dataset;
+import org.apache.jena.query.DatasetFactory;
+import org.apache.jena.query.Query;
+import org.apache.jena.query.QueryExecution;
+import org.apache.jena.query.QueryFactory;
+import org.apache.jena.query.QuerySolution;
+import org.apache.jena.query.ResultSet;
+import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.rdf.model.Resource;
 import org.apache.jena.rdf.model.ResourceFactory;
 import org.apache.jena.shared.PrefixMapping;
@@ -33,6 +42,7 @@ import org.json.JSONObject;
 public class WorkbookGraph implements AticGraph {
 
     public static final Node node = NodeFactory.createURI("urn:atic:workbooks");
+    public static final String ROW_ENTITY_VAR = "rowEntity";
 
     private SqliteAticDatasetGraph datasetGraph;
 
@@ -42,6 +52,27 @@ public class WorkbookGraph implements AticGraph {
     private AticGraph innerGraph;
 
     public static final Resource Workbook = ResourceFactory.createResource("urn:atic:Workbook");
+
+    //caches
+    private IndexAllocation<Node> rowCache;
+    private IndexAllocation<Node> columns;
+    private Map<ResourceColumn, List<Node>> valueCache;
+    private Query recentQuery;
+
+    //settings
+    private int pageSize = 20;
+    private int valueCacheThreshold = 100;
+    private int valueCacheCleanupMaxDist = pageSize * 3;
+    private Integer maxNumberOfRows;
+
+    /**
+     * The invisible column for the entity. Has index smaller than 0.
+     */
+    private Node entityRowColumn = NodeFactory.createURI("urn:entity:row");
+
+    private record ResourceColumn(Node resource, Node column) {
+
+    }
 
     public WorkbookGraph(SqliteAticDatasetGraph datasetGraph) {
         this.datasetGraph = datasetGraph;
@@ -277,7 +308,101 @@ public class WorkbookGraph implements AticGraph {
 
     //sheet stuff
     public Cell get(Node workbook, Node sheet, int rowIndex, int columnIndex, InvocationContext ctx) {
-        return null;
+
+        //get the config
+        JSONObject json = getJson(workbook, ctx);
+        JSONArray sheetArray = json.optJSONArray("sheets");
+        if (sheetArray == null) {
+            throw new IllegalStateException("Sheet not found in workbook: " + sheet.getURI());
+        }
+        String sheetId = sheet.getURI();
+        JSONObject selectedSheet = null;
+        for (int i = 0; i < sheetArray.length(); i++) {
+            JSONObject sheetJson = sheetArray.getJSONObject(i);
+            if (sheetId.equals(sheetJson.optString("@id"))) {
+                selectedSheet = sheetJson;
+                break;
+            }
+        }
+        if (selectedSheet == null) {
+            throw new IllegalStateException("Sheet not found in workbook: " + sheetId);
+        }
+
+        //we can not load all of them but a window
+        //the row index decides what row entity we pick
+        //decide: from cache or ask query window, cache it and use it
+        //directly return empty cell if we reached the end
+        if (maxNumberOfRows != null && rowIndex >= maxNumberOfRows) {
+            return Cell.empty();
+        }
+
+        updateRowCache(selectedSheet.getString("rowQuery"), rowIndex, ctx);
+
+        //row cache is now filled
+        Node rowEntity = rowCache.getObject(rowIndex);
+
+        //row does not exist
+        if (rowEntity == null) {
+            //empty cell
+            return Cell.empty();
+        }
+
+        //special case: we are interested in the row entity, not one of its columns
+        //we use a predefined entity row column here
+        if (columnIndex < 0) {
+            //return new Cell(rowEntity, entityRowColumn);
+            return Cell.builder()
+                    .addNode(node)
+                    .workbook(workbook)
+                    .sheet(sheet)
+                    .column(entityRowColumn)
+                    .rowIndex(rowIndex)
+                    .columnIndex(columnIndex)
+                    .build();
+        }
+
+        Node column = columns.getObject(columnIndex);
+
+        //column does not exist
+        if (column == null) {
+            //empty cell
+            return Cell.empty();
+        }
+
+        JSONArray columnArray = selectedSheet.optJSONArray("columns");
+        String columnId = column.getURI();
+        JSONObject selectedColumn = null;
+        for (int i = 0; i < columnArray.length(); i++) {
+            JSONObject columnJson = columnArray.getJSONObject(i);
+            if (columnId.equals(columnJson.optString("@id"))) {
+                selectedColumn = columnJson;
+                break;
+            }
+        }
+        if (selectedColumn == null) {
+            throw new IllegalStateException("Column not found in sheet: " + sheetId);
+        }
+        
+        ColumnConfig columnConfig = ColumnConfig.fromJson(selectedColumn);
+        
+        ResourceColumn key = updateValueCache(rowEntity, rowIndex, column, columnConfig, ctx);
+
+        //value cache is now filled
+        List<Node> values = valueCache.get(key);
+
+        if (values == null) {
+            throw new RuntimeException("values should never be null");
+        }
+
+        //return new Cell(values, column);
+        return Cell.builder()
+                .workbook(workbook)
+                .sheet(sheet)
+                .column(column)
+                .rowIndex(rowIndex)
+                .columnIndex(columnIndex)
+                .nodes(values)
+                .build();
     }
 
     public Window get(Node workbook, Node sheet, Rectangle rect, InvocationContext ctx) {
@@ -290,6 +415,181 @@ public class WorkbookGraph implements AticGraph {
 
     public void set(Node workbook, Node sheet, Rectangle rect, Cell cell, InvocationContext ctx) {
 
+    }
+
+    //cache update
+    private void updateRowCache(String rowQuery, int rowIndex, InvocationContext ctx) {
+        //if resource was not found in cache, fill cache
+        if (rowCache.getObject(rowIndex) == null) {
+            Query query = getRowQuery(rowQuery, rowIndex);
+            long offset = query.getOffset();
+            Dataset ds = DatasetFactory.wrap(datasetGraph);
+            ctx.transferContext(ds.getContext());
+            ResultSet rs = QueryExecution.create(query, ds).execSelect();
+            while (rs.hasNext()) {
+                QuerySolution qs = rs.next();
+                Resource re = qs.get(ROW_ENTITY_VAR).asResource();
+                //row number starts at 1
+                int index = (int) (offset + (rs.getRowNumber() - 1));
+                rowCache.putOverwrite(re.asNode(), index);
+            }
+            //if we reach the end we mark it so that we do not ask again when caching
+            if (rs.getRowNumber() < query.getLimit()) {
+                //number of rows, so it is +1
+                maxNumberOfRows = (int) (offset + rs.getRowNumber());
+            }
+        }
+    }
+
+    private ResourceColumn updateValueCache(Node rowEntity, int rowIndex, Node columnIndicator, ColumnConfig columnConfig, InvocationContext ctx) {
+        //check the cache
+        ResourceColumn key = new ResourceColumn(rowEntity, columnIndicator);
+        if (!valueCache.containsKey(key)) {
+            //if cache is empty we have to load it
+
+            //again we only load all columns for our window
+            int[] fromTo = getWindowFromTo(rowIndex);
+
+            for (int i = fromTo[0]; i <= fromTo[1]; i++) {
+                //we use the row cache, should be initialized already
+                Node res = rowCache.getObject(i);
+
+                //no recsource no row for it
+                if (res == null) {
+                    continue;
+                }
+
+                //for each column we need to know the cell values
+                for (Node col : columns.toDeflatedList()) {
+
+                    //because of deflated
+                    if (col == null) {
+                        continue;
+                    }
+
+                    datasetGraph.find(Node.ANY, s, p, o, ctx);
+                    
+                    List<Node> values = null;
+                    switch (columnConfig.getDirection()) {
+                        
+                        
+                        
+                        case Outgoing:
+                            values = model.listObjectsOfProperty(res, col.getProperty()).toList();
+                            break;
+                        case Incoming:
+                            values = model.listSubjectsWithProperty(col.getProperty(), res).mapWith(r -> (RDFNode) r).toList();
+                            break;
+                    }
+
+                    //update cache
+                    valueCache.put(new ResourceColumn(res, col), values);
+                }
+            }
+
+        }
+
+        //if value cache get too large we need to reduce it again
+        //does nothing if cache is not over threshold
+        manageValueCache(rowIndex);
+        
+        
+        return key;
+    }
+
+    //query management
+    private Query getRowQuery(String rowQuery, int indexIndicator) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(getPrefixes());
+        //I guess we have to add distinct because bgps may yield multiple rows with same row
+        sb.append("select distinct ?" + ROW_ENTITY_VAR + "\n");
+        sb.append("{\n");
+
+        sb.append(rowQuery).append("\n");
+
+        //better is filter before sort so we have less to check in query
+        //add column filters here
+        /*
+        List<String> filterVars = new ArrayList<>();
+        for(ColumnFilter cf : filterList) {
+            String filterVar = RandomStringUtils.randomAlphabetic(6);
+            filterVars.add(filterVar);
+            String bgp = cf.getColumn().getBGP(filterVar);
+            //we do not have to use optional here, because filter should filter only the matching ones
+            sb.append(bgp).append("\n");
+        }
+         */
+ /*
+        if(!filterVars.isEmpty()) {
+            //we only provide and operator (&&)
+            StringJoiner sj = new StringJoiner(" && ");
+            for(int i = 0; i < filterVars.size(); i++) {
+                String filterVar = filterVars.get(i);
+                ColumnFilter columnFilter = filterList.get(i);
+                sj.add(columnFilter.getFiltering().toFilter(filterVar));
+            }
+            sb.append("filter ( ").append(sj.toString()).append(" )").append("\n");
+        }
+         */
+        List<String> sortVars = new ArrayList<>();
+        /*
+        for(ColumnSort cs : sortList) {
+            String sortVar = RandomStringUtils.randomAlphabetic(6);
+            sortVars.add(sortVar);
+            
+            String bgp = cs.getColumn().getBGP(sortVar);
+            //we have to use optional because not all may have the property for sorting
+            sb.append("optional { ").append(bgp).append(" }").append("\n");
+        }
+         */
+
+        //where end
+        sb.append("}");
+
+        //parse the query and add the rest
+        Query q = QueryFactory.create(sb.toString());
+
+        /*
+        //variable names for the order by
+        if(sortList.isEmpty()) {
+            //if no sorting is specified, we order by ROW_ENTITY_VAR to have a fixed order
+            q.addOrderBy(NodeFactory.createVariable(ROW_ENTITY_VAR), Query.ORDER_DEFAULT);
+        } else {
+            for(int i = 0; i < sortVars.size(); i++) {
+                String sortVar = sortVars.get(i);
+                ColumnSort columnSort = sortList.get(i);
+                q.addOrderBy(sortVar, toDirection(columnSort.getSorting()));
+            }
+        }
+         */
+        //offset and limit
+        setOffsetAndLimit(q, indexIndicator);
+
+        recentQuery = q;
+
+        return q;
+    }
+
+    private String getPrefixes() {
+        StringBuilder sb = new StringBuilder();
+        this.datasetGraph.prefixes().forEach((prefix, uri) -> {
+            sb.append(String.format("PREFIX %s: <%s>\n", prefix, uri));
+        });
+        return sb.toString();
+    }
+
+    private void setOffsetAndLimit(Query query, int indexIndicator) {
+        int[] fromTo = getWindowFromTo(indexIndicator);
+        query.setOffset(fromTo[0]);
+        query.setLimit(pageSize);
+    }
+
+    private int[] getWindowFromTo(int indexIndicator) {
+        int offset = indexIndicator;
+        if (offset < 0) {
+            offset = 0;
+        }
+        return new int[]{offset, offset + pageSize};
     }
 
     //----------------------------------

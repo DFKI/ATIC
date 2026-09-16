@@ -234,8 +234,12 @@ public class SystemAticGraph implements AticGraph {
     public ExtendedIterator<Triple> find(Node s, Node p, Node o, InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, datasetGraph.getContext());
 
-        valid(s, p, o);
-
+        try {
+            valid(s, p, o);
+        } catch(Exception e) {
+            return NiceIterator.emptyIterator();
+        }
+        
         try {
             Database db = datasetGraph.getDatabase();
 
@@ -380,7 +384,11 @@ public class SystemAticGraph implements AticGraph {
     public boolean contains(Node s, Node p, Node o, InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, datasetGraph.getContext());
 
-        valid(s, p, o);
+        try {
+            valid(s, p, o);
+        } catch(Exception e) {
+            return false;
+        }
 
         try {
             Database db = datasetGraph.getDatabase();
