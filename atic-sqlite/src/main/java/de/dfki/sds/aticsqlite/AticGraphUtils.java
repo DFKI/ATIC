@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
@@ -26,7 +27,7 @@ import org.apache.jena.shared.DeleteDeniedException;
 /**
  *
  */
-/*package*/ class AticGraphUtils {
+public class AticGraphUtils {
 
     public record Collection(Set<Node> resourceNodes, Map<Node, Set<Node>> predicateObjectsMap) {
 
@@ -58,6 +59,22 @@ import org.apache.jena.shared.DeleteDeniedException;
         return new Collection(resourceNodes, predicateObjectsMap);
     }
 
+    
+    /**
+     * Generates a URN of the form {@code urn:atic:{type}-{UUID}} for creating unique resource identifiers.
+     *
+     * @param type the type prefix for the URN (e.g., "resource", "blanknode", "user", "group", "graph", "session")
+     * @return the generated URN string
+     */
+    public static String createURN(String type) {
+        return "urn:atic:" + type + "-" + UUID.randomUUID();
+    }
+    
+    public static String createURNForResource() {
+        return createURN("resource");
+    }
+
+    
     //TODO bulkResolveResources can be optimized for performance
     public static void bulkResolveResources(
             Set<Node> nodes,
@@ -79,7 +96,7 @@ import org.apache.jena.shared.DeleteDeniedException;
 
         for (Node n : nodes) {
             if (n.isBlank() && !bnode2uri.containsKey(n)) {
-                bnode2uri.put(n, datasetGraph.createURN("blanknode"));
+                bnode2uri.put(n, createURN("blanknode"));
             }
         }
 
@@ -520,7 +537,7 @@ import org.apache.jena.shared.DeleteDeniedException;
             if (predicate.isBlank() && !bnode2uri.containsKey(predicate)) {
                 bnode2uri.put(
                         predicate,
-                        datasetGraph.createURN("blanknode")
+                        createURN("blanknode")
                 );
             }
         }

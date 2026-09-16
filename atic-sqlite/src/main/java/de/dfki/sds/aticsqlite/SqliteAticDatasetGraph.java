@@ -25,7 +25,9 @@ import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import static de.dfki.sds.aticsqlite.AticGraphUtils.createURN;
 import de.dfki.sds.aticsqlite.agent.AgentSessionManager;
+import de.dfki.sds.aticsqlite.s16n.WorkbookGraph;
 import edu.lehigh.swat.bench.uba.Generator;
 import edu.lehigh.swat.bench.uba.StreamRDFWriter;
 import java.io.File;
@@ -50,7 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -144,6 +145,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     private User adminUser;
 
     private SystemAticGraph systemGraph;
+    
+    private WorkbookGraph workbookGraph;
 
     private Capabilities capabilities;
 
@@ -169,6 +172,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         this.agentSessionManager = new AgentSessionManager();
         this.capabilities = capabilities;
         this.systemGraph = new SystemAticGraph(this);
+        this.workbookGraph = new WorkbookGraph(this);
         if (mainListener != null) {
             this.rdfPatchEmitter.addListener(mainListener);
         }
@@ -230,8 +234,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 throw new RuntimeException("Failed to bootstrap indices", ex);
             }
         });
-
         
+        this.executeWrite(() -> {
+            try {
+                bootstrapWorkbookGraph();
+            } catch (Exception ex) {
+                throw new RuntimeException("Failed to bootstrap workbook graph", ex);
+            }
+        });
     }
 
     /**
@@ -478,6 +488,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         );
     }
 
+    private void bootstrapWorkbookGraph() {
+        InvocationContext ctx = InvocationContext.builder().fromUser(adminUser).build();
+        workbookGraph.ensureGraph(ctx);
+    }
+    
     private void bootstrapInvex() {
         if(!capabilities.isInvexEnabled())
             return;
@@ -508,20 +523,6 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         } catch (Throwable e) {
             // INVEX is optional; leave invexEmbedded as null.
         }
-    }
-
-    /**
-     * Generates a URN of the form {@code urn:atic:{type}-{UUID}} for creating unique resource identifiers.
-     *
-     * @param type the type prefix for the URN (e.g., "resource", "blanknode", "user", "group", "graph", "session")
-     * @return the generated URN string
-     */
-    public static String createURN(String type) {
-        return "urn:atic:" + type + "-" + UUID.randomUUID();
-    }
-    
-    public static String createURNForResource() {
-        return createURN("resource");
     }
 
     //============================================================
@@ -2921,6 +2922,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
     public AticGraph getSystemGraph() {
         return getGraph(SystemAticGraph.node, false, InvocationContext.EMPTY);
+    }
+    
+    public WorkbookGraph getWorkbookGraph() {
+        return workbookGraph;
     }
 
     /**

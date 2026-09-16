@@ -21,7 +21,7 @@ public class SparqlFunctionCreateURN extends FunctionBase0 {
     @Override
     public NodeValue exec() {
         // example: generate a fresh URI
-        String urn = datasetGraph.createURN("resource");
+        String urn = AticGraphUtils.createURN("resource");
         Node n = NodeFactory.createURI(urn);
         return NodeValue.makeNode(n);
     }
