@@ -12,6 +12,7 @@ public class Cell {
     private Node workbook;
     private Node sheet;
     private Node column;
+    private Node rowEntity;
     private int rowIndex;
     private int columnIndex;
 
@@ -21,6 +22,7 @@ public class Cell {
         this.workbook = builder.workbook;
         this.sheet = builder.sheet;
         this.column = builder.column;
+        this.rowEntity = builder.rowEntity;
         this.rowIndex = builder.rowIndex;
         this.columnIndex = builder.columnIndex;
         this.nodes = builder.nodes;
@@ -29,7 +31,79 @@ public class Cell {
     public static Builder builder() {
         return new Builder();
     }
+    
+    public static class Builder {
 
+        private Node workbook;
+        private Node sheet;
+        private Node column;
+        private Node rowEntity;
+        private int rowIndex;
+        private int columnIndex;
+        private List<Node> nodes = new ArrayList<>();
+
+        public Builder workbook(Node workbook) {
+            this.workbook = workbook;
+            return this;
+        }
+
+        public Builder sheet(Node sheet) {
+            this.sheet = sheet;
+            return this;
+        }
+
+        public Builder column(Node column) {
+            this.column = column;
+            return this;
+        }
+        
+        public Builder rowEntity(Node rowEntity) {
+            this.rowEntity = rowEntity;
+            return this;
+        }
+
+        public Builder rowIndex(int rowIndex) {
+            this.rowIndex = rowIndex;
+            return this;
+        }
+
+        public Builder columnIndex(int columnIndex) {
+            this.columnIndex = columnIndex;
+            return this;
+        }
+
+        public Builder location(int rowIndex, int columnIndex) {
+            this.rowIndex = rowIndex;
+            this.columnIndex = columnIndex;
+            return this;
+        }
+
+        public Builder nodes(List<Node> nodes) {
+            this.nodes = nodes;
+            return this;
+        }
+
+        public Builder addNode(Node node) {
+            this.nodes.add(node);
+            return this;
+        }
+
+        public Builder fromJson(JSONObject json) {
+            JSONArray content = json.getJSONArray("content");
+            this.nodes = new ArrayList<>();
+
+            for (int i = 0; i < content.length(); i++) {
+                this.nodes.add(fromJsonLd(content.getJSONObject(i)));
+            }
+
+            return this;
+        }
+
+        public Cell build() {
+            return new Cell(this);
+        }
+    }
+    
     public Node getWorkbook() {
         return workbook;
     }
@@ -54,69 +128,6 @@ public class Cell {
         return nodes;
     }
 
-    public static class Builder {
-
-        private Node workbook;
-        private Node sheet;
-        private Node column;
-        private int rowIndex;
-        private int columnIndex;
-        private List<Node> nodes = new ArrayList<>();
-
-        public Builder workbook(Node workbook) {
-            this.workbook = workbook;
-            return this;
-        }
-
-        public Builder sheet(Node sheet) {
-            this.sheet = sheet;
-            return this;
-        }
-
-        public Builder column(Node column) {
-            this.column = column;
-            return this;
-        }
-
-        public Builder rowIndex(int rowIndex) {
-            this.rowIndex = rowIndex;
-            return this;
-        }
-
-        public Builder columnIndex(int columnIndex) {
-            this.columnIndex = columnIndex;
-            return this;
-        }
-
-        public Builder nodes(List<Node> nodes) {
-            this.nodes = nodes;
-            return this;
-        }
-        
-        public Builder addNode(Node node) {
-            this.nodes.add(node);
-            return this;
-        }
-
-        public Builder fromJson(JSONObject json) {
-            JSONArray content = json.getJSONArray("content");
-            this.nodes = new ArrayList<>();
-
-            for (int i = 0; i < content.length(); i++) {
-                this.nodes.add(fromJsonLd(content.getJSONObject(i)));
-            }
-
-            return this;
-        }
-
-        public Cell build() {
-            return new Cell(this);
-        }
-    }
-
-    public static Cell empty() {
-        return builder().build();
-    }
 
     public static Cell fromJson(JSONObject json) {
         return builder()
@@ -136,13 +147,21 @@ public class Cell {
             content.put(toJsonLd(node));
         }
 
-        return new JSONObject()
+        JSONObject json = new JSONObject()
                 .put("workbook", new JSONObject().put("@id", workbook.getURI()))
                 .put("sheet", new JSONObject().put("@id", sheet.getURI()))
-                .put("column", new JSONObject().put("@id", column.getURI()))
                 .put("rowIndex", rowIndex)
                 .put("columnIndex", columnIndex)
                 .put("content", content);
+
+        if (column != null) {
+            json.put("column", new JSONObject().put("@id", column.getURI()));
+        }
+        if (rowEntity != null) {
+            json.put("rowEntity", new JSONObject().put("@id", rowEntity.getURI()));
+        }
+
+        return json;
     }
 
     private static JSONObject toJsonLd(Node node) {
@@ -174,14 +193,14 @@ public class Cell {
             String value = json.getString("@value");
 
             if (json.has("@language")) {
-                return NodeFactory.createLiteral(value, json.getString("@language"));
+                return NodeFactory.createLiteralLang(value, json.getString("@language"));
             }
 
             if (json.has("@type")) {
-                return NodeFactory.createLiteral(value, NodeFactory.getType(json.getString("@type")));
+                return NodeFactory.createLiteralDT(value, NodeFactory.getType(json.getString("@type")));
             }
 
-            return NodeFactory.createLiteral(value);
+            return NodeFactory.createLiteralString(value);
         }
 
         throw new IllegalArgumentException("Invalid JSON-LD node: " + json);
