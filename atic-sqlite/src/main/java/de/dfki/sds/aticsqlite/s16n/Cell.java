@@ -14,8 +14,8 @@ public class Cell {
     private Node sheet;
     private Node column;
     private Node rowEntity;
-    private int rowIndex;
-    private int columnIndex;
+    private Integer rowIndex;
+    private Integer columnIndex;
 
     private final List<Node> nodes;
 
@@ -97,6 +97,22 @@ public class Cell {
                 this.nodes.add(fromJsonLd(content.getJSONObject(i)));
             }
 
+            if (json.has("workbook")) {
+                this.workbook = NodeFactory.createURI(json.getJSONObject("workbook").getString("@id"));
+            }
+            if (json.has("sheet")) {
+                this.sheet = NodeFactory.createURI(json.getJSONObject("sheet").getString("@id"));
+            }
+            if (json.has("column")) {
+                this.column = NodeFactory.createURI(json.getJSONObject("column").getString("@id"));
+            }
+            if (json.has("rowIndex")) {
+                this.rowIndex = json.getInt("rowIndex");
+            }
+            if (json.has("columnIndex")) {
+                this.columnIndex = json.getInt("columnIndex");
+            }
+
             return this;
         }
 
@@ -130,14 +146,7 @@ public class Cell {
     }
 
     public static Cell fromJson(JSONObject json) {
-        return builder()
-                .workbook(NodeFactory.createURI(json.getJSONObject("workbook").getString("@id")))
-                .sheet(NodeFactory.createURI(json.getJSONObject("sheet").getString("@id")))
-                .column(NodeFactory.createURI(json.getJSONObject("column").getString("@id")))
-                .rowIndex(json.getInt("rowIndex"))
-                .columnIndex(json.getInt("columnIndex"))
-                .fromJson(json)
-                .build();
+        return builder().fromJson(json).build();
     }
 
     public JSONObject toJson() {
@@ -147,18 +156,25 @@ public class Cell {
             content.put(toJsonLd(node));
         }
 
-        JSONObject json = new JSONObject()
-                .put("workbook", new JSONObject().put("@id", workbook.getURI()))
-                .put("sheet", new JSONObject().put("@id", sheet.getURI()))
-                .put("rowIndex", rowIndex)
-                .put("columnIndex", columnIndex)
-                .put("content", content);
+        JSONObject json = new JSONObject().put("content", content);
 
+        if (workbook != null) {
+            json.put("workbook", new JSONObject().put("@id", workbook.getURI()));
+        }
+        if (sheet != null) {
+            json.put("sheet", new JSONObject().put("@id", sheet.getURI()));
+        }
         if (column != null) {
             json.put("column", new JSONObject().put("@id", column.getURI()));
         }
         if (rowEntity != null) {
             json.put("rowEntity", new JSONObject().put("@id", rowEntity.getURI()));
+        }
+        if (rowIndex != null) {
+            json.put("rowIndex", rowIndex);
+        }
+        if (columnIndex != null) {
+            json.put("columnIndex", columnIndex);
         }
 
         return json;
@@ -221,7 +237,7 @@ public class Cell {
             if (datatype == null
                     || XSDstring.getURI().equals(datatype)) {
                 json.put("@value", lexicalForm);
-                if(datatype != null) {
+                if (datatype != null) {
                     json.put("@type", datatype);
                 }
                 return json;

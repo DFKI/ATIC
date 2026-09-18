@@ -29,6 +29,13 @@ import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
+import de.dfki.sds.aticsqlite.s16n.Cell;
+import de.dfki.sds.aticsqlite.s16n.ColumnConfig;
+import de.dfki.sds.aticsqlite.s16n.Operation;
+import de.dfki.sds.aticsqlite.s16n.SheetConfig;
+import de.dfki.sds.aticsqlite.s16n.Window;
+import de.dfki.sds.aticsqlite.s16n.WorkbookConfig;
+import de.dfki.sds.aticsqlite.s16n.WorkbookGraph;
 import de.dfki.sds.rdfpatchsqlite.Converter;
 import io.javalin.Javalin;
 import io.javalin.config.JavalinConfig;
@@ -47,6 +54,7 @@ import jakarta.json.JsonObject;
 import jakarta.json.JsonWriter;
 import jakarta.json.JsonWriterFactory;
 import jakarta.json.stream.JsonGenerator;
+import java.awt.Rectangle;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -381,6 +389,16 @@ public class AticServer {
         routes.put("/bridge", this::handleBridge);
         routes.patch("/bridge", this::handleBridge);
         routes.delete("/bridge", this::handleBridge);
+
+        routes.post("/workbooks", this::postWorkbooks);
+        routes.get("/workbooks/{workbookUri}", this::getWorkbook);
+        routes.post("/workbooks/{workbookUri}/sheets", this::postSheets);
+        routes.delete("/workbooks/{workbookUri}/sheets", this::deleteSheets);
+        routes.post("/workbooks/{workbookUri}/sheets/{sheetUri}/columns", this::postColumns);
+        routes.delete("/workbooks/{workbookUri}/sheets/{sheetUri}/columns", this::deleteColumns);
+        routes.get("/workbooks/{workbookUri}/sheets/{sheetUri}/cells", this::getCells);
+        routes.post("/workbooks/{workbookUri}/sheets/{sheetUri}/cells", this::postCell);
+        routes.delete("/workbooks/{workbookUri}/sheets/{sheetUri}/cells", this::deleteCell);
     }
 
     private void getAppLogin(Context ctx) throws IOException {
@@ -403,6 +421,220 @@ public class AticServer {
         sb.append("Instance Name: ").append(config.instanceName).append("\n");
         ctx.contentType(ContentType.TEXT_PLAIN);
         ctx.result(sb.toString());
+    }
+
+    //------------------------------------------
+    //workbook
+    
+    private void postWorkbooks(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        JSONArray json = new JSONArray(ctx.body());
+        List<WorkbookConfig> configs = new ArrayList<>();
+
+        for (int i = 0; i < json.length(); i++) {
+            configs.add(WorkbookConfig.fromJson(json.getJSONObject(i)));
+        }
+
+        List<Node> workbooks = datasetGraph.calculateWrite(() -> datasetGraph.getWorkbookGraph().addWorkbooks(configs, ictx));
+        JSONArray result = new JSONArray();
+
+        for (Node workbook : workbooks) {
+            result.put(workbook.getURI());
+        }
+
+        ctx.json(result.toString());
+    }
+
+    private void getWorkbook(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
+        JSONObject json = datasetGraph.calculateRead(() -> datasetGraph.getWorkbookGraph().getJson(workbook, ictx));
+        ctx.json(json.toString());
+    }
+
+    private void postSheets(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
+        JSONArray json = new JSONArray(ctx.body());
+        List<SheetConfig> configs = new ArrayList<>();
+
+        for (int i = 0; i < json.length(); i++) {
+            configs.add(SheetConfig.fromJson(json.getJSONObject(i)));
+        }
+
+        List<Node> sheets = datasetGraph.calculateWrite(() -> datasetGraph.getWorkbookGraph().addSheets(workbook, configs, ictx));
+        JSONArray result = new JSONArray();
+
+        for (Node sheet : sheets) {
+            result.put(sheet.getURI());
+        }
+
+        ctx.json(result.toString());
+    }
+
+    private void deleteSheets(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
+        JSONArray json = new JSONArray(ctx.body());
+        Set<Node> sheets = new HashSet<>();
+
+        for (int i = 0; i < json.length(); i++) {
+            sheets.add(NodeFactory.createURI(json.getString(i)));
+        }
+
+        datasetGraph.executeWrite(() -> datasetGraph.getWorkbookGraph().removeSheets(workbook, sheets, ictx));
+        ctx.status(204);
+    }
+
+    private void postColumns(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
+        Node sheet = NodeFactory.createURI(ctx.pathParam("sheetUri"));
+        JSONArray json = new JSONArray(ctx.body());
+        List<ColumnConfig> configs = new ArrayList<>();
+
+        for (int i = 0; i < json.length(); i++) {
+            configs.add(ColumnConfig.fromJson(json.getJSONObject(i)));
+        }
+
+        List<Node> columns = datasetGraph.calculateWrite(() -> datasetGraph.getWorkbookGraph().addColumns(workbook, sheet, configs, ictx));
+        JSONArray result = new JSONArray();
+
+        for (Node column : columns) {
+            result.put(column.getURI());
+        }
+
+        ctx.json(result.toString());
+    }
+
+    private void deleteColumns(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
+        Node sheet = NodeFactory.createURI(ctx.pathParam("sheetUri"));
+        JSONArray json = new JSONArray(ctx.body());
+        Set<Node> columns = new HashSet<>();
+
+        for (int i = 0; i < json.length(); i++) {
+            columns.add(NodeFactory.createURI(json.getString(i)));
+        }
+
+        datasetGraph.executeWrite(() -> datasetGraph.getWorkbookGraph().removeColumns(workbook, sheet, columns, ictx));
+        ctx.status(204);
+    }
+
+    private void getCells(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
+        Node sheet = NodeFactory.createURI(ctx.pathParam("sheetUri"));
+        WorkbookGraph graph = datasetGraph.getWorkbookGraph();
+
+        String window = ctx.queryParam("window");
+        String position = ctx.queryParam("position");
+
+        if (window != null && position != null) {
+            throw new IllegalArgumentException("Specify either window or position, not both");
+        }
+
+        if (window != null) {
+            String[] values = window.split(",");
+            if (values.length != 4) {
+                throw new IllegalArgumentException("window must be x,y,width,height");
+            }
+
+            Rectangle rect = new Rectangle(Integer.parseInt(values[0]), Integer.parseInt(values[1]), Integer.parseInt(values[2]), Integer.parseInt(values[3]));
+            Window result = datasetGraph.calculateRead(() -> graph.get(workbook, sheet, rect, ictx));
+            ctx.json(result.toJson().toString());
+            return;
+        }
+
+        if (position != null) {
+            String[] values = position.split(",");
+            if (values.length != 2) {
+                throw new IllegalArgumentException("position must be row,column");
+            }
+
+            Cell result = datasetGraph.calculateRead(() -> graph.get(workbook, sheet, Integer.parseInt(values[0]), Integer.parseInt(values[1]), ictx));
+            ctx.json(result.toJson().toString());
+            return;
+        }
+
+        throw new IllegalArgumentException("Either window or position must be specified");
+    }
+
+    private void postCell(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
+        Node sheet = NodeFactory.createURI(ctx.pathParam("sheetUri"));
+        WorkbookGraph graph = datasetGraph.getWorkbookGraph();
+
+        String window = ctx.queryParam("window");
+        String position = ctx.queryParam("position");
+
+        if (window != null && position != null) {
+            throw new IllegalArgumentException("Specify either window or position, not both");
+        }
+
+        Rectangle rect;
+
+        if (window != null) {
+            String[] values = window.split(",");
+            if (values.length != 4) {
+                throw new IllegalArgumentException("window must be x,y,width,height");
+            }
+            rect = new Rectangle(Integer.parseInt(values[0]), Integer.parseInt(values[1]), Integer.parseInt(values[2]), Integer.parseInt(values[3]));
+        } else if (position != null) {
+            String[] values = position.split(",");
+            if (values.length != 2) {
+                throw new IllegalArgumentException("position must be row,column");
+            }
+            rect = new Rectangle(Integer.parseInt(values[1]), Integer.parseInt(values[0]), 1, 1);
+        } else {
+            throw new IllegalArgumentException("Either window or position must be specified");
+        }
+
+        Cell cell = Cell.fromJson(new JSONObject(ctx.body()));
+        String operationValue = ctx.queryParam("operation");
+        Operation operation = operationValue == null ? Operation.Set : Operation.valueOf(operationValue);
+
+        datasetGraph.executeWrite(() -> graph.set(workbook, sheet, rect, cell, operation, ictx));
+        ctx.status(204);
+    }
+
+    private void deleteCell(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
+        Node sheet = NodeFactory.createURI(ctx.pathParam("sheetUri"));
+        WorkbookGraph graph = datasetGraph.getWorkbookGraph();
+
+        String window = ctx.queryParam("window");
+        String position = ctx.queryParam("position");
+
+        if (window != null && position != null) {
+            throw new IllegalArgumentException("Specify either window or position, not both");
+        }
+
+        Rectangle rect;
+
+        if (window != null) {
+            String[] values = window.split(",");
+            if (values.length != 4) {
+                throw new IllegalArgumentException("window must be x,y,width,height");
+            }
+            rect = new Rectangle(Integer.parseInt(values[0]), Integer.parseInt(values[1]), Integer.parseInt(values[2]), Integer.parseInt(values[3]));
+        } else if (position != null) {
+            String[] values = position.split(",");
+            if (values.length != 2) {
+                throw new IllegalArgumentException("position must be row,column");
+            }
+            rect = new Rectangle(Integer.parseInt(values[1]), Integer.parseInt(values[0]), 1, 1);
+        } else {
+            throw new IllegalArgumentException("Either window or position must be specified");
+        }
+
+        Cell cell = Cell.fromJson(new JSONObject(ctx.body()));
+
+        datasetGraph.executeWrite(() -> graph.set(workbook, sheet, rect, cell, Operation.Remove, ictx));
+        ctx.status(204);
     }
 
     //------------------------------------------

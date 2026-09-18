@@ -210,6 +210,7 @@ public class WorkbookGraph implements AticGraph {
         }
     }
 
+    //TODO double check that the rowQuery has correct syntax and contains the variable
     public List<Node> addSheets(Node workbook, List<SheetConfig> sheetConfigs, InvocationContext ctx) {
 
         JSONObject json = getJson(workbook, ctx);
@@ -490,10 +491,15 @@ public class WorkbookGraph implements AticGraph {
         
         //since add is lazy, we need to flush
         datasetGraph.flush();
+        
+        //since resource changed, cache might be old so we invalidate it by deleting it
+        ResourceColumn key = new ResourceColumn(rowEntity, column);
+        cache.valueCache.remove(key);
 
         updateValueCache(cache, rowEntity, rowIndex, column, selectedSheet, ctx);
     }
 
+    //TODO maybe turn around so bulk is done so update is not called so often
     public void set(Node workbook, Node sheet, Rectangle rect, Cell cell, Operation operation, InvocationContext ctx) {
         for (int rowIndex = rect.y; rowIndex < rect.y + rect.height; rowIndex++) {
             for (int colIndex = rect.x; colIndex < rect.x + rect.width; colIndex++) {
