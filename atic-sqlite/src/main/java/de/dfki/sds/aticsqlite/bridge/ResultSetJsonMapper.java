@@ -3,7 +3,7 @@ package de.dfki.sds.aticsqlite.bridge;
 import de.dfki.sds.atic.helper.JSONUtils;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
-import java.util.ArrayList;
+import de.dfki.sds.aticsqlite.bridge.FragmentSettings.FragmentProperty;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -12,6 +12,7 @@ import java.util.Map;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.query.QuerySolution;
+import org.apache.jena.query.QuerySolutionMap;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.rdf.model.Literal;
 import org.apache.jena.rdf.model.Model;
@@ -21,10 +22,8 @@ import org.apache.jena.rdf.model.Resource;
 import org.apache.jena.shared.PrefixMapping;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.core.Var;
-import org.apache.jena.sparql.vocabulary.FOAF;
+import org.apache.jena.sparql.graph.PrefixMappingZero;
 import org.apache.jena.util.iterator.ExtendedIterator;
-import org.apache.jena.vocabulary.RDF;
-import org.apache.jena.vocabulary.RDFS;
 import org.apache.jena.vocabulary.XSD;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -34,19 +33,12 @@ public class ResultSetJsonMapper {
     private final Map<String, NodeModifier> modifiers = new HashMap<>();
 
     private final Model model = ModelFactory.createDefaultModel();
+    
+    private FragmentSettings fragmentSettings;
 
-    private final List<FragmentProperty> fragmentSetting = new ArrayList<>();
-
-    //language aware does only select best language but still shows the language
-    //TODO we need another setting like hideLanguage, so it is just a string
-    //actually: we have to make sure to interpret strings always the same way
-    public record FragmentProperty(String key, Node property, boolean languageAware) {
-
-    }
-
-    public ResultSetJsonMapper() {
-        defaultFragmentSetting();
-
+    public ResultSetJsonMapper(FragmentSettings fragmentSettings) {
+        this.fragmentSettings = fragmentSettings;
+        
         registerModifier(
                 "date",
                 new DateModifier()
@@ -79,17 +71,6 @@ public class ResultSetJsonMapper {
                 : Character.toUpperCase(s.charAt(0))
                 + s.substring(1))
         );
-    }
-
-    private void defaultFragmentSetting() {
-        fragmentSetting.add(new FragmentProperty("@type", RDF.type.asNode(), false));
-        fragmentSetting.add(new FragmentProperty("label", RDFS.label.asNode(), true));
-        fragmentSetting.add(new FragmentProperty("comment", RDFS.comment.asNode(), true));
-        fragmentSetting.add(new FragmentProperty("icon", FOAF.img.asNode(), false));
-    }
-
-    public List<FragmentProperty> getFragmentSetting() {
-        return fragmentSetting;
     }
 
     public final void registerModifier(
@@ -346,18 +327,18 @@ public class ResultSetJsonMapper {
 
         json.put("@id", subject.getURI());
 
-        for (FragmentProperty fp : fragmentSetting) {
+        for (FragmentProperty fp : fragmentSettings.getProperties()) {
 
             //we do not need again @type for a type
-            if (fp.key().equals("@type") && !expandType) {
+            if (fp.getKey().equals("@type") && !expandType) {
                 continue;
             }
 
-            Node predicate = fp.property;
+            Node predicate = fp.getProperty();
 
             Node object;
 
-            if (fp.languageAware) {
+            if (fp.isLanguageAware()) {
 
                 object = getBestLanguageMatch(
                         subject,
@@ -380,13 +361,27 @@ public class ResultSetJsonMapper {
             if (object != null) {
                 Object o = toJson(ModelFactory.createDefaultModel().asRDFNode(object));
 
-                json.put(fp.key, o);
+                json.put(fp.getKey(), o);
 
-                if (fp.key.equals("@type")) {
+                if (fp.getKey().equals("@type")) {
                     resolveFragment((JSONObject) o, object.getURI(), qs, datasetGraph, ctx, binding, prefixes, false);
                 }
             }
         }
+    }
+    
+    //friendly version for resolving fragments
+    public JSONObject resolveFragment(
+            Node node,
+            boolean expandType,
+            AticDatasetGraph datasetGraph,
+            InvocationContext ctx) { 
+        JSONObject json = JSONUtils.createJSONObject();
+        String value = "?subject";
+        QuerySolutionMap qs = new QuerySolutionMap();
+        qs.add(value, model.asRDFNode(node));
+        resolveFragment(json, value, qs, datasetGraph, ctx, null, new PrefixMappingZero(), expandType);
+        return json;
     }
 
     private Node getBestLanguageMatch(
@@ -692,6 +687,14 @@ public class ResultSetJsonMapper {
          * Plain string literal.
          */
         return lit.getLexicalForm();
+    }
+
+    public FragmentSettings getFragmentSettings() {
+        return fragmentSettings;
+    }
+
+    public void setFragmentSettings(FragmentSettings fragmentSettings) {
+        this.fragmentSettings = fragmentSettings;
     }
 
 }

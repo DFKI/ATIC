@@ -5,6 +5,7 @@ import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticTriple;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticsqlite.s16n.WorkbookGraph;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -246,11 +247,12 @@ public class DatasetGraphRdfStarDisabledUnitTest {
             dataset.listGraphNodes(ctx).forEachRemaining(graphs::add);
 
             //4 because of system graph
-            assertEquals(4, graphs.size());
+            assertEquals(5, graphs.size());
             assertTrue(graphs.contains(g1));
             assertTrue(graphs.contains(g2));
             assertTrue(graphs.contains(g3));
             assertTrue(graphs.contains(SystemAticGraph.node));
+            assertTrue(graphs.contains(WorkbookGraph.node));
 
         } finally {
             dataset.end();

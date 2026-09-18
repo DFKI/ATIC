@@ -48,13 +48,17 @@
     "data": "data_01_bridge_persons.ttl",
     "params": {},
     "fragmentSettings": {
-        "label": {
-            "uri": "http://xmlns.com/foaf/0.1/name",
-            "languageAware": true
-        },
-        "comment": {
-            "uri": "https://schema.org/description",
-            "languageAware": true
-        }
+        "properties": [
+            {
+                "key": "label", 
+                "property": { "@id": "http://xmlns.com/foaf/0.1/name" },
+                "languageAware": true
+            },
+            {
+                "key": "comment", 
+                "property": { "@id": "https://schema.org/description" },
+                "languageAware": true
+            }
+        ]
     }
 }

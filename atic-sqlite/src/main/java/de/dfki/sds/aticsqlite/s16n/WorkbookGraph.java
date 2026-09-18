@@ -4,6 +4,8 @@ import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.AticGraphUtils;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
+import de.dfki.sds.aticsqlite.bridge.FragmentSettings;
+import de.dfki.sds.aticsqlite.bridge.ResultSetJsonMapper;
 import java.awt.Rectangle;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -43,11 +45,13 @@ import org.json.JSONObject;
  */
 public class WorkbookGraph implements AticGraph {
 
-    //TODO implement set with operations: add, remove, set
-    //TODO FragmentSettings class, Bridge reuse
+    
     //TODO if @type is same for all in content, could be also on Cell
+    //TODO turn uri nodes to FragmentNodes
+    
     //TODO build an endpoint: /workbooks/{uri}/sheets/{uri}/cells    with ?window=0,0,10,10 or ?position=0,0
     //use GET POST DELETE
+    
     public static final Node node = NodeFactory.createURI("urn:atic:workbooks");
 
     /**
@@ -70,6 +74,8 @@ public class WorkbookGraph implements AticGraph {
     private final Node entityRowColumn = NodeFactory.createURI("urn:entity:row");
 
     private Map<WorkbookSheet, SheetCache> cacheMap;
+    
+    private ResultSetJsonMapper mapper;
 
     //TODO expiration time would be useful
     private class SheetCache {
@@ -110,8 +116,10 @@ public class WorkbookGraph implements AticGraph {
         graphEventManager = new SimpleEventManager();
 
         cacheMap = new HashMap<>();
+        
+        mapper = new ResultSetJsonMapper(FragmentSettings.defaultSettings());
     }
-
+    
     public void ensureGraph(InvocationContext ctx) {
         boolean exists = datasetGraph.calculateRead(() -> {
             return datasetGraph.containsGraph(node, ctx);
@@ -404,9 +412,9 @@ public class WorkbookGraph implements AticGraph {
                     .build();
         }
 
-        JSONObject selectedColumn = getColumn(selectedSheet, column);
+        //JSONObject selectedColumn = getColumn(selectedSheet, column);
 
-        ColumnConfig columnConfig = ColumnConfig.fromJson(selectedColumn);
+        //ColumnConfig columnConfig = ColumnConfig.fromJson(selectedColumn);
 
         ResourceColumn key = updateValueCache(cache, rowEntity, rowIndex, column, selectedSheet, ctx);
 
@@ -417,7 +425,6 @@ public class WorkbookGraph implements AticGraph {
             throw new RuntimeException("values should never be null");
         }
 
-        //return new Cell(values, column);
         return Cell.builder()
                 .workbook(workbook)
                 .sheet(sheet)
@@ -635,6 +642,8 @@ public class WorkbookGraph implements AticGraph {
                         }
                     }
 
+                    //TODO uri node can be enriched to FragmentNodes
+                    
                     //update cache
                     cache.valueCache.put(new ResourceColumn(res, col), values);
                 }
@@ -908,6 +917,16 @@ public class WorkbookGraph implements AticGraph {
     @Override
     public boolean dependsOn(Graph other, InvocationContext ctx) {
         throw new UnsupportedOperationException("Not supported yet.");
+    }
+    
+    //getter & setter
+    
+    public FragmentSettings getFragmentSettings() {
+        return mapper.getFragmentSettings();
+    }
+
+    public void setFragmentSettings(FragmentSettings fragmentSettings) {
+        mapper.setFragmentSettings(fragmentSettings);
     }
 
 }

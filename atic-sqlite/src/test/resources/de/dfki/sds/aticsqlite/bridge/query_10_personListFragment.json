@@ -73,21 +73,27 @@
     "data": "data_01_bridge_persons.ttl",
     "params": {},
     "fragmentSettings": {
-        "@type": {
-            "uri": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
-            "languageAware": false
-        },
-        "icon": {
-            "uri": "https://schema.org/icon",
-            "languageAware": false
-        },
-        "label": {
-            "uri": "http://xmlns.com/foaf/0.1/name",
-            "languageAware": true
-        },
-        "comment": {
-            "uri": "https://schema.org/description",
-            "languageAware": true
-        }
+        "properties": [
+            {
+                "key": "@type",
+                "property": { "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" },
+                "languageAware": false
+            },
+            {
+                "key": "icon",
+                "property": { "@id": "https://schema.org/icon" },
+                "languageAware": false
+            },
+            {
+                "key": "label", 
+                "property": { "@id": "http://xmlns.com/foaf/0.1/name" },
+                "languageAware": true
+            },
+            {
+                "key": "comment", 
+                "property": { "@id": "https://schema.org/description" },
+                "languageAware": true
+            }
+        ]
     }
 }

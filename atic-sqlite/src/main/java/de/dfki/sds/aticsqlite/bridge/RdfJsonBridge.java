@@ -54,12 +54,13 @@ public class RdfJsonBridge {
 
     private final SparqlQueryBuilder sparqlQueryBuilder;
     private final ResultSetJsonMapper resultSetJsonMapper;
+    
+    private FragmentSettings fragmentSettings;
 
     public RdfJsonBridge() {
-        this(
-                new SparqlQueryBuilder(),
-                new ResultSetJsonMapper()
-        );
+        fragmentSettings = FragmentSettings.defaultSettings();
+        this.sparqlQueryBuilder = new SparqlQueryBuilder();
+        this.resultSetJsonMapper = new ResultSetJsonMapper(fragmentSettings);
     }
 
     private RdfJsonBridge(
@@ -70,8 +71,13 @@ public class RdfJsonBridge {
         this.resultSetJsonMapper = resultSetJsonMapper;
     }
 
-    public List<ResultSetJsonMapper.FragmentProperty> getFragmentSetting() {
-        return resultSetJsonMapper.getFragmentSetting();
+    public FragmentSettings getFragmentSettings() {
+        return fragmentSettings;
+    }
+
+    public void setFragmentSettings(FragmentSettings fragmentSettings) {
+        this.fragmentSettings = fragmentSettings;
+        this.resultSetJsonMapper.setFragmentSettings(fragmentSettings);
     }
 
     //==========================================================

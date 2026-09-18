@@ -3,8 +3,8 @@ package de.dfki.sds.aticsqlite;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticsqlite.bridge.FragmentSettings;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
-import de.dfki.sds.aticsqlite.bridge.ResultSetJsonMapper;
 import io.json.compare.CompareMode;
 import io.json.compare.JSONCompare;
 import java.io.BufferedReader;
@@ -26,7 +26,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.commons.io.IOUtils;
-import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.riot.Lang;
@@ -187,18 +186,8 @@ public class RdfJsonBridgeUnitTest {
         loadData(test.getString("data"));
 
         if (test.has("fragmentSettings")) {
-            List<ResultSetJsonMapper.FragmentProperty> fragmentSetting = rdfJsonBridge.getFragmentSetting();
-            fragmentSetting.clear();
-            JSONObject fragmentSettings = test.getJSONObject("fragmentSettings");
-            for (String key : fragmentSettings.keySet()) {
-                JSONObject setting = fragmentSettings.getJSONObject(key);
-                fragmentSetting.add(
-                        new ResultSetJsonMapper.FragmentProperty(
-                                key,
-                                NodeFactory.createURI(setting.getString("uri")),
-                                setting.getBoolean("languageAware"))
-                );
-            }
+            FragmentSettings settings = FragmentSettings.fromJson(test.getJSONObject("fragmentSettings"));
+            rdfJsonBridge.setFragmentSettings(settings);
         }
 
         User user = dataset.calculateRead(() -> {
@@ -239,18 +228,8 @@ public class RdfJsonBridgeUnitTest {
         loadData(test.getString("data"));
 
         if (test.has("fragmentSettings")) {
-            List<ResultSetJsonMapper.FragmentProperty> fragmentSetting = rdfJsonBridge.getFragmentSetting();
-            fragmentSetting.clear();
-            JSONObject fragmentSettings = test.getJSONObject("fragmentSettings");
-            for (String key : fragmentSettings.keySet()) {
-                JSONObject setting = fragmentSettings.getJSONObject(key);
-                fragmentSetting.add(
-                        new ResultSetJsonMapper.FragmentProperty(
-                                key,
-                                NodeFactory.createURI(setting.getString("uri")),
-                                setting.getBoolean("languageAware"))
-                );
-            }
+            FragmentSettings settings = FragmentSettings.fromJson(test.getJSONObject("fragmentSettings"));
+            rdfJsonBridge.setFragmentSettings(settings);
         }
 
         User user = dataset.calculateRead(() -> {
