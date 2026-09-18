@@ -43,6 +43,11 @@ import org.json.JSONObject;
  */
 public class WorkbookGraph implements AticGraph {
 
+    //TODO implement set with operations: add, remove, set
+    //TODO FragmentSettings class, Bridge reuse
+    //TODO if @type is same for all in content, could be also on Cell
+    //TODO build an endpoint: /workbooks/{uri}/sheets/{uri}/cells    with ?window=0,0,10,10 or ?position=0,0
+    //use GET POST DELETE
     public static final Node node = NodeFactory.createURI("urn:atic:workbooks");
 
     /**
@@ -66,6 +71,7 @@ public class WorkbookGraph implements AticGraph {
 
     private Map<WorkbookSheet, SheetCache> cacheMap;
 
+    //TODO expiration time would be useful
     private class SheetCache {
 
         //caches
@@ -331,13 +337,14 @@ public class WorkbookGraph implements AticGraph {
     }
 
     //sheet stuff
+    
     public Cell get(Node workbook, Node sheet, int rowIndex, int columnIndex, InvocationContext ctx) {
 
         SheetCache cache = cacheMap.computeIfAbsent(new WorkbookSheet(workbook, sheet), k -> new SheetCache());
 
         //get the config
         JSONObject selectedWorkbook = getJson(workbook, ctx);
-        
+
         JSONObject selectedSheet = getSheet(selectedWorkbook, sheet);
 
         SheetConfig sheetConfig = SheetConfig.fromJson(selectedSheet);
@@ -382,7 +389,7 @@ public class WorkbookGraph implements AticGraph {
                     .addNode(node)
                     .build();
         }
-        
+
         updateColumnCache(selectedSheet.getJSONArray("columns"), cache);
 
         Node column = cache.columnCache.getObject(columnIndex);
@@ -434,58 +441,113 @@ public class WorkbookGraph implements AticGraph {
         return window;
     }
 
-    public void set(Node workbook, Node sheet, int rowIndex, int columnIndex, Cell cell, InvocationContext ctx) {
+    public void set(Node workbook, Node sheet, int rowIndex, int columnIndex, Cell cell, Operation operation, InvocationContext ctx) {
+        SheetCache cache = cacheMap.computeIfAbsent(new WorkbookSheet(workbook, sheet), k -> new SheetCache());
 
+        JSONObject selectedWorkbook = getJson(workbook, ctx);
+        JSONObject selectedSheet = getSheet(selectedWorkbook, sheet);
+        SheetConfig sheetConfig = SheetConfig.fromJson(selectedSheet);
+        
+        updateRowCache(cache, sheetConfig.getRowQuery(), rowIndex, ctx);
+
+        Node rowEntity = cache.rowCache.getObject(rowIndex);
+        if (rowEntity == null) {
+            throw new IllegalArgumentException("Cell has no row");
+        }
+
+        updateColumnCache(selectedSheet.getJSONArray("columns"), cache);
+
+        Node column = cache.columnCache.getObject(columnIndex);
+
+        //column does not exist
+        if (column == null) {
+            throw new IllegalArgumentException("Cell has no column");
+        }
+
+        JSONObject selectedColumn = getColumn(selectedSheet, column);
+        ColumnConfig columnConfig = ColumnConfig.fromJson(selectedColumn);
+        Node property = columnConfig.getProperty();
+
+        switch (operation) {
+            case Set:
+                removeColumnValues(rowEntity, property, columnConfig.getDirection(), ctx);
+                addColumnValues(rowEntity, property, columnConfig.getDirection(), cell.getNodes(), ctx);
+                break;
+            case Add:
+                addColumnValues(rowEntity, property, columnConfig.getDirection(), cell.getNodes(), ctx);
+                break;
+            case Remove:
+                removeColumnValues(rowEntity, property, columnConfig.getDirection(), cell.getNodes(), ctx);
+                break;
+        }
+        
+        //since add is lazy, we need to flush
+        datasetGraph.flush();
+
+        updateValueCache(cache, rowEntity, rowIndex, column, selectedSheet, ctx);
     }
 
-    public void set(Node workbook, Node sheet, Rectangle rect, Cell cell, InvocationContext ctx) {
-
+    public void set(Node workbook, Node sheet, Rectangle rect, Cell cell, Operation operation, InvocationContext ctx) {
+        for (int rowIndex = rect.y; rowIndex < rect.y + rect.height; rowIndex++) {
+            for (int colIndex = rect.x; colIndex < rect.x + rect.width; colIndex++) {
+                set(workbook, sheet, rowIndex, colIndex, cell, operation, ctx);
+            }
+        }
     }
 
+    //set helper
+    
+    //TODO solve Quad.defaultGraphIRI for set
+    
+    private void addColumnValues(Node rowEntity, Node property, Direction direction, List<Node> values, InvocationContext ctx) {
+        for (Node value : values) {
+            if (direction == Direction.Outgoing) {
+                datasetGraph.add(new Quad(Quad.defaultGraphIRI, rowEntity, property, value), ctx);
+            } else {
+                datasetGraph.add(new Quad(Quad.defaultGraphIRI, value, property, rowEntity), ctx);
+            }
+        }
+    }
+
+    private void removeColumnValues(Node rowEntity, Node property, Direction direction, List<Node> values, InvocationContext ctx) {
+        for (Node value : values) {
+            if (direction == Direction.Outgoing) {
+                datasetGraph.delete(new Quad(Quad.defaultGraphIRI, rowEntity, property, value), ctx);
+            } else {
+                datasetGraph.delete(new Quad(Quad.defaultGraphIRI, value, property, rowEntity), ctx);
+            }
+        }
+    }
+
+    private void removeColumnValues(Node rowEntity, Node property, Direction direction, InvocationContext ctx) {
+        ExtendedIterator<Quad> iterator = null;
+
+        try {
+            if (direction == Direction.Outgoing) {
+                iterator = (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, rowEntity, property, Node.ANY, ctx);
+            } else {
+                iterator = (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, Node.ANY, property, rowEntity, ctx);
+            }
+
+            List<Quad> quads = iterator.toList();
+
+            for (Quad quad : quads) {
+                datasetGraph.delete(quad, ctx);
+            }
+        } finally {
+            if (iterator != null) {
+                iterator.close();
+            }
+        }
+    }
+
+    
     //cache update
-    
-    private JSONObject getSheet(JSONObject selectedWorkbook, Node sheet) {
-        JSONArray sheetArray = selectedWorkbook.optJSONArray("sheets");
-        if (sheetArray == null) {
-            throw new IllegalStateException("Sheet not found in workbook: " + sheet.getURI());
-        }
-        String sheetId = sheet.getURI();
-        JSONObject selectedSheet = null;
-        for (int i = 0; i < sheetArray.length(); i++) {
-            JSONObject sheetJson = sheetArray.getJSONObject(i);
-            if (sheetId.equals(sheetJson.optString("@id"))) {
-                selectedSheet = sheetJson;
-                break;
-            }
-        }
-        if (selectedSheet == null) {
-            throw new IllegalStateException("Sheet not found in workbook: " + sheetId);
-        }
-        return selectedSheet;
-    }
-    
-    private JSONObject getColumn(JSONObject selectedSheet, Node column) {
-        JSONArray columnArray = selectedSheet.optJSONArray("columns");
-        String columnId = column.getURI();
-        JSONObject selectedColumn = null;
-        for (int i = 0; i < columnArray.length(); i++) {
-            JSONObject columnJson = columnArray.getJSONObject(i);
-            if (columnId.equals(columnJson.getString("@id"))) {
-                selectedColumn = columnJson;
-                break;
-            }
-        }
-        if (selectedColumn == null) {
-            throw new IllegalStateException("Column not found: " + column);
-        }
-        return selectedColumn;
-    }
-    
     private void updateColumnCache(JSONArray columns, SheetCache cache) {
         for (int i = 0; i < columns.length(); i++) {
             //JSONObject property = columns.getJSONObject(i).getJSONObject("property");
             //Node node = NodeFactory.createURI(property.getString("@id"));
-            
+
             Node node = NodeFactory.createURI(columns.getJSONObject(i).getString("@id"));
 
             if (!cache.columnCache.contains(node)) {
@@ -542,10 +604,10 @@ public class WorkbookGraph implements AticGraph {
                     if (col == null) {
                         continue;
                     }
-                    
+
                     //TODO improve this later
                     JSONObject selectedColumn = getColumn(selectedSheet, col);
-                    
+
                     ColumnConfig columnConfig = ColumnConfig.fromJson(selectedColumn);
 
                     List<Node> values = new ArrayList<>();
@@ -618,6 +680,43 @@ public class WorkbookGraph implements AticGraph {
             "valueCache size is now " + valueCache.size()
         );
          */
+    }
+
+    private JSONObject getSheet(JSONObject selectedWorkbook, Node sheet) {
+        JSONArray sheetArray = selectedWorkbook.optJSONArray("sheets");
+        if (sheetArray == null) {
+            throw new IllegalStateException("Sheet not found in workbook: " + sheet.getURI());
+        }
+        String sheetId = sheet.getURI();
+        JSONObject selectedSheet = null;
+        for (int i = 0; i < sheetArray.length(); i++) {
+            JSONObject sheetJson = sheetArray.getJSONObject(i);
+            if (sheetId.equals(sheetJson.optString("@id"))) {
+                selectedSheet = sheetJson;
+                break;
+            }
+        }
+        if (selectedSheet == null) {
+            throw new IllegalStateException("Sheet not found in workbook: " + sheetId);
+        }
+        return selectedSheet;
+    }
+
+    private JSONObject getColumn(JSONObject selectedSheet, Node column) {
+        JSONArray columnArray = selectedSheet.optJSONArray("columns");
+        String columnId = column.getURI();
+        JSONObject selectedColumn = null;
+        for (int i = 0; i < columnArray.length(); i++) {
+            JSONObject columnJson = columnArray.getJSONObject(i);
+            if (columnId.equals(columnJson.getString("@id"))) {
+                selectedColumn = columnJson;
+                break;
+            }
+        }
+        if (selectedColumn == null) {
+            throw new IllegalStateException("Column not found: " + column);
+        }
+        return selectedColumn;
     }
 
     //query management

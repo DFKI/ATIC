@@ -1,0 +1,12 @@
+[[{
+    "workbook": {"@id": "urn:atic:workbook-37f27470-f6db-4535-827a-79e5cb4c5ee2"},
+    "column": {"@id": "urn:atic:column-37aa294d-072c-498d-b3cd-97fb95e297ac"},
+    "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+    "sheet": {"@id": "urn:atic:sheet-9fe6c2d0-f67e-44ca-9bf9-e6aeca3bf00c"},
+    "rowIndex": 0,
+    "columnIndex": 0,
+    "content": [{
+        "@value": "Other Name",
+        "@type": "http://www.w3.org/2001/XMLSchema#string"
+    }]
+}]]

@@ -4192,6 +4192,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     /**
+     * Flushes all graphs.
+     */
+    public void flush() {
+        this.graphMap.values().forEach(g -> g.flush());
+    }
+    
+    /**
      * Begins a transaction: delegates to the database, starts the RDF patch emitter, clears blank node mapping, and begins on all cached graphs.
      *
      * @param type the transaction type (read or write)

@@ -200,6 +200,10 @@ public class SqliteAticGraph implements AticGraph {
 
     }
 
+    public void flush() {
+        user2trans.values().forEach(td -> td.flush());
+    }
+    
     /*package*/ void begin() {
         user2trans.clear();
     }

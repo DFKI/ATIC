@@ -4,9 +4,11 @@ import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.helper.JSONUtils;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticsqlite.s16n.Cell;
 import de.dfki.sds.aticsqlite.s16n.ColumnConfig;
 import de.dfki.sds.aticsqlite.s16n.ColumnType;
 import de.dfki.sds.aticsqlite.s16n.Direction;
+import de.dfki.sds.aticsqlite.s16n.Operation;
 import de.dfki.sds.aticsqlite.s16n.SheetConfig;
 import de.dfki.sds.aticsqlite.s16n.Window;
 import de.dfki.sds.aticsqlite.s16n.WorkbookConfig;
@@ -27,7 +29,9 @@ import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
+import org.json.JSONTokener;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -239,6 +243,81 @@ public class WorkbookGraphUnitTest {
 
     @Test
     public void testWindow() throws IOException {
+        WorkbookGraph wg = dataset.getWorkbookGraph();
+        
+        Coordinates coordinates = preparePersonWorkbook();
+        
+        //dataset.executeRead(() -> {
+        //   System.out.println(wg.getJson(workbook, ctx).toString(4));
+        //});
+        
+        Window window = dataset.calculateRead(() -> wg.get(coordinates.workbook, coordinates.sheet, new Rectangle(0, 0, 20, 5), coordinates.ctx));
+
+        JSONArray expected = (JSONArray) loadJSON("01_expected_get.json");
+
+        Set<CompareMode> modes = Set.of(
+                CompareMode.JSON_ARRAY_NON_EXTENSIBLE,
+                CompareMode.JSON_OBJECT_NON_EXTENSIBLE
+        );
+        
+        JSONArray actual = window.toJson();
+        
+        removeIds(expected);
+        removeIds(actual);
+
+        //System.out.println(window.toJson().toString(4));
+        JSONCompare.assertMatches(expected.toString(), actual.toString(), modes);
+    }
+    
+    @Test
+    public void testSetSet() throws IOException {
+        testSetOperation(Operation.Set, "02_expected_set.json", null);
+    }
+    
+    @Test
+    public void testSetAdd() throws IOException {
+        testSetOperation(Operation.Add, "03_expected_set_add.json", null);
+    }
+    
+    @Test
+    public void testSetRemove() throws IOException {
+        Cell c = Cell.builder().addNode(NodeFactory.createLiteralString("Alice Smith")).build();
+        testSetOperation(Operation.Remove, "04_expected_set_remove.json", c);
+    }
+    
+    private void testSetOperation(Operation operation, String expectedFilename, Cell c) throws IOException {
+        WorkbookGraph wg = dataset.getWorkbookGraph();
+        
+        Coordinates coordinates = preparePersonWorkbook();
+        
+        if(c == null) {
+            c = Cell.builder().addNode(NodeFactory.createLiteralString("Other Name")).build();
+        }
+        
+        Cell finalCell = c;
+        dataset.executeWrite(() -> wg.set(coordinates.workbook, coordinates.sheet, new Rectangle(0, 0, 1, 1), finalCell, operation, coordinates.ctx));
+    
+        Window window = dataset.calculateRead(() -> wg.get(coordinates.workbook, coordinates.sheet, new Rectangle(0, 0, 1, 1), coordinates.ctx));
+        
+        JSONArray expected = (JSONArray) loadJSON(expectedFilename);
+
+        Set<CompareMode> modes = Set.of(
+                CompareMode.JSON_ARRAY_NON_EXTENSIBLE,
+                CompareMode.JSON_OBJECT_NON_EXTENSIBLE
+        );
+        
+        JSONArray actual = window.toJson();
+        
+        //System.out.println(actual.toString(4));
+        
+        removeIds(expected);
+        removeIds(actual);
+
+        //System.out.println(window.toJson().toString(4));
+        JSONCompare.assertMatches(expected.toString(), actual.toString(), modes);
+    }
+    
+    private Coordinates preparePersonWorkbook() throws IOException {
         loadData("data_01_bridge_persons.ttl");
 
         User adminUser = dataset.calculateRead(() -> dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY));
@@ -267,14 +346,10 @@ public class WorkbookGraphUnitTest {
 
         List<Node> columns = dataset.calculateWrite(() -> wg.addColumns(workbook, sheet, List.of(nameConfig, givenNameConfig, familyNameConfig, emailConfig, birthDateConfig, genderConfig, nationalityConfig, activatedConfig, descriptionConfig, knowsConfig, createdConfig, modifiedConfig), ctx));
 
-        //dataset.executeRead(() -> {
-        //   System.out.println(wg.getJson(workbook, ctx).toString(4));
-        //});
-        
-        Window window = dataset.calculateRead(() -> wg.get(workbook, sheet, new Rectangle(0, 0, 5, 5), ctx));
-        
-        System.out.println(window.toJson().toString(4));
+        return new Coordinates(wg, workbook, sheet, ctx);
     }
+    
+    private record Coordinates(WorkbookGraph wg, Node workbook, Node sheet, InvocationContext ctx) { }
 
     private void loadData(String filename) throws IOException {
         InputStream is = RdfJsonBridgeUnitTest.class.getResourceAsStream("/de/dfki/sds/aticsqlite/bridge/" + filename);
@@ -301,4 +376,47 @@ public class WorkbookGraphUnitTest {
             );
         });
     }
+
+    private Object loadJSON(String filename) throws IOException {
+        try (InputStream is = RdfJsonBridgeUnitTest.class
+                .getResourceAsStream("/de/dfki/sds/aticsqlite/s16n/" + filename)) {
+
+            if (is == null) {
+                throw new RuntimeException(filename + " not found");
+            }
+
+            String json = IOUtils.toString(is, StandardCharsets.UTF_8);
+
+            Object result = new JSONTokener(json).nextValue();
+
+            if (result instanceof JSONObject || result instanceof JSONArray) {
+                return result;
+            }
+
+            throw new JSONException("Root JSON value must be an object or array");
+        }
+    }
+
+    private static JSONObject withoutIds(JSONObject json) {
+        JSONObject result = new JSONObject(json.toString());
+
+        removeIds(result);
+
+        return result;
+    }
+
+    private static void removeIds(Object value) {
+        if (value instanceof JSONObject object) {
+            object.remove("@id");
+
+            for (String key : object.keySet()) {
+                removeIds(object.get(key));
+            }
+        } else if (value instanceof JSONArray array) {
+            for (int i = 0; i < array.length(); i++) {
+                removeIds(array.get(i));
+            }
+        }
+    }
+
 }

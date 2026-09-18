@@ -2,6 +2,7 @@ package de.dfki.sds.aticsqlite.s16n;
 
 import java.util.ArrayList;
 import java.util.List;
+import static org.apache.jena.datatypes.xsd.XSDDatatype.*;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.json.JSONArray;
@@ -31,7 +32,7 @@ public class Cell {
     public static Builder builder() {
         return new Builder();
     }
-    
+
     public static class Builder {
 
         private Node workbook;
@@ -56,7 +57,7 @@ public class Cell {
             this.column = column;
             return this;
         }
-        
+
         public Builder rowEntity(Node rowEntity) {
             this.rowEntity = rowEntity;
             return this;
@@ -103,7 +104,7 @@ public class Cell {
             return new Cell(this);
         }
     }
-    
+
     public Node getWorkbook() {
         return workbook;
     }
@@ -127,7 +128,6 @@ public class Cell {
     public List<Node> getNodes() {
         return nodes;
     }
-
 
     public static Cell fromJson(JSONObject json) {
         return builder()
@@ -164,46 +164,157 @@ public class Cell {
         return json;
     }
 
-    private static JSONObject toJsonLd(Node node) {
+    public static JSONObject toJsonLd(Node node) {
         if (node.isURI()) {
-            return new JSONObject().put("@id", node.getURI());
+            return new JSONObject()
+                    .put("@id", node.getURI());
         }
 
         if (node.isLiteral()) {
-            JSONObject json = new JSONObject().put("@value", node.getLiteralLexicalForm());
+            String lexicalForm = node.getLiteralLexicalForm();
+            String language = node.getLiteralLanguage();
+            String datatype = node.getLiteralDatatypeURI();
 
-            if (node.getLiteralLanguage() != null && !node.getLiteralLanguage().isEmpty()) {
-                json.put("@language", node.getLiteralLanguage());
-            } else if (node.getLiteralDatatypeURI() != null) {
-                json.put("@type", node.getLiteralDatatypeURI());
+            JSONObject json = new JSONObject();
+
+            // Language-tagged string
+            if (language != null && !language.isEmpty()) {
+                json.put("@value", lexicalForm);
+                json.put("@language", language);
+                return json;
             }
 
+            // Native JSON types
+            if (XSDboolean.getURI().equals(datatype)) {
+                json.put("@value", Boolean.parseBoolean(lexicalForm));
+                json.put("@type", datatype);
+                return json;
+            }
+
+            if (XSDinteger.getURI().equals(datatype)
+                    || XSDint.getURI().equals(datatype)
+                    || XSDlong.getURI().equals(datatype)
+                    || XSDshort.getURI().equals(datatype)
+                    || XSDbyte.getURI().equals(datatype)
+                    || XSDnonNegativeInteger.getURI().equals(datatype)
+                    || XSDpositiveInteger.getURI().equals(datatype)
+                    || XSDnonPositiveInteger.getURI().equals(datatype)
+                    || XSDnegativeInteger.getURI().equals(datatype)
+                    || XSDunsignedLong.getURI().equals(datatype)
+                    || XSDunsignedInt.getURI().equals(datatype)
+                    || XSDunsignedShort.getURI().equals(datatype)
+                    || XSDunsignedByte.getURI().equals(datatype)) {
+                json.put("@value", Long.parseLong(lexicalForm));
+                json.put("@type", datatype);
+                return json;
+            }
+
+            if (XSDdecimal.getURI().equals(datatype)
+                    || XSDdouble.getURI().equals(datatype)
+                    || XSDfloat.getURI().equals(datatype)) {
+                json.put("@value", Double.parseDouble(lexicalForm));
+                json.put("@type", datatype);
+                return json;
+            }
+
+            // Plain/string literal
+            if (datatype == null
+                    || XSDstring.getURI().equals(datatype)) {
+                json.put("@value", lexicalForm);
+                if(datatype != null) {
+                    json.put("@type", datatype);
+                }
+                return json;
+            }
+
+            // Other explicitly typed literal
+            json.put("@value", lexicalForm);
+            json.put("@type", datatype);
             return json;
         }
 
         throw new IllegalArgumentException("Unsupported Node type: " + node);
     }
 
-    private static Node fromJsonLd(JSONObject json) {
+    public static Node fromJsonLd(JSONObject json) {
         if (json.has("@id")) {
             return NodeFactory.createURI(json.getString("@id"));
         }
 
-        if (json.has("@value")) {
-            String value = json.getString("@value");
-
-            if (json.has("@language")) {
-                return NodeFactory.createLiteralLang(value, json.getString("@language"));
-            }
-
-            if (json.has("@type")) {
-                return NodeFactory.createLiteralDT(value, NodeFactory.getType(json.getString("@type")));
-            }
-
-            return NodeFactory.createLiteralString(value);
+        if (!json.has("@value")) {
+            throw new IllegalArgumentException(
+                    "Invalid JSON-LD node: " + json);
         }
 
-        throw new IllegalArgumentException("Invalid JSON-LD node: " + json);
+        Object value = json.get("@value");
+
+        // JSON-LD language-tagged literal
+        if (json.has("@language")) {
+            if (!(value instanceof String)) {
+                throw new IllegalArgumentException(
+                        "@language requires a string @value: " + json);
+            }
+
+            return NodeFactory.createLiteralLang(
+                    (String) value,
+                    json.getString("@language"));
+        }
+
+        // Explicit datatype
+        if (json.has("@type")) {
+            String datatype = json.getString("@type");
+
+            if (!(value instanceof String)) {
+                throw new IllegalArgumentException(
+                        "Explicit @type requires a string @value: " + json);
+            }
+
+            return NodeFactory.createLiteralDT(
+                    (String) value,
+                    NodeFactory.getType(datatype));
+        }
+
+        // Native JSON boolean
+        if (value instanceof Boolean) {
+            return NodeFactory.createLiteralDT(
+                    value.toString(),
+                    NodeFactory.getType(
+                            "http://www.w3.org/2001/XMLSchema#boolean"));
+        }
+
+        // Native JSON number
+        if (value instanceof Number) {
+            String lexicalForm = value.toString();
+
+            String datatype;
+
+            if (value instanceof Byte
+                    || value instanceof Short
+                    || value instanceof Integer
+                    || value instanceof Long) {
+                datatype
+                        = "http://www.w3.org/2001/XMLSchema#integer";
+            } else {
+                datatype
+                        = "http://www.w3.org/2001/XMLSchema#double";
+                // TODO: Native JSON numbers are mapped to xsd:integer/xsd:double,
+                //so xsd:decimal and other numeric datatypes can be lost; 
+                //preserve the datatype via @type (or disable native numeric conversion) for lossless round-tripping.
+            }
+
+            return NodeFactory.createLiteralDT(
+                    lexicalForm,
+                    NodeFactory.getType(datatype));
+        }
+
+        // Native JSON string
+        if (value instanceof String) {
+            return NodeFactory.createLiteralString((String) value);
+        }
+
+        throw new IllegalArgumentException(
+                "Unsupported @value type: "
+                + value.getClass().getName());
     }
 
     public boolean isEmpty() {
