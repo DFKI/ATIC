@@ -83,6 +83,7 @@ public class ATICPatchConverter {
                 for (Triple t : outgoing) {
 
                     Node object = t.getObject();
+                    String predUri = t.getPredicate().getURI();
 
                     if (object.isURI()
                             && newUris.contains(object.getURI())
@@ -696,8 +697,7 @@ public class ATICPatchConverter {
         if (uri.equals(options.typeUri)) {
 
             if (object.isURI()) {
-                value.put("@type", object.getURI());
-                //ensurePropertyKey(object.getURI(), context)
+                addPropertyValue(value, "@type", object.getURI());
             }
 
             return;
