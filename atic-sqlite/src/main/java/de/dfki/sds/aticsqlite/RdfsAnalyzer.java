@@ -862,13 +862,17 @@ public class RdfsAnalyzer {
         Map<Set<Resource>, Resource> generatedClasses = new HashMap<>();
 
         propertyDomains.forEach((property, domains) -> {
-            Resource generated = getOrGenerateClass(property, domains, "Domain", generatedClasses);
-            propertyDomainsGenerated.put(property, Set.of(generated));
+            if(!property.equals(RDF.type)) {
+                Resource generated = getOrGenerateClass(property, domains, "Domain", generatedClasses);
+                propertyDomainsGenerated.put(property, Set.of(generated));
+            }
         });
 
         propertyRanges.forEach((property, ranges) -> {
-            Resource generated = getOrGenerateClass(property, ranges, "Range", generatedClasses);
-            propertyRangesGenerated.put(property, Set.of(generated));
+            if(!property.equals(RDF.type)) {
+                Resource generated = getOrGenerateClass(property, ranges, "Range", generatedClasses);
+                propertyRangesGenerated.put(property, Set.of(generated));
+            }
         });
     }
 

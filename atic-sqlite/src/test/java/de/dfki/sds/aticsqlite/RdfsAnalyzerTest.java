@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,6 +25,8 @@ import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.sparql.vocabulary.FOAF;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.XSD;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,7 +72,7 @@ public class RdfsAnalyzerTest {
             ex:bob a foaf:Person ;
                 foaf:firstName "Bob" ;
                 foaf:lastName "Jones" .
-    """;
+        """;
 
         dataset.executeWrite(() -> {
             try (InputStream in = new ByteArrayInputStream(ttl.getBytes(StandardCharsets.UTF_8))) {
@@ -172,7 +175,7 @@ public class RdfsAnalyzerTest {
             ex:bob a foaf:Person ;
                 foaf:firstName "Bob" ;
                 foaf:lastName "Jones" .
-    """;
+        """;
 
         dataset.executeWrite(() -> {
             try (InputStream in = new ByteArrayInputStream(ttl.getBytes(StandardCharsets.UTF_8))) {
@@ -193,6 +196,8 @@ public class RdfsAnalyzerTest {
         DefinitionConstructor oc = new DefinitionConstructor();
 
         Model ontology = oc.toRdfsOntology("ex", "http://example.org/onto", analyzer);
+        
+        //ontology.write(System.out, "TTL", null);
 
         String ontologyTTL = """
                              PREFIX ex:   <http://example.org/onto>
@@ -230,7 +235,6 @@ public class RdfsAnalyzerTest {
         assertTrue(ontology.isIsomorphicWith(expected));
     }
     
-    
     @Test
     public void testOntologyConstructorOwl() {
         AticGraph defaultGraph = dataset.calculateRead(() -> {
@@ -249,7 +253,7 @@ public class RdfsAnalyzerTest {
             ex:bob a foaf:Person ;
                 foaf:firstName "Bob" ;
                 foaf:lastName "Jones" .
-    """;
+        """;
 
         dataset.executeWrite(() -> {
             try (InputStream in = new ByteArrayInputStream(ttl.getBytes(StandardCharsets.UTF_8))) {
@@ -307,5 +311,183 @@ public class RdfsAnalyzerTest {
         
         assertEquals(expected.size(), ontology.size());
         assertTrue(ontology.isIsomorphicWith(expected));
+    }
+
+    /**
+     * Verifies that {@code buildSuggestedTemplates} produces the expected
+     * JSON for the foaf:Person type used in this test class.
+     */
+    @Test
+    public void testSuggestedTemplateForPerson() {
+        AticGraph defaultGraph = dataset.calculateRead(() -> {
+            return dataset.getDefaultGraph(ctx);
+        });
+
+        String ttl = """
+            @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+            @prefix ex:   <http://example.org/> .
+
+            ex:alice a foaf:Person ;
+                foaf:firstName "Alice" ;
+                foaf:lastName "Smith" ;
+                foaf:knows ex:bob .
+
+            ex:bob a foaf:Person ;
+                foaf:firstName "Bob" ;
+                foaf:lastName "Jones" .
+        """;
+
+        dataset.executeWrite(() -> {
+            try (InputStream in = new ByteArrayInputStream(ttl.getBytes(StandardCharsets.UTF_8))) {
+                RDFDataMgr.read(defaultGraph, in, Lang.TTL);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        RdfsAnalyzer analyzer = new RdfsAnalyzer();
+
+        dataset.executeRead(() -> {
+            Model model = ModelFactory.createModelForGraph(defaultGraph);
+            analyzer.analyze(model);
+        });
+
+        DefinitionConstructor dc = new DefinitionConstructor();
+        Map<Resource, JSONObject> templates = dc.buildSuggestedTemplates(analyzer);
+
+        // Find the template for foaf:Person by URI (Jena Resource identity differs across model instances)
+        String personUri = "http://xmlns.com/foaf/0.1/Person";
+        JSONObject actual = null;
+        for (Map.Entry<Resource, JSONObject> e : templates.entrySet()) {
+            if (personUri.equals(e.getKey().getURI())) {
+                actual = e.getValue();
+                break;
+            }
+        }
+
+        assertTrue(actual != null, "Expected template for foaf:Person");
+
+        // Expected output for foaf:Person
+        // Properties: foaf:firstName (TEXT, SINGLE), foaf:lastName (TEXT, SINGLE),
+        //             foaf:knows (RESOURCE, SINGLE)
+        // Since knows has SINGLE cardinality, it gets a simple variable binding (not nested)
+        assertEquals("array", actual.getString("$type"));
+        assertEquals(10, actual.getInt("$limit"));
+
+        JSONObject map = actual.getJSONObject("$map");
+        assertEquals("?person", map.getString("@id"));
+        assertEquals("?firstName", map.getString("firstName"));
+        assertEquals("?lastName", map.getString("lastName"));
+        assertEquals("?knows", map.getString("knows"));
+
+        JSONArray where = actual.getJSONArray("$where");
+        assertEquals(4, where.length());
+        assertEquals("?person a foaf:Person", where.getString(0));
+        // The remaining 3 patterns are from type2prop iteration order (Set), verify content not order
+        Set<String> whereSet = new HashSet<>();
+        for (int i = 1; i < where.length(); i++) {
+            whereSet.add(where.getString(i));
+        }
+        assertTrue(whereSet.contains("?person foaf:firstName ?firstName"));
+        assertTrue(whereSet.contains("?person foaf:lastName ?lastName"));
+        assertTrue(whereSet.contains("?person foaf:knows ?knows"));
+
+        JSONObject ctx = actual.getJSONObject("@context");
+        assertEquals("http://xmlns.com/foaf/0.1/", ctx.getString("foaf"));
+    }
+
+    /**
+     * Tests that a multi-cardinality resource property (knows) generates a nested sub-query
+     * in the suggested template. With 3 persons knowing each other, foaf:knows becomes
+     * MULTI in both domain and range cardinality.
+     *
+     * <p>Variables are lowercase to avoid clashes. Properties use CURIEs (e.g. {@code foaf:knows}).
+     */
+    @Test
+    public void testSuggestedTemplateForPersonWithMultiCardinalityKnows() {
+        AticGraph defaultGraph = dataset.calculateRead(() -> {
+            return dataset.getDefaultGraph(ctx);
+        });
+
+        // 3 persons who all know each other => foaf:knows is MULTI cardinality
+        String ttl = """
+            @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+            @prefix ex:   <http://example.org/> .
+
+            ex:alice a foaf:Person ;
+                foaf:firstName "Alice" ;
+                foaf:lastName "Smith" ;
+                foaf:knows ex:bob , ex:charlie .
+
+            ex:bob a foaf:Person ;
+                foaf:firstName "Bob" ;
+                foaf:lastName "Jones" ;
+                foaf:knows ex:alice , ex:charlie .
+
+            ex:charlie a foaf:Person ;
+                foaf:firstName "Charlie" ;
+                foaf:lastName "Brown" ;
+                foaf:knows ex:alice , ex:bob .
+        """;
+
+        dataset.executeWrite(() -> {
+            try (InputStream in = new ByteArrayInputStream(ttl.getBytes(StandardCharsets.UTF_8))) {
+                RDFDataMgr.read(defaultGraph, in, Lang.TTL);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        RdfsAnalyzer analyzer = new RdfsAnalyzer();
+
+        dataset.executeRead(() -> {
+            Model model = ModelFactory.createModelForGraph(defaultGraph);
+            analyzer.analyze(model);
+        });
+
+        // Verify cardinality was detected as MULTI
+        assertEquals(Cardinality.MULTI, analyzer.getDomainCardinality().get(FOAF.knows));
+        assertEquals(Cardinality.MULTI, analyzer.getRangeCardinality().get(FOAF.knows));
+
+        DefinitionConstructor dc = new DefinitionConstructor();
+        Map<Resource, JSONObject> templates = dc.buildSuggestedTemplates(analyzer);
+
+        String personUri = "http://xmlns.com/foaf/0.1/Person";
+        JSONObject actual = null;
+        for (Map.Entry<Resource, JSONObject> e : templates.entrySet()) {
+            if (personUri.equals(e.getKey().getURI())) {
+                actual = e.getValue();
+                break;
+            }
+        }
+
+        //System.out.println(actual.toString(4));
+        
+        assertTrue(actual != null, "Expected template for foaf:Person with multi-cardinality knows");
+
+        // Top-level structure
+        assertEquals("array", actual.getString("$type"));
+        assertEquals(10, actual.getInt("$limit"));
+
+        JSONObject map = actual.getJSONObject("$map");
+        assertEquals("?person", map.getString("@id"));
+        assertEquals("?firstName", map.getString("firstName"));
+        assertEquals("?lastName", map.getString("lastName"));
+
+        // "knows" should be a nested sub-query object (not a simple variable string)
+        JSONObject knowsNested = map.getJSONObject("knows");
+        assertEquals("array", knowsNested.getString("$type"));
+        assertEquals("?knows", knowsNested.getJSONObject("$map").getString("@id"));
+
+        JSONArray knowsWhere = knowsNested.getJSONArray("$where");
+        assertEquals(1, knowsWhere.length());
+        // Nested query connects parent subject to child via the relationship property (CURIE, no trailing '.')
+        assertEquals("?person foaf:knows ?knows", knowsWhere.getString(0));
+
+        // Top-level $where should NOT contain a "knows" triple pattern
+        // (instead, the knows property is only in the nested query)
+        JSONArray where = actual.getJSONArray("$where");
+        assertEquals(3, where.length());
+        assertEquals("?person a foaf:Person", where.getString(0));
     }
 }
