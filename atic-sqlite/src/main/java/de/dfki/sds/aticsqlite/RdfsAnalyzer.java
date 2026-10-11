@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -142,17 +143,22 @@ public class RdfsAnalyzer {
     private Model model;
     private long size;
     private Set<Resource> types;
+    private Set<Resource> generatedTypes;
     private Set<Resource> customTypes;
 
     private Model analyzedStatements;
 
     private Map<Resource, Set<Property>> type2prop;
+    private Map<Resource, Set<Resource>> subClassOf;
 
     private Set<Property> literalProperties;
     private Set<Property> resourceProperties;
 
     private Map<Property, Set<Resource>> propertyDomains;
     private Map<Property, Set<Resource>> propertyRanges;
+
+    private Map<Property, Set<Resource>> propertyDomainsGenerated;
+    private Map<Property, Set<Resource>> propertyRangesGenerated;
 
     //no statement about it in the dataset
     private Set<Resource> danglingResources;
@@ -217,8 +223,10 @@ public class RdfsAnalyzer {
     public RdfsAnalyzer() {
         types = new HashSet<>();
         customTypes = new HashSet<>();
+        generatedTypes = new HashSet<>();
         analyzedStatements = ModelFactory.createDefaultModel();
         type2prop = new HashMap<>();
+        subClassOf = new HashMap<>();
         literalProperties = new HashSet<>();
         resourceProperties = new HashSet<>();
         warnings = new ArrayList<>();
@@ -234,6 +242,9 @@ public class RdfsAnalyzer {
         filterTypesWithNamespaces.add(RDFS.uri);
         filterTypesWithNamespaces.add(OWL.NS);
         filterTypesWithNamespaces.add(VOID.NS);
+        
+        propertyDomainsGenerated = new HashMap<>();
+        propertyRangesGenerated = new HashMap<>();
 
         explicitClasses = new HashSet<>();
         explicitProperties = new HashSet<>();
@@ -266,7 +277,6 @@ public class RdfsAnalyzer {
 
         size = model.size();
 
-        //TODO subClassOf
         //TODO subPropertyOf
         types = new HashSet<>();
 
@@ -482,7 +492,11 @@ public class RdfsAnalyzer {
         cardinalityAnalysis();
 
         multiCardinalityProperties();
+        
+        generatePropertyDomainsAndRanges();
 
+        //deriveSubClassOf(0.8, 4);
+        //cleanupPropertyDomainsAndRanges();
         //untypedAnalysis();
         //multiTypeCleanup();
         return this;
@@ -776,6 +790,107 @@ public class RdfsAnalyzer {
         }
     }
 
+    private void deriveSubClassOf(double minCoverage, int minSharedProperties) {
+        Map<Resource, Set<Property>> class2properties = new HashMap<>();
+        type2prop.forEach((type, properties) -> {
+            Set<Property> filtered = new HashSet<>(properties);
+            filtered.remove(RDF.type);
+            class2properties.put(type, filtered);
+        });
+
+        List<Resource> classes = new ArrayList<>(class2properties.keySet());
+
+        for (Resource a : classes) {
+            Set<Property> propsA = class2properties.get(a);
+            if (propsA.isEmpty()) {
+                continue;
+            }
+
+            for (Resource b : classes) {
+                if (a.equals(b)) {
+                    continue;
+                }
+
+                Set<Property> propsB = class2properties.get(b);
+                if (propsB.isEmpty()) {
+                    continue;
+                }
+
+                Set<Property> intersection = new HashSet<>(propsA);
+                intersection.retainAll(propsB);
+
+                double coverageAB = (double) intersection.size() / propsA.size();
+                double coverageBA = (double) intersection.size() / propsB.size();
+
+                //if (coverageAB >= minCoverage && coverageAB > coverageBA) {
+                //    subClassOf.computeIfAbsent(a, key -> new HashSet<>()).add(b);
+                //}
+                if (intersection.size() >= minSharedProperties
+                        && coverageAB >= minCoverage && coverageAB > coverageBA
+                        && propsB.size() > propsA.size()) {
+                    subClassOf.computeIfAbsent(a, key -> new HashSet<>()).add(b);
+                }
+            }
+        }
+    }
+
+    private void cleanupPropertyDomainsAndRanges() {
+        propertyDomains.replaceAll((property, classes) -> generalizeClasses(classes));
+        propertyRanges.replaceAll((property, classes) -> generalizeClasses(classes));
+    }
+
+    private Set<Resource> generalizeClasses(Set<Resource> classes) {
+        Set<Resource> generalized = new HashSet<>(classes);
+
+        for (Resource a : classes) {
+            for (Resource b : classes) {
+                if (a.equals(b)) {
+                    continue;
+                }
+
+                if (subClassOf.getOrDefault(a, Collections.emptySet()).contains(b)) {
+                    generalized.remove(a);
+                    break;
+                }
+            }
+        }
+
+        return generalized;
+    }
+
+    private void generatePropertyDomainsAndRanges() {
+        Map<Set<Resource>, Resource> generatedClasses = new HashMap<>();
+
+        propertyDomains.forEach((property, domains) -> {
+            Resource generated = getOrGenerateClass(property, domains, "Domain", generatedClasses);
+            propertyDomainsGenerated.put(property, Set.of(generated));
+        });
+
+        propertyRanges.forEach((property, ranges) -> {
+            Resource generated = getOrGenerateClass(property, ranges, "Range", generatedClasses);
+            propertyRangesGenerated.put(property, Set.of(generated));
+        });
+    }
+
+    private Resource getOrGenerateClass(Property property, Set<Resource> classes, String kind, Map<Set<Resource>, Resource> generatedClasses) {
+        if (classes.size() == 1) {
+            return classes.iterator().next();
+        }
+
+        Set<Resource> key = Set.copyOf(classes);
+        return generatedClasses.computeIfAbsent(key, k -> {
+            Resource generated = ResourceFactory.createResource("atic:generated#GeneratedFor" + kind + getLocalName(property.getURI()));
+
+            generatedTypes.add(generated);
+
+            for (Resource parent : k) {
+                subClassOf.computeIfAbsent(generated, r -> new HashSet<>()).add(parent);
+            }
+
+            return generated;
+        });
+    }
+
     //TODO necessary?
     //not necessary anymore
     @Deprecated
@@ -913,8 +1028,24 @@ public class RdfsAnalyzer {
         return types;
     }
 
+    public Map<Resource, Set<Resource>> getSubClassOf() {
+        return subClassOf;
+    }
+
     public Set<Resource> getCustomTypes() {
         return customTypes;
+    }
+
+    public Set<Resource> getGeneratedTypes() {
+        return generatedTypes;
+    }
+
+    public Map<Property, Set<Resource>> getPropertyDomainsGenerated() {
+        return propertyDomainsGenerated;
+    }
+
+    public Map<Property, Set<Resource>> getPropertyRangesGenerated() {
+        return propertyRangesGenerated;
     }
 
     public Model getAnalyzedStatements() {

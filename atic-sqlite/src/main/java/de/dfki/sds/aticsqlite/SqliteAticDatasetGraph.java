@@ -62,6 +62,8 @@ import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.query.ReadWrite;
 import org.apache.jena.query.TxnType;
+import org.apache.jena.rdf.model.Model;
+import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.changes.RDFChangesBase;
 import org.apache.jena.riot.system.PrefixMap;
@@ -71,6 +73,7 @@ import org.apache.jena.shared.DeleteDeniedException;
 import org.apache.jena.shared.Lock;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.function.FunctionFactory;
+import org.apache.jena.sparql.graph.GraphFactory;
 import org.apache.jena.sparql.util.Context;
 import org.apache.jena.sparql.util.Symbol;
 import org.apache.jena.util.iterator.ExtendedIterator;
@@ -220,7 +223,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         });
 
         bootstrapSparqlFunctions();
-        
+
         bootstrapInvex();
 
         this.executeWrite(() -> {
@@ -231,7 +234,6 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             }
         });
 
-        
     }
 
     /**
@@ -407,11 +409,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         // loop through definitions
         for (int i = 0; i < arr.length(); i++) {
             JSONObject idx = arr.getJSONObject(i);
-            
+
             boolean load = !isInvexAvailable() || idx.optBoolean("essential", false);
-            
+
             String key = load ? "create" : "drop";
-            
+
             String sql = idx.getString(key);
             db.write(sql);
         }
@@ -479,9 +481,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     private void bootstrapInvex() {
-        if(!capabilities.isInvexEnabled())
+        if (!capabilities.isInvexEnabled()) {
             return;
-        
+        }
+
         ExternalComponents externalComponents = new ExternalComponents();
         externalComponents.setNormalizer(new Normalizer() {
             @Override
@@ -519,19 +522,18 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     public static String createURN(String type) {
         return "urn:atic:" + type + "-" + UUID.randomUUID();
     }
-    
+
     public static String createURNForResource() {
         return createURN("resource");
     }
 
     //============================================================
     //invex
-    
     public AticQueryResults initializeQuery(QueryOptions options) throws Exception {
-        if(!isInvexAvailable()) {
+        if (!isInvexAvailable()) {
             throw new IllegalStateException("Invex not loaded");
         }
-        
+
         QueryResults queryResults = invexEmbedded.initializeQuery(options);
 
         AticQueryResults aticQueryResults = AticQueryResults.builder(queryResults).build();
@@ -539,25 +541,25 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     public AticQueryResults proceedWithQuery(String queryProcessId) throws Exception {
-        if(!isInvexAvailable()) {
+        if (!isInvexAvailable()) {
             throw new IllegalStateException("Invex not loaded");
         }
-        
+
         QueryResults queryResults = invexEmbedded.proceedWithQuery(queryProcessId);
 
         long[] foundResourceIds = queryResults.getFoundResourceIDs();
-        
+
         List<Node> nodes = AticGraphUtils.resolveResourceIds(foundResourceIds, db);
-        
+
         AticQueryResults aticQueryResults = AticQueryResults.builder(queryResults).foundNodes(nodes).build();
         return aticQueryResults;
     }
 
     public void rebuildInvex() throws Exception {
-        if(!isInvexAvailable()) {
+        if (!isInvexAvailable()) {
             throw new IllegalStateException("Invex not loaded");
         }
-        
+
         File dbFile = new File(this.db.getOptions().getDbFilePath());
 
         Path tempDir = Files.createTempDirectory("invex-rebuild-");
@@ -4152,8 +4154,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         virtualGraphMap.clear();
 
         agentSessionManager.close();
-        
-        if(invexEmbedded != null) {
+
+        if (invexEmbedded != null) {
             try {
                 invexEmbedded.shutdown();
             } catch (Exception ex) {
@@ -4516,6 +4518,39 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             this.add(rmlProjectGraphNode, rmlProjectResource, stackTraceProperty, NodeFactory.createLiteralString(finalStackTrace), ctx);
         }
         //});
+    }
+
+    public synchronized Graph deriveOntologyFromABox(AticGraph graph, String ontologyPrefix, String ontologyIRI, OntologyFormat format, InvocationContext ictx) {
+        
+        //System.out.println("copy");
+        //copy in memory: faster with rdfs analyzer
+        Graph memGraph = GraphFactory.createDefaultGraph();
+        ExtendedIterator<Triple> iter = graph.find(Node.ANY, Node.ANY, Node.ANY, ictx);
+        while (iter.hasNext()) {
+            memGraph.add(iter.next());
+        }
+        iter.close();
+
+        //System.out.println("analyze");
+        Model model = ModelFactory.createModelForGraph(memGraph);
+        RdfsAnalyzer analyzer = new RdfsAnalyzer();
+        analyzer.analyze(model);
+
+        //System.out.println("construct");
+        DefinitionConstructor constructor = new DefinitionConstructor();
+        Model ontology = switch (format) {
+            case RDFS ->
+                constructor.toRdfsOntology(ontologyPrefix, ontologyIRI, analyzer);
+            case OWL ->
+                constructor.toOwlOntology(ontologyPrefix, ontologyIRI, analyzer);
+        };
+
+        return ontology.getGraph();
+    }
+
+    public enum OntologyFormat {
+        RDFS,
+        OWL
     }
 
 }

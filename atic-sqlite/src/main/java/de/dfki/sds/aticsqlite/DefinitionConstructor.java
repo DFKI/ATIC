@@ -15,7 +15,7 @@ import org.apache.jena.vocabulary.XSD;
 /**
  *
  */
-public class OntologyConstructor {
+public class DefinitionConstructor {
 
     public Model toRdfsOntology(String ontologyPrefix, String ontologyIRI, RdfsAnalyzer analyzer) {
         Model ontology = ModelFactory.createDefaultModel();
@@ -27,22 +27,32 @@ public class OntologyConstructor {
         ontology.setNsPrefix("owl", OWL.getURI());
 
         Set<Resource> resources = new HashSet<>(analyzer.getTypes());
-        resources.addAll(analyzer.getPropertyDomains().keySet());
-        resources.addAll(analyzer.getPropertyRanges().keySet());
+        resources.addAll(analyzer.getGeneratedTypes());
+        resources.addAll(analyzer.getPropertyDomainsGenerated().values().stream().flatMap(Set::stream).toList());
+        resources.addAll(analyzer.getPropertyRangesGenerated().values().stream().flatMap(Set::stream).toList());
 
         addPotentialPrefixes(ontology, resources);
 
         Resource ontologyResource = ontology.createResource(ontologyIRI);
         ontologyResource.addProperty(RDF.type, OWL.Ontology);
 
-        for (Resource type : analyzer.getTypes()) {
+        Set<Resource> classes = new HashSet<>(analyzer.getTypes());
+        classes.addAll(analyzer.getGeneratedTypes());
+
+        for (Resource type : classes) {
             ontology.add(type, RDF.type, RDFS.Class);
             ontology.add(type, RDFS.label, toLabel(type));
         }
 
         Set<Property> properties = new HashSet<>();
-        properties.addAll(analyzer.getPropertyDomains().keySet());
-        properties.addAll(analyzer.getPropertyRanges().keySet());
+        properties.addAll(analyzer.getPropertyDomainsGenerated().keySet());
+        properties.addAll(analyzer.getPropertyRangesGenerated().keySet());
+
+        analyzer.getSubClassOf().forEach((subClass, superClasses)
+                -> superClasses.forEach(superClass
+                        -> ontology.add(subClass, RDFS.subClassOf, superClass)
+                )
+        );
 
         for (Property property : properties) {
             if (property.equals(RDF.type)) {
@@ -52,13 +62,11 @@ public class OntologyConstructor {
             ontology.add(property, RDF.type, RDF.Property);
             ontology.add(property, RDFS.label, toLabel(property));
 
-            for (Resource domain : analyzer.getPropertyDomains()
-                    .getOrDefault(property, Set.of())) {
+            for (Resource domain : analyzer.getPropertyDomainsGenerated().getOrDefault(property, Set.of())) {
                 ontology.add(property, RDFS.domain, domain);
             }
 
-            for (Resource range : analyzer.getPropertyRanges()
-                    .getOrDefault(property, Set.of())) {
+            for (Resource range : analyzer.getPropertyRangesGenerated().getOrDefault(property, Set.of())) {
                 ontology.add(property, RDFS.range, range);
             }
         }
@@ -76,30 +84,38 @@ public class OntologyConstructor {
         ontology.setNsPrefix("owl", OWL.getURI());
 
         Set<Resource> resources = new HashSet<>(analyzer.getTypes());
-        resources.addAll(analyzer.getPropertyDomains().keySet());
-        resources.addAll(analyzer.getPropertyRanges().keySet());
+        resources.addAll(analyzer.getGeneratedTypes());
+        resources.addAll(analyzer.getPropertyDomainsGenerated().values().stream().flatMap(Set::stream).toList());
+        resources.addAll(analyzer.getPropertyRangesGenerated().values().stream().flatMap(Set::stream).toList());
 
         addPotentialPrefixes(ontology, resources);
 
         Resource ontologyResource = ontology.createResource(ontologyIRI);
         ontologyResource.addProperty(RDF.type, OWL.Ontology);
 
-        for (Resource type : analyzer.getTypes()) {
+        Set<Resource> classes = new HashSet<>(analyzer.getTypes());
+        classes.addAll(analyzer.getGeneratedTypes());
+
+        for (Resource type : classes) {
             ontology.add(type, RDF.type, OWL.Class);
             ontology.add(type, RDFS.label, toLabel(type));
         }
+
+        analyzer.getSubClassOf().forEach((subClass, superClasses)
+                -> superClasses.forEach(superClass
+                        -> ontology.add(subClass, RDFS.subClassOf, superClass)
+                )
+        );
 
         for (Property property : analyzer.getLiteralProperties()) {
             ontology.add(property, RDF.type, OWL.DatatypeProperty);
             ontology.add(property, RDFS.label, toLabel(property));
 
-            for (Resource domain : analyzer.getPropertyDomains()
-                    .getOrDefault(property, Set.of())) {
+            for (Resource domain : analyzer.getPropertyDomainsGenerated().getOrDefault(property, Set.of())) {
                 ontology.add(property, RDFS.domain, domain);
             }
 
-            for (Resource range : analyzer.getPropertyRanges()
-                    .getOrDefault(property, Set.of())) {
+            for (Resource range : analyzer.getPropertyRangesGenerated().getOrDefault(property, Set.of())) {
                 ontology.add(property, RDFS.range, range);
             }
         }
@@ -112,13 +128,11 @@ public class OntologyConstructor {
             ontology.add(property, RDF.type, OWL.ObjectProperty);
             ontology.add(property, RDFS.label, toLabel(property));
 
-            for (Resource domain : analyzer.getPropertyDomains()
-                    .getOrDefault(property, Set.of())) {
+            for (Resource domain : analyzer.getPropertyDomainsGenerated().getOrDefault(property, Set.of())) {
                 ontology.add(property, RDFS.domain, domain);
             }
 
-            for (Resource range : analyzer.getPropertyRanges()
-                    .getOrDefault(property, Set.of())) {
+            for (Resource range : analyzer.getPropertyRangesGenerated().getOrDefault(property, Set.of())) {
                 ontology.add(property, RDFS.range, range);
             }
         }

@@ -190,7 +190,7 @@ public class RdfsAnalyzerTest {
             analyzer.analyze(model);
         });
 
-        OntologyConstructor oc = new OntologyConstructor();
+        DefinitionConstructor oc = new DefinitionConstructor();
 
         Model ontology = oc.toRdfsOntology("ex", "http://example.org/onto", analyzer);
 
@@ -267,7 +267,7 @@ public class RdfsAnalyzerTest {
             analyzer.analyze(model);
         });
 
-        OntologyConstructor oc = new OntologyConstructor();
+        DefinitionConstructor oc = new DefinitionConstructor();
 
         Model ontology = oc.toOwlOntology("ex", "http://example.org/onto", analyzer);
 

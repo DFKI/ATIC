@@ -26,6 +26,7 @@ import de.dfki.sds.aticsqlite.DatabaseOptions;
 import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
 import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
+import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph.OntologyFormat;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import de.dfki.sds.rdfpatchsqlite.Converter;
@@ -90,6 +91,7 @@ import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.TxnType;
 import org.apache.jena.rdf.model.Model;
+import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.rdfpatch.changes.RDFChangesBase;
@@ -348,6 +350,7 @@ public class AticServer {
         routes.get("/graph", this::getGraph);
         routes.post("/graph", this::postGraph);
         routes.delete("/graph/{uri}", this::deleteGraph);
+        routes.post("/graph/derived-ontology", this::postDerivedOntology);
 
         routes.post("/rml/execution", this::postRmlExecution);
 
@@ -660,6 +663,27 @@ public class AticServer {
                     "error", "Failed to delete graph"
             ));
         }
+    }
+
+    private void postDerivedOntology(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        
+        JSONObject jsonConf = new JSONObject(ctx.body());
+
+        String uri = jsonConf.getString("uri");
+        OntologyFormat format = OntologyFormat.valueOf(jsonConf.getString("format").toUpperCase());
+        String prefix = jsonConf.getString("prefix");
+        String iri = jsonConf.getString("iri");
+
+        Graph ontology = datasetGraph.calculateRead(() -> {
+            AticGraph graph = datasetGraph.getGraph(NodeFactory.createURI(uri), ictx);
+            return datasetGraph.deriveOntologyFromABox(graph, prefix, iri, format, ictx);
+        });
+
+        ctx.contentType("text/turtle");
+        StringWriter sw = new StringWriter();
+        RDFDataMgr.write(sw, ModelFactory.createModelForGraph(ontology), Lang.TURTLE);
+        ctx.result(sw.toString());
     }
 
     //------------------------------------------
