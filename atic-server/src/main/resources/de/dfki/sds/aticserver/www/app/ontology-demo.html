@@ -218,6 +218,14 @@ createApp({
     computed: {
 
     },
+    watch: {
+        derivedOntology: {
+            handler() {
+                this.saveDerivedOntology();
+            },
+            deep: true
+        }
+    },
     created() {
         axios.interceptors.response.use(
                 response => response,
@@ -228,9 +236,29 @@ createApp({
                 }
         );
         this.getAuthMe();
+        this.loadDerivedOntology();
     },
     methods: {
 
+        saveDerivedOntology() {
+            localStorage.setItem(
+                    'derivedOntology',
+                    JSON.stringify(this.derivedOntology)
+                    );
+        },
+        loadDerivedOntology() {
+            const saved = localStorage.getItem('derivedOntology');
+            if (saved) {
+                try {
+                    this.derivedOntology = {
+                        ...this.derivedOntology,
+                        ...JSON.parse(saved)
+                    };
+                } catch (error) {
+                    console.error('Failed to load derived ontology settings:', error);
+                }
+            }
+        },
         async postDerivedOntology() {
             this.isDerivingOntology = true;
             this.derivedOntologyResult = null;
@@ -293,13 +321,12 @@ createApp({
             const link = document.createElement('a');
             const prefix = this.derivedOntology.prefix.trim() || 'ontology';
             link.href = url;
-            link.download = `${prefix}.ttl`;
+            link.download = `${prefix}-ontology.ttl`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
         },
-
         getAuthMe() {
             axios.get('/auth/me').then(response => {
                 this.user = response.data;

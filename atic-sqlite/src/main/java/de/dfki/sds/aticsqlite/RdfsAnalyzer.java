@@ -14,6 +14,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import static java.util.stream.Collectors.toSet;
 import org.apache.jena.datatypes.DatatypeFormatException;
+import org.apache.jena.datatypes.TypeMapper;
 import org.apache.jena.datatypes.xsd.XSDDateTime;
 import org.apache.jena.rdf.model.AnonId;
 import org.apache.jena.rdf.model.Literal;
@@ -242,7 +243,7 @@ public class RdfsAnalyzer {
         filterTypesWithNamespaces.add(RDFS.uri);
         filterTypesWithNamespaces.add(OWL.NS);
         filterTypesWithNamespaces.add(VOID.NS);
-        
+
         propertyDomainsGenerated = new HashMap<>();
         propertyRangesGenerated = new HashMap<>();
 
@@ -492,7 +493,7 @@ public class RdfsAnalyzer {
         cardinalityAnalysis();
 
         multiCardinalityProperties();
-        
+
         generatePropertyDomainsAndRanges();
 
         //deriveSubClassOf(0.8, 4);
@@ -862,33 +863,61 @@ public class RdfsAnalyzer {
         Map<Set<Resource>, Resource> generatedClasses = new HashMap<>();
 
         propertyDomains.forEach((property, domains) -> {
-            if(!property.equals(RDF.type)) {
-                Resource generated = getOrGenerateClass(property, domains, "Domain", generatedClasses);
+            if (!property.equals(RDF.type)) {
+                Resource generated = getOrGenerateClass(
+                        property, domains, "Domain", generatedClasses
+                );
                 propertyDomainsGenerated.put(property, Set.of(generated));
             }
         });
 
         propertyRanges.forEach((property, ranges) -> {
-            if(!property.equals(RDF.type)) {
-                Resource generated = getOrGenerateClass(property, ranges, "Range", generatedClasses);
+            if (!property.equals(RDF.type)) {
+
+                //we will not generalize for datatypes
+                boolean allDatatypes = ranges.stream()
+                        .allMatch(range -> range.isURIResource()
+                        && TypeMapper.getInstance()
+                                .getTypeByName(range.getURI()) != null);
+                if (allDatatypes) {
+                    propertyRangesGenerated.put(property, ranges);
+                    return;
+                }
+
+                Resource generated = getOrGenerateClass(
+                        property, ranges, "Range", generatedClasses
+                );
                 propertyRangesGenerated.put(property, Set.of(generated));
             }
         });
     }
 
-    private Resource getOrGenerateClass(Property property, Set<Resource> classes, String kind, Map<Set<Resource>, Resource> generatedClasses) {
+    private Resource getOrGenerateClass(
+            Property property,
+            Set<Resource> classes,
+            String kind,
+            Map<Set<Resource>, Resource> generatedClasses) {
+
         if (classes.size() == 1) {
             return classes.iterator().next();
         }
 
         Set<Resource> key = Set.copyOf(classes);
+
         return generatedClasses.computeIfAbsent(key, k -> {
-            Resource generated = ResourceFactory.createResource("atic:generated#GeneratedFor" + kind + getLocalName(property.getURI()));
+            String localName = getLocalName(property.getURI());
+            localName = localName.substring(0, 1).toUpperCase()
+                    + localName.substring(1);
+
+            Resource generated = ResourceFactory.createResource(
+                    "atic:generated#GeneratedFor" + kind + localName
+            );
 
             generatedTypes.add(generated);
 
             for (Resource parent : k) {
-                subClassOf.computeIfAbsent(generated, r -> new HashSet<>()).add(parent);
+                subClassOf.computeIfAbsent(generated, r -> new HashSet<>())
+                        .add(parent);
             }
 
             return generated;
