@@ -157,6 +157,7 @@ public class AticServer {
         Capabilities.Builder capBuilder = Capabilities.builder();
         capBuilder.rdfStarEnabled(config.isRdfStarEnabled());
         capBuilder.propertyTypeAware(config.isPropertyTypeAware());
+        capBuilder.invexEnabled(config.isInvexEnabled());
 
         datasetGraph = new SqliteAticDatasetGraph(database, rdfPatchWriter, capBuilder.build());
 
