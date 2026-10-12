@@ -7,9 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
-import org.apache.jena.sparql.vocabulary.FOAF;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
+import org.apache.jena.vocabulary.SchemaDO;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -119,7 +119,7 @@ public class FragmentSettings {
                 .addProperty(new FragmentProperty("@type", RDF.type.asNode(), false))
                 .addProperty(new FragmentProperty("label", RDFS.label.asNode(), true))
                 .addProperty(new FragmentProperty("comment", RDFS.comment.asNode(), true))
-                .addProperty(new FragmentProperty("icon", FOAF.img.asNode(), false))
+                .addProperty(new FragmentProperty("icon", SchemaDO.image.asNode(), false))
                 .build();
     }
 
