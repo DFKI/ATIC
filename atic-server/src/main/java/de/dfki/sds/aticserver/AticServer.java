@@ -351,7 +351,7 @@ public class AticServer {
         routes.post("/graph", this::postGraph);
         routes.delete("/graph/{uri}", this::deleteGraph);
         routes.post("/graph/derived-ontology", this::postDerivedOntology);
-
+        
         routes.post("/rml/execution", this::postRmlExecution);
 
         routes.post("/querylogger:enable", this::postQueryLoggerEnable);

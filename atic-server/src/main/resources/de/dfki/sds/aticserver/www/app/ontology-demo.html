@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Ontology Demo | Atic</title>
+    </head>
+    <body>
+        <div class="container-fluid mt-4" id="app">
+
+            <div class="row align-items-center">
+                <div class="col d-flex align-items-center m-2">
+                    <h3 class="mb-0 d-flex align-items-center me-2">
+                        Ontology
+                    </h3>
+                    <div v-if="loading" class="spinner-border text-primary" role="status" style="width: 1.5rem; height: 1.5rem;"
+                         @click="loading = false">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="col-auto ms-auto me-2" v-if="user">
+                    <span class="me-2" :title="user.username">
+                        <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                    </span>
+                    <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    Derive Ontology from ABox
+                </div>
+
+                <div class="card-body">
+                    <form @submit.prevent="postDerivedOntology">
+
+                        <div class="mb-3">
+                            <label for="ontologyUri" class="form-label">
+                                Graph URI
+                            </label>
+                            <input
+                                id="ontologyUri"
+                                type="text"
+                                class="form-control"
+                                list="ontologyUriOptions"
+                                v-model.trim="derivedOntology.uri"
+                                placeholder="https://example.org/graph"
+                                required
+                                >
+                        </div>
+
+                        <datalist id="ontologyUriOptions">
+                            <option value="urn:x-arq:DefaultGraph">
+                                Default Graph URI
+                            </option>
+                        </datalist>
+
+                        <div class="mb-3">
+                            <label for="ontologyFormat" class="form-label">
+                                Ontology Format
+                            </label>
+                            <select
+                                id="ontologyFormat"
+                                class="form-select"
+                                v-model="derivedOntology.format"
+                                required
+                                >
+                                <option value="RDFS">RDFS</option>
+                                <option value="OWL">OWL</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="ontologyPrefix" class="form-label">
+                                Prefix
+                            </label>
+                            <input
+                                id="ontologyPrefix"
+                                type="text"
+                                class="form-control"
+                                v-model.trim="derivedOntology.prefix"
+                                placeholder="ex"
+                                required
+                                >
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="ontologyIri" class="form-label">
+                                Ontology IRI
+                            </label>
+                            <input
+                                id="ontologyIri"
+                                type="url"
+                                class="form-control"
+                                v-model.trim="derivedOntology.iri"
+                                placeholder="https://example.org/ontology#"
+                                required
+                                >
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="btn btn-primary"
+                            :disabled="isDerivingOntology"
+                            >
+                            <span
+                                v-if="isDerivingOntology"
+                                class="spinner-border spinner-border-sm me-2"
+                                role="status"
+                                ></span>
+
+                            {{ isDerivingOntology ? 'Deriving...' : 'Derive Ontology' }}
+                        </button>
+                    </form>
+
+                    <div
+                        v-if="derivedOntologyError"
+                        class="alert alert-danger mt-3"
+                        role="alert"
+                        >
+                        {{ derivedOntologyError }}
+                    </div>
+
+                    <div v-if="derivedOntologyResult !== null" class="mt-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">Generated Ontology (Turtle)</h6>
+
+                            <div class="d-flex gap-2">
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    @click="copyDerivedOntology"
+                                    >
+                                    Copy
+                                </button>
+
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-primary btn-sm"
+                                    @click="exportDerivedOntology"
+                                    :disabled="derivedOntologyResult === null"
+                                    >
+                                    Export TTL
+                                </button>
+                            </div>
+                        </div>
+
+                        <pre class="border rounded p-3 bg-light"
+                             style="max-height: 500px; overflow: auto;"><code>{{ derivedOntologyResult }}</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal" id="errorModal" tabindex="-1" ref="error_modal">
+                <div class="modal-dialog  modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title fs-5">Error</h1>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="alert alert-danger" role="alert">
+                                    <span style="white-space: pre-wrap; word-break: break-word;">
+                                        {{ error }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                &nbsp;
+
+                &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+            </div>
+        </div>
+
+
+        <script>
+const {createApp} = Vue;
+createApp({
+
+    data() {
+        return {
+            loading: false,
+            error: null,
+            derivedOntology: {
+                uri: '',
+                format: 'RDFS',
+                prefix: '',
+                iri: ''
+            },
+            isDerivingOntology: false,
+            derivedOntologyResult: null,
+            derivedOntologyError: null
+        };
+    },
+    computed: {
+
+    },
+    created() {
+        axios.interceptors.response.use(
+                response => response,
+                error => {
+                    const errorMsg = error.response?.data || error.message || "Unknown error";
+                    this.open_error_modal(errorMsg);
+                    return Promise.reject(error);
+                }
+        );
+        this.getAuthMe();
+    },
+    methods: {
+
+        async postDerivedOntology() {
+            this.isDerivingOntology = true;
+            this.derivedOntologyResult = null;
+            this.derivedOntologyError = null;
+            try {
+                const response = await axios.post(
+                        '/graph/derived-ontology',
+                        {
+                            uri: this.derivedOntology.uri,
+                            format: this.derivedOntology.format,
+                            prefix: this.derivedOntology.prefix,
+                            iri: this.derivedOntology.iri
+                        },
+                        {
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'text/turtle'
+                            },
+                            responseType: 'text'
+                        }
+                );
+                this.derivedOntologyResult = response.data;
+            } catch (error) {
+                console.error('Failed to derive ontology:', error);
+                this.derivedOntologyError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+            } finally {
+                this.isDerivingOntology = false;
+            }
+        },
+        async copyDerivedOntology() {
+            if (this.derivedOntologyResult === null) {
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(
+                        this.derivedOntologyResult
+                        );
+            } catch (error) {
+                console.error('Failed to copy ontology:', error);
+                this.derivedOntologyError =
+                        'Could not copy the ontology to the clipboard.';
+            }
+        },
+        exportDerivedOntology() {
+            if (this.derivedOntologyResult === null) {
+                return;
+            }
+
+            const blob = new Blob(
+                    [this.derivedOntologyResult],
+                    {type: 'text/turtle;charset=utf-8'}
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const prefix = this.derivedOntology.prefix.trim() || 'ontology';
+            link.href = url;
+            link.download = `${prefix}.ttl`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        },
+
+        getAuthMe() {
+            axios.get('/auth/me').then(response => {
+                this.user = response.data;
+            }).catch(error => {
+                if (error.response && error.response.status === 401) {
+                    window.location.href = '/app/unauthorized.html';
+                }
+            });
+        },
+        postLogout() {
+            axios.post('/auth/logout').then(response => {
+                window.location.href = response.data.redirect;
+            });
+        },
+        open_error_modal(msg) {
+            this.error = msg;
+            this.loading = false;
+            const modalInstance = new window.bootstrap.Modal(this.$refs.error_modal);
+            modalInstance.show();
+        }
+
+    }
+}).mount("#app");
+        </script>
+    </body>
+</html>
