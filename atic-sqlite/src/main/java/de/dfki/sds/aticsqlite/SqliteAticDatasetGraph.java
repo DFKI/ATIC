@@ -4520,8 +4520,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         //});
     }
 
-    public synchronized Graph deriveOntologyFromABox(AticGraph graph, String ontologyPrefix, String ontologyIRI, OntologyFormat format, InvocationContext ictx) {
-        
+    public Graph deriveOntologyFromABox(AticGraph graph, String ontologyPrefix, String ontologyIRI, OntologyFormat format, InvocationContext ictx) {
+
         //System.out.println("copy");
         //copy in memory: faster with rdfs analyzer
         Graph memGraph = GraphFactory.createDefaultGraph();
@@ -4546,6 +4546,36 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         };
 
         return ontology.getGraph();
+    }
+
+    public Map<Node, JSONObject> deriveBridgeTemplatesFromABox(AticGraph graph, InvocationContext ictx) {
+
+        //System.out.println("copy");
+        //copy in memory: faster with rdfs analyzer
+        Graph memGraph = GraphFactory.createDefaultGraph();
+        ExtendedIterator<Triple> iter = graph.find(Node.ANY, Node.ANY, Node.ANY, ictx);
+        while (iter.hasNext()) {
+            memGraph.add(iter.next());
+        }
+        iter.close();
+
+        //System.out.println("analyze");
+        Model model = ModelFactory.createModelForGraph(memGraph);
+        RdfsAnalyzer analyzer = new RdfsAnalyzer();
+        analyzer.analyze(model);
+
+        //System.out.println("construct");
+        DefinitionConstructor constructor = new DefinitionConstructor();
+
+        Map<Node, JSONObject> map = constructor.buildSuggestedTemplates(analyzer)
+                .entrySet()
+                .stream()
+                .collect(Collectors.toMap(
+                        entry -> entry.getKey().asNode(),
+                        Map.Entry::getValue
+                ));
+
+        return map;
     }
 
     public enum OntologyFormat {

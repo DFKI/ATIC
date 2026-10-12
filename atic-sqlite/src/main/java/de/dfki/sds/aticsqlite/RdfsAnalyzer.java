@@ -127,13 +127,13 @@ public class RdfsAnalyzer {
             StringBuilder sb = new StringBuilder();
 
             if (hasDomain()) {
-                sb.append(getLocalName(getDomain().getURI())).append(" ");
+                sb.append(AticGraphUtils.getLocalName(getDomain().getURI())).append(" ");
             }
 
-            sb.append(getLocalName(getProperty().getURI()));
+            sb.append(AticGraphUtils.getLocalName(getProperty().getURI()));
 
             if (hasRange()) {
-                sb.append(" ").append(getLocalName(getRange().getURI()));
+                sb.append(" ").append(AticGraphUtils.getLocalName(getRange().getURI()));
             }
 
             return sb.toString();
@@ -905,7 +905,7 @@ public class RdfsAnalyzer {
         Set<Resource> key = Set.copyOf(classes);
 
         return generatedClasses.computeIfAbsent(key, k -> {
-            String localName = getLocalName(property.getURI());
+            String localName = AticGraphUtils.getLocalName(property.getURI());
             localName = localName.substring(0, 1).toUpperCase()
                     + localName.substring(1);
 
@@ -1309,22 +1309,4 @@ public class RdfsAnalyzer {
 
     }
 
-    public static String getLocalName(String uri) {
-        int a = uri.lastIndexOf("/");
-        int b = uri.lastIndexOf("#");
-        int m = Math.max(a, b);
-        if (m == -1) {
-            //schema:name
-            if (uri.contains(":")) {
-                String[] split = uri.split("\\:");
-                if (split.length == 2) {
-                    return split[1];
-                }
-            }
-
-            return null;
-        }
-
-        return uri.substring(m + 1, uri.length());
-    }
 }

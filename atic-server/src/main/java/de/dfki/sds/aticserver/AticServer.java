@@ -19,6 +19,7 @@ import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticsqlite.AticGraphUtils;
 import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
@@ -59,6 +60,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -351,7 +353,8 @@ public class AticServer {
         routes.post("/graph", this::postGraph);
         routes.delete("/graph/{uri}", this::deleteGraph);
         routes.post("/graph/derived-ontology", this::postDerivedOntology);
-        
+        routes.post("/graph/derived-bridge-template", this::postDerivedBridgeTemplate);
+
         routes.post("/rml/execution", this::postRmlExecution);
 
         routes.post("/querylogger:enable", this::postQueryLoggerEnable);
@@ -667,7 +670,7 @@ public class AticServer {
 
     private void postDerivedOntology(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
-        
+
         JSONObject jsonConf = new JSONObject(ctx.body());
 
         String uri = jsonConf.getString("uri");
@@ -684,6 +687,33 @@ public class AticServer {
         StringWriter sw = new StringWriter();
         RDFDataMgr.write(sw, ModelFactory.createModelForGraph(ontology), Lang.TURTLE);
         ctx.result(sw.toString());
+    }
+
+    private void postDerivedBridgeTemplate(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        JSONObject jsonConf = new JSONObject(ctx.body());
+        String uri = jsonConf.getString("uri");
+
+        Map<Node, JSONObject> map = datasetGraph.calculateRead(() -> {
+            AticGraph graph = datasetGraph.getGraph(NodeFactory.createURI(uri), ictx);
+            return datasetGraph.deriveBridgeTemplatesFromABox(graph, ictx);
+        });
+
+        JSONArray result = new JSONArray();
+
+        map.entrySet().stream()
+                .sorted(Comparator.comparing(entry -> entry.getKey().getURI()))
+                .forEach(entry -> {
+                    JSONObject item = new JSONObject();
+                    item.put("uri", entry.getKey().getURI());
+                    item.put("name", AticGraphUtils.getLocalName(entry.getKey().getURI()));
+                    item.put("template", entry.getValue());
+                    result.put(item);
+                });
+
+        ctx.contentType("application/json");
+        ctx.result(result.toString());
     }
 
     //------------------------------------------

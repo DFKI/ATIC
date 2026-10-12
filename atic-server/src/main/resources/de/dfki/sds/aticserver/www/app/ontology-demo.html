@@ -37,127 +37,188 @@
                 </div>
             </div>
 
-            <div class="card mb-4">
-                <div class="card-header">
-                    Derive Ontology from ABox
+            <h4>Derive Definition from ABox</h4>
+
+            <form @submit.prevent="postDerivedOntology">
+
+                <div class="mb-3">
+                    <label for="ontologyUri" class="form-label">
+                        Target Graph URI
+                    </label>
+                    <input
+                        id="ontologyUri"
+                        type="text"
+                        class="form-control"
+                        list="ontologyUriOptions"
+                        v-model.trim="derivedOntology.uri"
+                        placeholder="https://example.org/graph"
+                        required
+                        >
                 </div>
 
-                <div class="card-body">
-                    <form @submit.prevent="postDerivedOntology">
+                <datalist id="ontologyUriOptions">
+                    <option value="urn:x-arq:DefaultGraph">
+                        Default Graph URI
+                    </option>
+                </datalist>
 
-                        <div class="mb-3">
-                            <label for="ontologyUri" class="form-label">
-                                Graph URI
-                            </label>
-                            <input
-                                id="ontologyUri"
-                                type="text"
-                                class="form-control"
-                                list="ontologyUriOptions"
-                                v-model.trim="derivedOntology.uri"
-                                placeholder="https://example.org/graph"
-                                required
-                                >
-                        </div>
+                <div class="mb-3">
+                    <label for="ontologyFormat" class="form-label">
+                        Ontology Format
+                    </label>
+                    <select
+                        id="ontologyFormat"
+                        class="form-select"
+                        v-model="derivedOntology.format"
+                        required
+                        >
+                        <option value="RDFS">RDFS</option>
+                        <option value="OWL">OWL</option>
+                    </select>
+                </div>
 
-                        <datalist id="ontologyUriOptions">
-                            <option value="urn:x-arq:DefaultGraph">
-                                Default Graph URI
-                            </option>
-                        </datalist>
+                <div class="mb-3">
+                    <label for="ontologyPrefix" class="form-label">
+                        Ontology Prefix
+                    </label>
+                    <input
+                        id="ontologyPrefix"
+                        type="text"
+                        class="form-control"
+                        v-model.trim="derivedOntology.prefix"
+                        placeholder="ex"
+                        required
+                        >
+                </div>
 
-                        <div class="mb-3">
-                            <label for="ontologyFormat" class="form-label">
-                                Ontology Format
-                            </label>
-                            <select
-                                id="ontologyFormat"
-                                class="form-select"
-                                v-model="derivedOntology.format"
-                                required
-                                >
-                                <option value="RDFS">RDFS</option>
-                                <option value="OWL">OWL</option>
-                            </select>
-                        </div>
+                <div class="mb-3">
+                    <label for="ontologyIri" class="form-label">
+                        Ontology IRI
+                    </label>
+                    <input
+                        id="ontologyIri"
+                        type="url"
+                        class="form-control"
+                        v-model.trim="derivedOntology.iri"
+                        placeholder="https://example.org/ontology#"
+                        required
+                        >
+                </div>
 
-                        <div class="mb-3">
-                            <label for="ontologyPrefix" class="form-label">
-                                Prefix
-                            </label>
-                            <input
-                                id="ontologyPrefix"
-                                type="text"
-                                class="form-control"
-                                v-model.trim="derivedOntology.prefix"
-                                placeholder="ex"
-                                required
-                                >
-                        </div>
+                <button
+                    type="submit"
+                    class="btn btn-outline-primary"
+                    :disabled="isDerivingOntology"
+                    >
+                    <span
+                        v-if="isDerivingOntology"
+                        class="spinner-border spinner-border-sm me-2"
+                        role="status"
+                        ></span>
 
-                        <div class="mb-3">
-                            <label for="ontologyIri" class="form-label">
-                                Ontology IRI
-                            </label>
-                            <input
-                                id="ontologyIri"
-                                type="url"
-                                class="form-control"
-                                v-model.trim="derivedOntology.iri"
-                                placeholder="https://example.org/ontology#"
-                                required
-                                >
-                        </div>
+                    {{ isDerivingOntology ? 'Deriving...' : 'Derive Ontology' }}
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-outline-primary ms-2"
+                    @click="deriveBridgeTemplates"
+                    :disabled="isDerivingBridgeTemplates"
+                    >
+                    <span
+                        v-if="isDerivingBridgeTemplates"
+                        class="spinner-border spinner-border-sm me-2"
+                        role="status"
+                        ></span>
+                    {{ isDerivingBridgeTemplates
+                        ? 'Deriving Bridge Templates...'
+                        : 'Derive Bridge Templates' }}
+                </button>
+            </form>
+
+            <div
+                v-if="derivedOntologyError"
+                class="alert alert-danger mt-3"
+                role="alert"
+                >
+                {{ derivedOntologyError }}
+            </div>
+
+            <div v-if="derivedOntologyResult !== null" class="mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Generated Ontology (Turtle)</h6>
+
+                    <div class="d-flex gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary btn-sm"
+                            @click="copyDerivedOntology"
+                            >
+                            Copy
+                        </button>
 
                         <button
-                            type="submit"
-                            class="btn btn-primary"
-                            :disabled="isDerivingOntology"
+                            type="button"
+                            class="btn btn-outline-primary btn-sm"
+                            @click="exportDerivedOntology"
+                            :disabled="derivedOntologyResult === null"
                             >
-                            <span
-                                v-if="isDerivingOntology"
-                                class="spinner-border spinner-border-sm me-2"
-                                role="status"
-                                ></span>
-
-                            {{ isDerivingOntology ? 'Deriving...' : 'Derive Ontology' }}
+                            Export TTL
                         </button>
-                    </form>
-
-                    <div
-                        v-if="derivedOntologyError"
-                        class="alert alert-danger mt-3"
-                        role="alert"
-                        >
-                        {{ derivedOntologyError }}
                     </div>
+                </div>
 
-                    <div v-if="derivedOntologyResult !== null" class="mt-4">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="mb-0">Generated Ontology (Turtle)</h6>
+                <pre class="border rounded p-3 bg-light"
+                     style="max-height: 500px; overflow: auto;"><code>{{ derivedOntologyResult }}</code></pre>
+            </div>
 
-                            <div class="d-flex gap-2">
-                                <button
-                                    type="button"
-                                    class="btn btn-outline-secondary btn-sm"
-                                    @click="copyDerivedOntology"
-                                    >
-                                    Copy
-                                </button>
+            <div v-if="bridgeTemplateError" class="alert alert-danger mt-3">
+                {{ bridgeTemplateError }}
+            </div>
 
-                                <button
-                                    type="button"
-                                    class="btn btn-outline-primary btn-sm"
-                                    @click="exportDerivedOntology"
-                                    :disabled="derivedOntologyResult === null"
-                                    >
-                                    Export TTL
-                                </button>
+            <div v-if="bridgeTemplates.length > 0" class="mt-4">
+                <h5 class="mb-3">
+                    Derived Bridge Templates
+                    <span class="badge bg-secondary">{{ bridgeTemplates.length }}</span>
+                </h5>
+
+                <div
+                    v-for="(item, index) in bridgeTemplates"
+                    :key="item.uri"
+                    class="card mb-3"
+                    >
+                    <div class="card-header d-flex justify-content-between align-items-start">
+                        <div class="me-3">
+                            <div class="fw-semibold">
+                                {{ item.name }}
                             </div>
+                            <small class="text-muted text-break">
+                                {{ item.uri }}
+                            </small>
                         </div>
 
-                        <pre class="border rounded p-3 bg-light"
-                             style="max-height: 500px; overflow: auto;"><code>{{ derivedOntologyResult }}</code></pre>
+                        <div class="d-flex gap-2 flex-shrink-0">
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                @click="copyBridgeTemplate(item)"
+                                >
+                                Copy
+                            </button>
+
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-primary"
+                                @click="exportBridgeTemplate(item)"
+                                >
+                                Export JSON
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <pre class="mb-0 p-3 bg-light"
+                             style="max-height: 500px; overflow: auto;"><code>{{ formatBridgeTemplate(item.template) }}</code></pre>
                     </div>
                 </div>
             </div>
@@ -212,7 +273,11 @@ createApp({
             },
             isDerivingOntology: false,
             derivedOntologyResult: null,
-            derivedOntologyError: null
+            derivedOntologyError: null,
+
+            bridgeTemplates: [],
+            isDerivingBridgeTemplates: false,
+            bridgeTemplateError: null
         };
     },
     computed: {
@@ -327,6 +392,84 @@ createApp({
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
         },
+
+        async deriveBridgeTemplates() {
+            this.isDerivingBridgeTemplates = true;
+            this.bridgeTemplateError = null;
+            this.bridgeTemplates = [];
+
+            try {
+                const response = await axios.post(
+                        '/graph/derived-bridge-template',
+                        {
+                            uri: this.derivedOntology.uri
+                        },
+                        {
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            }
+                        }
+                );
+
+                this.bridgeTemplates = response.data.map(item => ({
+                        ...item,
+                        name: item.name || item.uri
+                    }));
+
+            } catch (error) {
+                console.error('Failed to derive bridge templates:', error);
+
+                this.bridgeTemplateError =
+                        typeof error.response?.data === 'string'
+                        ? error.response.data
+                        : error.message || 'Failed to derive bridge templates.';
+            } finally {
+                this.isDerivingBridgeTemplates = false;
+            }
+        },
+
+        formatBridgeTemplate(template) {
+            return JSON.stringify(template, null, 2);
+        },
+
+        async copyBridgeTemplate(item) {
+            try {
+                await navigator.clipboard.writeText(
+                        this.formatBridgeTemplate(item.template)
+                        );
+            } catch (error) {
+                console.error('Failed to copy bridge template:', error);
+                this.bridgeTemplateError =
+                        'Could not copy the bridge template to the clipboard.';
+            }
+        },
+
+        exportBridgeTemplate(item) {
+            const json = this.formatBridgeTemplate(item.template);
+
+            const filename = (item.name || 'bridge-template')
+                    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+                    .trim() || 'bridge-template';
+
+            const blob = new Blob(
+                    [json],
+                    {type: 'application/json;charset=utf-8'}
+            );
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+
+            link.href = url;
+            link.download = `${filename}.json`;
+
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        },
+
         getAuthMe() {
             axios.get('/auth/me').then(response => {
                 this.user = response.data;

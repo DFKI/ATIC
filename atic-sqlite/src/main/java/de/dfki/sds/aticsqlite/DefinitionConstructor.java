@@ -156,7 +156,7 @@ public class DefinitionConstructor {
             }
 
             String uri = resource.getURI();
-            String localName = RdfsAnalyzer.getLocalName(uri);
+            String localName = AticGraphUtils.getLocalName(uri);
 
             if (localName == null || localName.isBlank()) {
                 continue;
@@ -191,7 +191,7 @@ public class DefinitionConstructor {
     }
 
     private String toLabel(Resource resource) {
-        String localName = RdfsAnalyzer.getLocalName(resource.getURI());
+        String localName = AticGraphUtils.getLocalName(resource.getURI());
 
         if (localName == null || localName.isBlank()) {
             return resource.getURI();
@@ -205,12 +205,9 @@ public class DefinitionConstructor {
     // ============================================================
     // Suggested templates based on RDFS analysis
     // ============================================================
-
     /**
-     * Builds a suggested starting template for each type (class) found in the
-     * analyzed ABox.  The returned map key is the type resource, and the value
-     * is a JSON object with a valid bridge template structure that a user can
-     * adjust later.
+     * Builds a suggested starting template for each type (class) found in the analyzed ABox. The returned map key is the type resource, and the value is a JSON
+     * object with a valid bridge template structure that a user can adjust later.
      */
     public Map<Resource, JSONObject> buildSuggestedTemplates(RdfsAnalyzer analyzer) {
         Map<Resource, JSONObject> templates = new HashMap<>();
@@ -230,7 +227,7 @@ public class DefinitionConstructor {
      * Builds a single suggested template for the given type.
      */
     private JSONObject buildSuggestedTemplate(Resource type, RdfsAnalyzer analyzer) {
-        String typeLocalName = RdfsAnalyzer.getLocalName(type.getURI());
+        String typeLocalName = AticGraphUtils.getLocalName(type.getURI());
         if (typeLocalName == null || typeLocalName.isBlank()) {
             typeLocalName = "resource";
         }
@@ -250,7 +247,7 @@ public class DefinitionConstructor {
         // Check for clashes: if a property has the same local name as the type
         Set<String> usedVars = new HashSet<>(varMap.values());
         for (Property prop : props) {
-            String propLocalName = RdfsAnalyzer.getLocalName(prop.getURI());
+            String propLocalName = AticGraphUtils.getLocalName(prop.getURI());
             if (propLocalName == null || propLocalName.isBlank()) {
                 continue;
             }
@@ -287,7 +284,7 @@ public class DefinitionConstructor {
         wherePatterns.add(subjectVar + " a " + typeCuri);
 
         for (Property prop : props) {
-            String propLocalName = RdfsAnalyzer.getLocalName(prop.getURI());
+            String propLocalName = AticGraphUtils.getLocalName(prop.getURI());
             if (propLocalName == null || propLocalName.isBlank()) {
                 continue;
             }
@@ -330,7 +327,7 @@ public class DefinitionConstructor {
 
         // --- $limit ---
         template.put("$limit", 10);
-        
+
         // --- @context ---
         template.put("@context", new JSONObject(prefixMap));
 
@@ -341,7 +338,7 @@ public class DefinitionConstructor {
      * Builds a nested map object for a resource (1:N / relationship) property.
      */
     private JSONObject buildNestedMap(String propLocalName, String relVar, String parentSubjectVar,
-                                       String propCuri, Resource rangeType, RdfsAnalyzer analyzer) {
+            String propCuri, Resource rangeType, RdfsAnalyzer analyzer) {
         JSONObject nested = JSONUtils.createJSONObject();
         nested.put("$type", "array");
 
@@ -387,20 +384,43 @@ public class DefinitionConstructor {
     private Map<String, String> buildPrefixMap(Set<String> uris) {
         Map<String, String> prefixMap = new LinkedHashMap<>();
 
+        Map<String, String> standardNamespaces = new LinkedHashMap<>();
+        standardNamespaces.put("rdf", RDF.getURI());
+        standardNamespaces.put("rdfs", RDFS.getURI());
+        standardNamespaces.put("xsd", XSD.getURI());
+        standardNamespaces.put("owl", OWL.getURI());
+
+        for (Map.Entry<String, String> entry : standardNamespaces.entrySet()) {
+            String prefix = entry.getKey();
+            String namespace = entry.getValue();
+
+            if (uris.stream().anyMatch(uri -> uri.startsWith(namespace))) {
+                prefixMap.put(prefix, namespace);
+            }
+        }
+
         for (String uri : uris) {
-            int lastSlash = uri.lastIndexOf('/');
-            int lastHash = uri.lastIndexOf('#');
-            int sep = Math.max(lastSlash, lastHash);
+            if (uri == null) {
+                continue;
+            }
+
+            if (standardNamespaces.values().stream().anyMatch(uri::startsWith)) {
+                continue;
+            }
+
+            int sep = Math.max(uri.lastIndexOf('/'), uri.lastIndexOf('#'));
             if (sep == -1) {
                 continue;
             }
 
             String namespace = uri.substring(0, sep + 1);
+
             if (prefixMap.containsValue(namespace)) {
                 continue;
             }
 
             String prefix = inferPrefixForUri(uri, namespace);
+
             if (prefix != null && !prefixMap.containsKey(prefix)) {
                 prefixMap.put(prefix, namespace);
             }
@@ -410,8 +430,7 @@ public class DefinitionConstructor {
     }
 
     /**
-     * Converts a URI to a CURIE using the given prefix map.
-     * If no prefix is found for the URI's namespace, returns the full URI.
+     * Converts a URI to a CURIE using the given prefix map. If no prefix is found for the URI's namespace, returns the full URI.
      */
     private String uriToCuri(String uri, Map<String, String> prefixMap) {
         // Try to find the longest matching namespace
@@ -447,12 +466,24 @@ public class DefinitionConstructor {
      */
     private String inferPrefixForUri(String uri, String namespace) {
         // Known prefixes with high priority
-        if (namespace.equals("http://www.w3.org/1999/02/22-rdf-syntax-ns#")) return "rdf";
-        if (namespace.equals("http://www.w3.org/2000/01/rdf-schema#")) return "rdfs";
-        if (namespace.equals("http://www.w3.org/2001/XMLSchema#")) return "xsd";
-        if (namespace.equals("http://www.w3.org/2002/07/owl#")) return "owl";
-        if (namespace.equals("http://xmlns.com/foaf/0.1/")) return "foaf";
-        if (namespace.equals("http://schema.org/")) return "schema";
+        if (namespace.equals("http://www.w3.org/1999/02/22-rdf-syntax-ns#")) {
+            return "rdf";
+        }
+        if (namespace.equals("http://www.w3.org/2000/01/rdf-schema#")) {
+            return "rdfs";
+        }
+        if (namespace.equals("http://www.w3.org/2001/XMLSchema#")) {
+            return "xsd";
+        }
+        if (namespace.equals("http://www.w3.org/2002/07/owl#")) {
+            return "owl";
+        }
+        if (namespace.equals("http://xmlns.com/foaf/0.1/")) {
+            return "foaf";
+        }
+        if (namespace.equals("http://schema.org/")) {
+            return "schema";
+        }
 
         // Try to derive from URI parts
         String[] parts = namespace.split("[/#:]");
