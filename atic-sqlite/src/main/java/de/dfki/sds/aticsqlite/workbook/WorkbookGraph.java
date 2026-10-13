@@ -136,6 +136,20 @@ public class WorkbookGraph implements AticGraph {
 
     //-------------------------------
     //api
+    public List<Node> listWorkbooks(InvocationContext ctx) {
+        List<Node> result = new ArrayList<>();
+        ExtendedIterator<Triple> iter
+                = innerGraph.find(null, RDF.type.asNode(), Workbook.asNode(), ctx);
+        try {
+            while (iter.hasNext()) {
+                result.add(iter.next().getSubject());
+            }
+        } finally {
+            iter.close();
+        }
+        return result;
+    }
+
     public JSONObject getJson(Node workbook, InvocationContext ctx) {
 
         ExtendedIterator<Triple> iter

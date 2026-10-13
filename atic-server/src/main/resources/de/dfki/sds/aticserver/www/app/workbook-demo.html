@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js"></script>
+        <script src="js/vue.global.prod.js"></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Workbook Demo | Atic</title>
+
+        <style>
+            .workbook-card {
+                cursor: pointer;
+                transition: transform 0.15s, box-shadow 0.15s;
+            }
+            .workbook-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            .sheet-tab {
+                cursor: pointer;
+                white-space: nowrap;
+            }
+            .sheet-tab.active {
+                background-color: #0d6efd !important;
+                color: #fff !important;
+            }
+            .sheet-tab {
+                border: 1px solid #dee2e6;
+                padding: 6px 14px;
+                border-radius: 4px;
+                margin-right: 4px;
+                font-size: 13px;
+                background: #f8f9fa;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+            }
+            .sheet-tab .delete-sheet {
+                display: none;
+                cursor: pointer;
+                color: inherit;
+                font-size: 11px;
+            }
+            .sheet-tab:hover .delete-sheet {
+                display: inline;
+            }
+            .cell {
+                min-width: 140px;
+                min-height: 32px;
+                padding: 4px 6px;
+                border: 1px solid #dee2e6;
+                cursor: pointer;
+                font-size: 13px;
+                overflow: hidden;
+                word-break: break-word;
+                background: #fff;
+            }
+            .cell:hover {
+                background: #e8f0fe;
+                border-color: #0d6efd;
+            }
+            .cell-header {
+                background: #f1f3f5;
+                font-weight: 600;
+                font-size: 12px;
+                text-align: center;
+                min-width: 140px;
+                border: 1px solid #dee2e6;
+                padding: 6px 4px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .row-header {
+                background: #f1f3f5;
+                font-weight: 600;
+                text-align: center;
+                min-width: 48px;
+                width: 48px;
+                border: 1px solid #dee2e6;
+                padding: 6px 4px;
+                font-size: 12px;
+            }
+            .table-container {
+                max-height: 460px;
+                overflow-y: auto;
+                overflow-x: auto;
+            }
+            .table-container table {
+                border-collapse: separate;
+                border-spacing: 0;
+                min-width: 100%;
+            }
+            .table-container th,
+            .table-container td {
+                border: 1px solid #dee2e6;
+            }
+            .table-container .sticky-header {
+                position: sticky;
+                top: 0;
+                z-index: 1;
+            }
+            .table-container .sticky-entity-col {
+                position: sticky;
+                left: 0;
+                z-index: 2;
+                background: #f1f3f5;
+            }
+            .table-container .sticky-corner {
+                position: sticky;
+                top: 0;
+                left: 0;
+                z-index: 3;
+                background: #f1f3f5;
+            }
+            .cell-value-tag {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                background: #e9ecef;
+                border-radius: 4px;
+                padding: 2px 6px;
+                margin: 1px 2px;
+                font-size: 12px;
+            }
+            .cell-value-tag .remove-val {
+                cursor: pointer;
+                color: #dc3545;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            .multi-expand {
+                cursor: pointer;
+                color: #0d6efd;
+                font-weight: 600;
+                font-size: 12px;
+            }
+            .scroll-arrow {
+                cursor: pointer;
+                padding: 4px 8px;
+                font-size: 16px;
+                user-select: none;
+                display: inline-flex;
+                align-items: center;
+                color: #6c757d;
+            }
+            .scroll-arrow:hover {
+                color: #0d6efd;
+            }
+            .badge-type {
+                font-size: 10px;
+                padding: 2px 5px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container mt-4" id="app">
+
+            <!-- Header -->
+            <div class="row align-items-center">
+                <div class="col d-flex align-items-center m-2">
+                    <h3 class="mb-0 d-flex align-items-center me-2">
+                        <i class="fa fa-table me-2"></i> Workbook Demo
+                    </h3>
+                    <div v-if="loading" class="spinner-border text-primary" role="status" style="width: 1.3rem; height: 1.3rem;"></div>
+                </div>
+
+                <div class="col-auto ms-auto me-2" v-if="user">
+                    <span class="me-2" :title="user.username">
+                        <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                    </span>
+                    <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <!-- =================== WORKBOOK LIST VIEW =================== -->
+            <div v-if="currentView === 'list'">
+                <div class="d-flex align-items-center mb-3">
+                    <h4 class="mb-0 me-3">Workbooks</h4>
+                    <button class="btn btn-sm btn-primary" @click="openCreateWorkbookModal" title="Create Workbook">
+                        <i class="fa fa-plus"></i> New Workbook
+                    </button>
+                </div>
+
+                <div class="row" v-if="workbooks.length > 0">
+                    <div class="col-md-4 col-lg-3 mb-3" v-for="(wb, idx) in workbooks" :key="wb.uri">
+                        <div class="card workbook-card" @click="openWorkbook(idx)">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="fa fa-book fa-lg text-primary me-2"></i>
+
+                                    <h6 class="card-title mb-0 text-truncate" :title="wb.name">
+                                        {{ wb.name }}
+                                    </h6>
+
+                                    <button
+                                        class="btn btn-sm btn-outline-danger ms-auto"
+                                        @click.stop="deleteWorkbook(idx)"
+                                        title="Delete">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                                <div class="text-muted" style="font-size: 12px;">
+                                    <span class="badge bg-secondary" v-for="sh in (wb.sheets || [])" :key="sh['@id']">
+                                        {{ sh.name || sh['@id'].split('/').pop() }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================== WORKBOOK DETAIL VIEW =================== -->
+            <div v-if="currentView === 'detail'">
+                <div class="d-flex align-items-center mb-3">
+                    <button class="btn btn-sm btn-outline-secondary me-3" @click="goBack">
+                        <i class="fa fa-arrow-left"></i> Back
+                    </button>
+                    <h4 class="mb-0">
+                        <i class="fa fa-book text-primary me-2"></i>
+                        {{ currentWorkbook?.name }}
+                    </h4>
+                </div>
+
+                <!-- Sheet Tabs -->
+                <div class="mb-2 d-flex align-items-center">
+                    <span class="scroll-arrow me-1" @click="scrollSheets(-1)" title="Scroll left">
+                        <i class="fa fa-chevron-left"></i>
+                    </span>
+
+                    <div class="d-flex flex-nowrap overflow-hidden" :style="{ maxWidth: '600px' }">
+                        <span class="sheet-tab"
+                              :class="{ active: si === currentSheetIndex }"
+                              v-for="(sh, si) in visibleSheets"
+                              :key="sh['@id']"
+                              @click="selectSheet(si)"
+                              :title="sh.name || 'Sheet ' + (si + 1)">
+
+                            <i class="fa fa-file-alt me-1" :style="{ color: si === currentSheetIndex ? '#fff' : '#6c757d' }"></i>
+                            {{ sh.name || 'Sheet ' + (si + 1) }}
+
+                            <span class="delete-sheet" @click.stop="deleteSheet(si)" title="Delete sheet">
+                                <i class="fa fa-times"></i>
+                            </span>
+                        </span>
+
+                        <span v-if="sheets.length > 5" class="text-muted ms-1" style="font-size: 12px;">
+                            ... +{{ sheets.length - 5 }}
+                        </span>
+                    </div>
+
+                    <span class="scroll-arrow ms-1 me-1" @click="scrollSheets(1)" title="Scroll right">
+                        <i class="fa fa-chevron-right"></i>
+                    </span>
+
+                    <button class="btn btn-sm btn-outline-primary ms-2" @click="openCreateSheetModal" title="Create Sheet">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                </div>
+
+                <!-- Data Table -->
+                <div class="table-container card">
+                    <table class="mb-0">
+                        <thead>
+                            <!-- Column header row -->
+                            <tr>
+                                <th class="sticky-corner row-header" style="min-width: 48px; width: 48px; left: 0;"></th>
+                                <th class="cell-header" v-for="(col, ci) in columns" :key="col['@id'] || ci">
+                                    <div :title="col.property?.['@id'] || col.property">{{ col.name || col.property?.['@id']?.split('#')?.pop()?.split('/')?.pop() || ('Col ' + (ci + 1)) }}</div>
+                                </th>
+                                <th class="cell-header" style="min-width: 48px; width: 48px;">
+                                    <button class="btn btn-sm btn-outline-primary w-100" @click="openCreateColumnModal" title="Add Column">
+                                        <i class="fa fa-plus"></i>
+                                    </button>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="r in tableRows" :key="r">
+                                <!-- Entity column -->
+                                <td class="row-header sticky-entity-col" style="left: 0;">
+                                    <span class="text-nowrap">
+                                        {{ r }}
+                                        <span class="text-muted" style="font-size: 10px;">{{ cells[r]?.[0]?.rowEntity ? '🔗' : '' }}</span>
+                                    </span>
+                                </td>
+
+                                <!-- Data cells -->
+                                <td class="cell"
+                                    v-for="(cell, ci) in getColumnCells(r)"
+                                    :key="ci"
+                                    @click="openCellEditor(r, ci, cell)">
+                                    <template v-if="cell && !cell.isEmpty()">
+                                        <!-- Single value cells -->
+                                        <template v-if="cell.content.length === 1">
+                                            <render-cell-value :val="cell.content[0]"></render-cell-value>
+                                        </template>
+                                        <!-- Multi-value cells -->
+                                        <template v-else>
+                                            <template v-for="(v, vi) in cell.content.slice(0, 3)" :key="vi">
+                                                <render-cell-value :val="v"></render-cell-value>
+                                            </template>
+                                            <span v-if="cell.content.length > 3" class="multi-expand" @click.stop="openCellEditor(r, ci, cell)">
+                                                ... ({{ cell.content.length - 3 }})
+                                            </span>
+                                        </template>
+                                    </template>
+                                    <template v-else>
+                                        <span class="text-muted" style="font-size: 12px;">—</span>
+                                    </template>
+                                </td>
+
+                                <!-- Plus cell for adding new column data -->
+                                <td class="cell" style="text-align: center; background: #f8f9fa;">
+                                    <button class="btn btn-sm btn-link text-decoration-none p-0" @click="openCreateColumnModal" title="Add column">
+                                        <i class="fa fa-plus text-muted"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-2 text-muted" style="font-size: 12px;">
+                    Showing {{ tableRows.length }} rows × {{ columns.length }} columns
+                    <span v-if="sheets.length > 5">• {{ sheets.length }} sheets total</span>
+                    <span class="ms-2">Scroll to explore • Click a cell to edit</span>
+                </div>
+            </div>
+
+            <!-- =================== ERROR MODAL =================== -->
+            <div class="modal" id="errorModal" tabindex="-1" ref="error_modal">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Error</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-danger" role="alert">
+                                {{ error }}
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================== CREATE WORKBOOK MODAL =================== -->
+            <div class="modal" id="createWorkbookModal" tabindex="-1" ref="create_workbook_modal">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Create Workbook</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Workbook Name</label>
+                                <input type="text" class="form-control" v-model="newWorkbookName"
+                                       placeholder="e.g., My Dataset" autofocus @keydown.enter="createWorkbook">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" @click="createWorkbook" :disabled="!newWorkbookName">
+                                Create
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================== CREATE SHEET MODAL =================== -->
+            <div class="modal" id="createSheetModal" tabindex="-1" ref="create_sheet_modal">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Create Sheet</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Sheet Name</label>
+                                <input type="text" class="form-control" v-model="newSheetName"
+                                       placeholder="e.g., Employees" autofocus>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">SPARQL Row Query</label>
+                                <textarea class="form-control" rows="4" v-model="newSheetRowQuery"
+                                          placeholder="SELECT ?rowEntity WHERE { ... }"
+                                          style="font-family: monospace; font-size: 12px;"></textarea>
+                                <div class="form-text">
+                                    Must include <code>?rowEntity</code> variable. This query determines which resources appear as rows.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" @click="createSheet"
+                                    :disabled="!newSheetName || !newSheetRowQuery">
+                                Create
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================== CELL EDITOR MODAL =================== -->
+            <div class="modal" id="cellEditorModal" tabindex="-1" ref="cell_editor_modal">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                Edit Cell
+                                <small class="text-muted ms-2" style="font-size: 13px;">
+                                    Row {{ cellEditor.rowIndex + 1 }}, Column {{ (cellEditor.colIndex || 0) + 1 }}
+                                </small>
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div v-if="cellEditor.loading">
+                                <div class="spinner-border spinner-border-sm text-primary me-2"></div> Loading...
+                            </div>
+
+                            <div v-else-if="cellEditor.error">
+                                <div class="alert alert-danger">{{ cellEditor.error }}</div>
+                            </div>
+
+                            <div v-else>
+                                <!-- Column info -->
+                                <div class="mb-3">
+                                    <strong>Column:</strong>
+                                    <code v-if="cellEditor.column">{{ cellEditor.column.property?.['@id'] || 'N/A' }}</code>
+                                    <span v-else class="text-muted">No column configured</span>
+                                </div>
+
+                                <!-- Current values -->
+                                <div class="mb-3">
+                                    <label class="form-label">Current Values ({{ cellEditor.values.length }})</label>
+                                    <div v-if="cellEditor.values.length === 0" class="text-muted py-2">
+                                        <em>No values yet. Add one below.</em>
+                                    </div>
+
+                                    <!-- Collapsed display -->
+                                    <div v-if="cellEditor.values.length > 0 && !cellEditor.showAllValues">
+                                        <div v-for="(v, vi) in cellEditor.values.slice(0, 5)" :key="vi" class="cell-value-tag mb-1">
+                                            <span :class="getTypeBadgeClass(getValueType(v))" class="badge-type me-1">
+                                                {{ getTypeLabel(v) }}
+                                            </span>
+                                            <span>{{ formatCellValue(v) }}</span>
+                                            <span class="remove-val" @click="cellEditor.values.splice(vi, 1)" title="Remove">
+                                                <i class="fa fa-times"></i>
+                                            </span>
+                                        </div>
+                                        <span v-if="cellEditor.values.length > 5" class="multi-expand" @click="cellEditor.showAllValues = true">
+                                            ... show all ({{ cellEditor.values.length }})
+                                        </span>
+                                    </div>
+
+                                    <!-- Expanded display -->
+                                    <div v-if="cellEditor.showAllValues && cellEditor.values.length > 0">
+                                        <div class="list-group">
+                                            <div class="list-group-item d-flex align-items-center justify-content-between"
+                                                 v-for="(v, vi) in cellEditor.values" :key="vi">
+                                                <div>
+                                                    <span :class="getTypeBadgeClass(getValueType(v))" class="badge me-2">
+                                                        {{ getTypeLabel(v) }}
+                                                    </span>
+                                                    <code>{{ formatCellValue(v) }}</code>
+                                                </div>
+                                                <button class="btn btn-sm btn-outline-danger" @click="cellEditor.values.splice(vi, 1)">
+                                                    <i class="fa fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-sm btn-link p-0" @click="cellEditor.showAllValues = false" style="font-size: 12px;">
+                                            <i class="fa fa-compress"></i> Collapse
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Divider -->
+                                <hr v-if="cellEditor.values.length > 0">
+
+                                <!-- Add new value -->
+                                <div>
+                                    <label class="form-label">Add Value</label>
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-auto">
+                                            <select class="form-select" v-model="cellEditor.newValueType">
+                                                <option value="uri">Resource (URI)</option>
+                                                <option value="string">String</option>
+                                                <option value="boolean">Boolean</option>
+                                                <option value="integer">Integer</option>
+                                                <option value="decimal">Decimal</option>
+                                                <option value="langString">Language String</option>
+                                            </select>
+                                        </div>
+                                        <div class="col" v-if="cellEditor.newValueType !== 'langString'">
+                                            <input type="text" class="form-control" v-model="cellEditor.newValue"
+                                                   :placeholder="'Enter ' + cellEditor.newValueType + ' value'">
+                                        </div>
+                                        <div class="col-auto" v-if="cellEditor.newValueType === 'langString'">
+                                            <input type="text" class="form-control" v-model="cellEditor.newLang"
+                                                   placeholder="en" style="width: 70px;">
+                                            <input type="text" class="form-control mt-1" v-model="cellEditor.newValue"
+                                                   placeholder="Value">
+                                        </div>
+                                        <div class="col-auto">
+                                            <button class="btn btn-sm btn-primary" @click="addCellValue" :disabled="!cellEditor.newValue && cellEditor.newValueType !== 'boolean'">
+                                                <i class="fa fa-plus"></i> Add
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" @click="saveCellValue"
+                                    :disabled="cellEditor.loading">
+                                <i class="fa fa-save"></i> Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================== CREATE COLUMN MODAL =================== -->
+            <div class="modal" id="createColumnModal" tabindex="-1" ref="create_column_modal">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Add Column</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Column Name</label>
+                                <input type="text" class="form-control" v-model="newColumnName"
+                                       placeholder="e.g., Employee Name" autofocus>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Property URI</label>
+                                <input type="text" class="form-control" v-model="newColumnProperty"
+                                       placeholder="e.g., http://schema.org/name"
+                                       list="column-property-suggestions">
+                                <datalist id="column-property-suggestions">
+                                    <option value="http://schema.org/name">
+                                    <option value="http://schema.org/email">
+                                    <option value="http://schema.org/telephone">
+                                    <option value="http://www.w3.org/2000/01/rdf-schema#label">
+                                    <option value="http://xmlns.com/foaf/0.1/name">
+                                    <option value="http://purl.org/dc/terms/description">
+                                </datalist>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Direction</label>
+                                <select class="form-select" v-model="newColumnDirection">
+                                    <option value="Outgoing">Outgoing (row → value)</option>
+                                    <option value="Incoming">Incoming (value → row)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" @click="createColumn"
+                                    :disabled="!newColumnName || !newColumnProperty">
+                                Add Column
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- =================== Vue Template for Cell Value Rendering =================== -->
+        <script id="render-cell-value-template" type="x-template">
+            <div class="cell-value-tag" :title="fullValueText">
+            <span v-if="isResource">
+            <a :href="value" target="_blank" class="text-decoration-none" style="font-size: 13px;">
+            <i class="fa fa-link me-1"></i>{{ displayText }}
+            </a>
+            </span>
+            <span v-else-if="isBoolean">
+            <input type="checkbox" :checked="value === true" disabled style="cursor: default;">
+            <span class="ms-1">{{ valueText }}</span>
+            </span>
+            <span v-else-if="isLangString">
+            <i class="fa fa-globe me-1" :title="'Language: ' + lang"></i>
+            {{ valueText }}
+            </span>
+            <span v-else-if="isNumber">
+            <i class="fa fa-hashtag me-1 text-muted"></i>
+            {{ valueText }}
+            </span>
+            <span v-else>
+            <i class="fa fa-font me-1 text-muted"></i>
+            {{ valueText }}
+            </span>
+            </div>
+        </script>
+
+        <div class="row">
+            <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                &nbsp;
+                &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+            </div>
+        </div>
+
+        <script>
+const {createApp} = Vue;
+
+// ---- Cell value renderer component ----
+const CellValueRenderer = {
+    name: 'CellValueRenderer',
+    template: '#render-cell-value-template',
+    props: {val: {type: Object, required: true}},
+    computed: {
+        isResource() {
+            return this.val && this.val['@id'] !== undefined;
+        },
+        isBoolean() {
+            return this.val && this.val['@type'] === 'http://www.w3.org/2001/XMLSchema#boolean';
+        },
+        isLangString() {
+            return this.val && this.val['@language'] !== undefined;
+        },
+        isNumber() {
+            return this.val && this.val['@type'] && ['http://www.w3.org/2001/XMLSchema#integer', 'http://www.w3.org/2001/XMLSchema#decimal', 'http://www.w3.org/2001/XMLSchema#double', 'http://www.w3.org/2001/XMLSchema#float'].includes(this.val['@type']);
+        },
+        value() {
+            return this.val['@id'] || this.val['@value'];
+        },
+        lang() {
+            return this.val['@language'] || '';
+        },
+        valueText() {
+            return String(this.val['@value'] ?? '');
+        },
+        displayText() {
+            const u = this.val['@id'] || '';
+            return u.length > 60 ? u.substring(0, 57) + '...' : u;
+        },
+        fullValueText() {
+            return this.isResource ? this.val['@id'] : JSON.stringify(this.val);
+        }
+    }
+};
+
+createApp({
+    components: {renderCellValue: CellValueRenderer},
+
+    data() {
+        return {
+            // Auth
+            user: null,
+            loading: false,
+            error: null,
+
+            // View state
+            currentView: 'list', // 'list' | 'detail'
+            selectedWorkbookIdx: null,
+
+            // Workbook list
+            workbooks: [], // [{ uri, name, sheets }]
+
+            // Current workbook
+            workbookUri: null,
+            workbookName: '',
+            sheets: [], // [{ '@id', name, rowQuery, columns }]
+            columns: [], // [{ '@id', name, property, type, direction }]
+            currentSheetIndex: 0,
+
+            // Sheet tab scrolling
+            sheetViewStart: 0,
+
+            // Table viewport
+            rows: 20,
+            cells: [], // cells[rowIndex][columnIndex] = Cell
+
+            // Modals
+            newWorkbookName: '',
+            newSheetName: '',
+            newSheetRowQuery: 'SELECT ?rowEntity WHERE { ?rowEntity a <http://www.w3.org/2000/01/rdf-schema#Resource> . }',
+            newColumnName: '',
+            newColumnProperty: 'http://schema.org/name',
+            newColumnDirection: 'Outgoing',
+
+            // Cell editor
+            cellEditor: {
+                rowIndex: -1,
+                colIndex: -1,
+                column: null,
+                values: [],
+                showAllValues: false,
+                newValueType: 'string',
+                newValue: '',
+                newLang: 'en',
+                loading: false,
+                error: null
+            }
+        };
+    },
+
+    computed: {
+        currentWorkbook() {
+            return this.selectedWorkbookIdx !== null ? this.workbooks[this.selectedWorkbookIdx] : null;
+        },
+        currentSheet() {
+            return this.sheets[this.currentSheetIndex] || null;
+        },
+        visibleSheets() {
+            const s = this.sheetViewStart;
+            return this.sheets.slice(s, s + 5);
+        },
+        tableRows() {
+            return Array.from({length: this.rows}, (_, i) => i + 1);
+        }
+    },
+
+    created() {
+        axios.interceptors.response.use(
+                response => response,
+                error => {
+                    const errorMsg = error.response?.data || error.message || "Unknown error";
+                    this.open_error_modal(errorMsg);
+                    return Promise.reject(error);
+                }
+        );
+        this.getAuthMe();
+        this.loadWorkbooks();
+    },
+
+    methods: {
+        // ===================== AUTH =====================
+        getAuthMe() {
+            axios.get('/auth/me').then(response => {
+                this.user = response.data;
+            }).catch(() => {
+                window.location.href = '/app/unauthorized.html';
+            });
+        },
+
+        postLogout() {
+            axios.post('/auth/logout').then(response => {
+                window.location.href = response.data.redirect;
+            });
+        },
+
+        // ===================== WORKBOOKS =====================
+        loadWorkbooks() {
+            axios.get('/workbooks').then(response => {
+                this.workbooks = response.data.map(wb => ({
+                        uri: wb['@id'],
+                        name: wb.name,
+                        sheets: wb.sheets || []
+                    }));
+            });
+        },
+
+        openCreateWorkbookModal() {
+            this.newWorkbookName = '';
+            const modalInstance = new window.bootstrap.Modal(this.$refs.create_workbook_modal);
+            modalInstance.show();
+            setTimeout(() => {
+                const input = this.$refs.create_workbook_modal.querySelector('input');
+                if (input)
+                    input.focus();
+            }, 300);
+        },
+
+        createWorkbook() {
+            if (!this.newWorkbookName.trim())
+                return;
+
+            this.loading = true;
+            axios.post('/workbooks', [{name: this.newWorkbookName.trim()}])
+                    .then(response => {
+                        const uris = response.data;
+                        if (uris && uris.length > 0) {
+                            this.workbooks.push({
+                                uri: uris[0],
+                                name: this.newWorkbookName.trim(),
+                                sheets: []
+                            });
+                            // Close modal
+                            const modalEl = this.$refs.create_workbook_modal;
+                            const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
+                            if (modalInstance)
+                                modalInstance.hide();
+                            this.newWorkbookName = '';
+                        }
+                    })
+                    .finally(() => {
+                        this.loading = false;
+                    });
+        },
+
+        deleteWorkbook(idx) {
+            const wb = this.workbooks[idx];
+            if (!confirm('Delete workbook "' + wb.name + '"?'))
+                return;
+            this.loading = true;
+            axios.delete('/workbooks/' + encodeURIComponent(wb.uri))
+                    .then(() => {
+                        this.workbooks.splice(idx, 1);
+                    })
+                    .catch(err => {
+                        console.error('Error deleting workbook:', err);
+                    })
+                    .finally(() => {
+                        this.loading = false;
+                    });
+        },
+
+        // ===================== OPEN WORKBOOK =====================
+        openWorkbook(idx) {
+            const wb = this.workbooks[idx];
+            this.selectedWorkbookIdx = idx;
+            this.workbookUri = wb.uri;
+            this.workbookName = wb.name;
+            this.currentView = 'detail';
+            this.sheetViewStart = 0;
+            this.currentSheetIndex = 0;
+            this.cells = {};
+            this.columns = [];
+            this.sheets = [];
+            this.loadWorkbookDetail();
+        },
+
+        goBack() {
+            this.currentView = 'list';
+            this.selectedWorkbookIdx = null;
+            this.loadWorkbooks();
+        },
+
+        loadWorkbookDetail() {
+            this.loading = true;
+            axios.get('/workbooks/' + encodeURIComponent(this.workbookUri))
+                    .then(response => {
+                        const data = response.data;
+                        this.workbookName = data.name || this.workbookName;
+                        this.sheets = data.sheets || [];
+
+                        // Update workbook list entry
+                        if (this.selectedWorkbookIdx !== null) {
+                            this.workbooks[this.selectedWorkbookIdx].name = this.workbookName;
+                            this.workbooks[this.selectedWorkbookIdx].sheets = this.sheets;
+                        }
+
+                        if (this.sheets.length > 0) {
+                            this.loadSheet();
+                        }
+                    })
+                    .finally(() => {
+                        this.loading = false;
+                    });
+        },
+
+        // ===================== SHEETS =====================
+        selectSheet(si) {
+            this.currentSheetIndex = si;
+            this.cells = {};
+            this.columns = [];
+            this.loadSheet();
+        },
+
+        loadSheet() {
+            if (!this.currentSheet)
+                return;
+
+            // Load column config from the sheet config
+            if (this.currentSheet.columns) {
+                this.columns = this.currentSheet.columns.map(c => ({
+                        '@id': c['@id'],
+                        name: c.name,
+                        property: c.property,
+                        type: c.type,
+                        direction: c.direction,
+                        datatype: c.datatype,
+                        language: c.language
+                    }));
+            }
+
+            // Fetch initial cells: first 20 rows × first 4 columns (or all if fewer)
+            const maxCols = Math.max(4, this.columns.length);
+            const cols = this.columns.slice(0, maxCols);
+
+            if (cols.length === 0) {
+                // No columns configured yet - show empty table
+                this.cells = {};
+                return;
+            }
+
+            const colIndices = cols.map((_, i) => i);
+            const cellData = {};
+
+            // Load first page of rows for each column
+            const promises = colIndices.map(ci => {
+                const windowStr = '0,0,' + maxCols + ',' + this.rows;
+                return axios.get('/workbooks/' + encodeURIComponent(this.workbookUri) +
+                        '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
+                        '/cells', {params: {window: windowStr}});
+            });
+
+            Promise.all(promises)
+                    .then(responses => {
+                        // Each response is a 2D array of cells [rows][cols]
+                        // We need to merge them by the actual column index
+                        // Actually, each response should be the same window data
+                        // Let's use the first response
+                        const windowData = responses[0].data;
+                        if (Array.isArray(windowData)) {
+                            this.cells = {};
+                            for (let r = 0; r < windowData.length; r++) {
+                                if (!this.cells[r + 1])
+                                    this.cells[r + 1] = {};
+                                for (let c = 0; c < windowData[r].length; c++) {
+                                    const cell = windowData[r][c];
+                                    if (cell) {
+                                        this.cells[r + 1][c] = cell;
+                                        // Carry rowEntity from first cell in row
+                                        if (cell.rowEntity && !this.cells[r + 1][0]?.rowEntity) {
+                                            this.cells[r + 1][0] = {...this.cells[r + 1][0], rowEntity: cell.rowEntity};
+                                        }
+                                    }
+                                }
+                            }
+                            // Set first cell's rowEntity for display
+                            for (const r of Object.keys(this.cells)) {
+                                const rowCells = this.cells[r];
+                                for (const c of Object.keys(rowCells)) {
+                                    if (rowCells[c]?.rowEntity) {
+                                        for (const cc of Object.keys(rowCells)) {
+                                            rowCells[cc] = {...rowCells[cc], rowEntity: rowCells[c].rowEntity};
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error loading sheet:', err);
+                        this.cells = {};
+                    })
+                    .finally(() => {
+                        this.loading = false;
+                    });
+        },
+
+        openCreateSheetModal() {
+            this.newSheetName = '';
+            this.newSheetRowQuery = 'SELECT ?rowEntity WHERE { ?rowEntity a <http://www.w3.org/2000/01/rdf-schema#Resource> . }';
+            const modalInstance = new window.bootstrap.Modal(this.$refs.create_sheet_modal);
+            modalInstance.show();
+            setTimeout(() => {
+                const input = this.$refs.create_sheet_modal.querySelector('input');
+                if (input)
+                    input.focus();
+            }, 300);
+        },
+
+        createSheet() {
+            if (!this.newSheetName.trim() || !this.newSheetRowQuery.trim())
+                return;
+
+            this.loading = true;
+            axios.post('/workbooks/' + encodeURIComponent(this.workbookUri) + '/sheets',
+                    [{name: this.newSheetName.trim(), rowQuery: this.newSheetRowQuery.trim()}])
+                    .then(response => {
+                        const sheetUris = response.data;
+                        if (sheetUris && sheetUris.length > 0) {
+                            // Reload workbook to get full sheet config
+                            this.loadWorkbookDetail();
+                        }
+                    })
+                    .finally(() => {
+                        this.loading = false;
+                        const modalEl = this.$refs.create_sheet_modal;
+                        const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
+                        if (modalInstance)
+                            modalInstance.hide();
+                    });
+        },
+
+        deleteSheet(si) {
+            if (!confirm('Delete sheet "' + (this.sheets[si].name || 'Sheet ' + (si + 1)) + '"?'))
+                return;
+            axios.delete('/workbooks/' + encodeURIComponent(this.workbookUri) + '/sheets',
+                    {data: [this.sheets[si]['@id']]})
+                    .then(() => {
+                        this.sheets.splice(si, 1);
+                        if (this.currentSheetIndex >= this.sheets.length) {
+                            this.currentSheetIndex = Math.max(0, this.sheets.length - 1);
+                        }
+                        if (this.sheets.length > 0) {
+                            this.loadSheet();
+                        } else {
+                            this.cells = {};
+                            this.columns = [];
+                        }
+                    });
+        },
+
+        // ===================== COLUMN SCROLLING =====================
+        scrollSheets(dir) {
+            const maxStart = Math.max(0, this.sheets.length - 5);
+            this.sheetViewStart = Math.max(0, Math.min(maxStart, this.sheetViewStart + dir));
+        },
+
+        // ===================== COLUMNS =====================
+        openCreateColumnModal() {
+            this.newColumnName = '';
+            this.newColumnProperty = 'http://schema.org/name';
+            this.newColumnDirection = 'Outgoing';
+            const modalInstance = new window.bootstrap.Modal(this.$refs.create_column_modal);
+            modalInstance.show();
+            setTimeout(() => {
+                const input = this.$refs.create_column_modal.querySelector('input');
+                if (input)
+                    input.focus();
+            }, 300);
+        },
+
+        createColumn() {
+            if (!this.newColumnName.trim() || !this.newColumnProperty.trim())
+                return;
+
+            this.loading = true;
+            const colConfig = {
+                name: this.newColumnName.trim(),
+                property: {'@id': this.newColumnProperty.trim()},
+                type: 'VALUE',
+                direction: this.newColumnDirection
+            };
+
+            axios.post('/workbooks/' + encodeURIComponent(this.workbookUri) +
+                    '/sheets/' + encodeURIComponent(this.currentSheet['@id']) + '/columns',
+                    [colConfig])
+                    .then(response => {
+                        // Reload workbook to get updated columns
+                        this.loadWorkbookDetail();
+                    })
+                    .finally(() => {
+                        this.loading = false;
+                        const modalEl = this.$refs.create_column_modal;
+                        const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
+                        if (modalInstance)
+                            modalInstance.hide();
+                    });
+        },
+
+        // ===================== CELL EDITOR =====================
+        getColumnCells(rowIndex) {
+            return this.columns.map((_, ci) => {
+                const cell = this.cells[rowIndex]?.[ci] || null;
+                return cell || {content: [], isEmpty: () => true, rowIndex, columnIndex: ci};
+            });
+        },
+
+        openCellEditor(rowIndex, colIndex, existingCell) {
+            this.cellEditor = {
+                rowIndex: rowIndex,
+                colIndex: colIndex,
+                column: this.columns[colIndex] || null,
+                values: [],
+                showAllValues: false,
+                newValueType: 'string',
+                newValue: '',
+                newLang: 'en',
+                loading: true,
+                error: null
+            };
+
+            const cell = existingCell;
+
+            // Build the content array from the cell
+            if (cell && cell.content && Array.isArray(cell.content)) {
+                this.cellEditor.values = cell.content.map(v => JSON.parse(JSON.stringify(v)));
+            }
+
+            // If no content and column has datatype/language info, pre-select type
+            if (this.cellEditor.values.length === 0 && this.cellEditor.column) {
+                if (this.cellEditor.column.datatype) {
+                    const dt = this.cellEditor.column.datatype['@id'] || '';
+                    if (dt === 'http://www.w3.org/2001/XMLSchema#boolean') {
+                        this.cellEditor.newValueType = 'boolean';
+                    } else if (dt === 'http://www.w3.org/2001/XMLSchema#integer') {
+                        this.cellEditor.newValueType = 'integer';
+                    } else if (dt === 'http://www.w3.org/2001/XMLSchema#decimal' || dt === 'http://www.w3.org/2001/XMLSchema#double') {
+                        this.cellEditor.newValueType = 'decimal';
+                    } else if (this.cellEditor.column.language) {
+                        this.cellEditor.newValueType = 'langString';
+                        this.cellEditor.newLang = this.cellEditor.column.language;
+                    }
+                }
+            }
+
+            // Fetch from server to ensure we have the latest data
+            this.loading = true;
+            axios.get('/workbooks/' + encodeURIComponent(this.workbookUri) +
+                    '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
+                    '/cells', {params: {position: (rowIndex - 1) + ',' + colIndex}})
+                    .then(response => {
+                        const cellData = response.data;
+                        if (cellData && cellData.content && Array.isArray(cellData.content)) {
+                            this.cellEditor.values = cellData.content.map(v => JSON.parse(JSON.stringify(v)));
+                            // Also get rowEntity for display
+                            if (cellData.rowEntity) {
+                                // Store on a temporary property for display
+                                this.$set(this.cellEditor, '_rowEntity', cellData.rowEntity);
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error fetching cell:', err);
+                        this.cellEditor.error = err.message || 'Failed to load cell data';
+                    })
+                    .finally(() => {
+                        this.loading = false;
+                        this.cellEditor.loading = false;
+                        const modalInstance = new window.bootstrap.Modal(this.$refs.cell_editor_modal);
+                        modalInstance.show();
+                    });
+        },
+
+        addCellValue() {
+            const val = this.cellEditor.newValue;
+            if (val === '' && this.cellEditor.newValueType !== 'boolean')
+                return;
+
+            let cellValue;
+            switch (this.cellEditor.newValueType) {
+                case 'uri':
+                    cellValue = {'@id': val};
+                    break;
+                case 'boolean':
+                    cellValue = {'@value': val, '@type': 'http://www.w3.org/2001/XMLSchema#boolean'};
+                    break;
+                case 'integer':
+                    cellValue = {'@value': val, '@type': 'http://www.w3.org/2001/XMLSchema#integer'};
+                    break;
+                case 'decimal':
+                    cellValue = {'@value': val, '@type': 'http://www.w3.org/2001/XMLSchema#decimal'};
+                    break;
+                case 'langString':
+                    cellValue = {'@value': val, '@language': this.cellEditor.newLang};
+                    break;
+                case 'string':
+                default:
+                    cellValue = {'@value': val};
+                    break;
+            }
+
+            this.cellEditor.values.push(cellValue);
+            this.cellEditor.newValue = '';
+        },
+
+        removeCellValue(idx) {
+            this.cellEditor.values.splice(idx, 1);
+        },
+
+        saveCellValue() {
+            const cellObj = {content: this.cellEditor.values};
+            const op = this.cellEditor.values.length === 0 ? 'Remove' : 'Set';
+
+            this.cellEditor.loading = true;
+
+            // Determine operation based on whether we're removing all values
+            let operation = 'Set';
+            if (this.cellEditor.values.length === 0) {
+                operation = 'Remove';
+            }
+
+            axios.post('/workbooks/' + encodeURIComponent(this.workbookUri) +
+                    '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
+                    '/cells?position=' + this.cellEditor.rowIndex + ',' + this.cellEditor.colIndex +
+                    '&operation=' + operation,
+                    JSON.stringify(cellObj),
+                    {headers: {'Content-Type': 'application/json'}})
+                    .then(() => {
+                        // Update local cell data
+                        if (!this.cells[this.cellEditor.rowIndex]) {
+                            this.cells[this.cellEditor.rowIndex] = {};
+                        }
+                        if (this.cellEditor.values.length > 0) {
+                            this.cells[this.cellEditor.rowIndex][this.cellEditor.colIndex] = {
+                                content: [...this.cellEditor.values],
+                                rowIndex: this.cellEditor.rowIndex,
+                                columnIndex: this.cellEditor.colIndex,
+                                isEmpty: () => false
+                            };
+                        } else {
+                            delete this.cells[this.cellEditor.rowIndex][this.cellEditor.colIndex];
+                        }
+
+                        const modalEl = this.$refs.cell_editor_modal;
+                        const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
+                        if (modalInstance)
+                            modalInstance.hide();
+                    })
+                    .catch(err => {
+                        this.cellEditor.error = err.message || 'Failed to save cell';
+                    })
+                    .finally(() => {
+                        this.cellEditor.loading = false;
+                    });
+        },
+
+        // ===================== CELL VALUE HELPERS =====================
+        getValueType(val) {
+            if (val['@id'] !== undefined)
+                return 'uri';
+            if (val['@language'] !== undefined)
+                return 'langString';
+            if (val['@type'] === 'http://www.w3.org/2001/XMLSchema#boolean')
+                return 'boolean';
+            if (val['@type'])
+                return val['@type'];
+            return 'string';
+        },
+
+        getTypeLabel(val) {
+            const type = this.getValueType(val);
+            if (type === 'uri')
+                return 'URI';
+            if (type === 'boolean')
+                return 'bool';
+            if (type === 'langString')
+                return 'lang';
+            return 'val';
+        },
+
+        getTypeBadgeClass(type) {
+            switch (type) {
+                case 'uri':
+                    return 'bg-info';
+                case 'boolean':
+                    return 'bg-warning';
+                case 'langString':
+                    return 'bg-success';
+                case 'integer':
+                case 'decimal':
+                case 'double':
+                    return 'bg-primary';
+                default:
+                    return 'bg-secondary';
+            }
+        },
+
+        formatCellValue(val) {
+            if (val['@id'])
+                return val['@id'];
+            if (val['@value'] === undefined)
+                return '';
+
+            const v = val['@value'];
+            const str = String(v);
+            return str.length > 80 ? str.substring(0, 77) + '...' : str;
+        },
+
+        // ===================== UI HELPERS =====================
+        open_error_modal(msg) {
+            this.error = msg;
+            this.loading = false;
+            const modalInstance = new window.bootstrap.Modal(this.$refs.error_modal);
+            modalInstance.show();
+        }
+    }
+}).mount("#app");
+        </script>
+    </body>
+</html>

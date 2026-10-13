@@ -391,6 +391,7 @@ public class AticServer {
         routes.delete("/bridge", this::handleBridge);
 
         routes.post("/workbooks", this::postWorkbooks);
+        routes.get("/workbooks", this::getWorkbooks);
         routes.get("/workbooks/{workbookUri}", this::getWorkbook);
         routes.post("/workbooks/{workbookUri}/sheets", this::postSheets);
         routes.delete("/workbooks/{workbookUri}/sheets", this::deleteSheets);
@@ -399,6 +400,7 @@ public class AticServer {
         routes.get("/workbooks/{workbookUri}/sheets/{sheetUri}/cells", this::getCells);
         routes.post("/workbooks/{workbookUri}/sheets/{sheetUri}/cells", this::postCell);
         routes.delete("/workbooks/{workbookUri}/sheets/{sheetUri}/cells", this::deleteCell);
+        routes.delete("/workbooks/{workbookUri}", this::deleteWorkbook);
     }
 
     private void getAppLogin(Context ctx) throws IOException {
@@ -425,7 +427,36 @@ public class AticServer {
 
     //------------------------------------------
     //workbook
-    
+    private void getWorkbooks(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        WorkbookGraph graph = datasetGraph.getWorkbookGraph();
+
+        JSONArray result = new JSONArray();
+        
+        datasetGraph.executeRead(() -> {
+
+            // Find all workbook URIs by looking for rdf:type Workbook triples
+            List<Node> workbookNodes = graph.listWorkbooks(ictx);
+
+            
+            for (Node workbook : workbookNodes) {
+                try {
+                    JSONObject json = graph.getJson(workbook, ictx);
+                    JSONObject entry = new JSONObject();
+                    entry.put("@id", workbook.getURI());
+                    entry.put("name", json.optString("name", ""));
+                    entry.put("sheets", json.opt("sheets") != null ? json.getJSONArray("sheets") : new JSONArray());
+                    result.put(entry);
+                } catch (Exception e) {
+                    // Skip workbooks that can't be read
+                    continue;
+                }
+            }
+        });
+
+        ctx.json(result.toString());
+    }
+
     private void postWorkbooks(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
         JSONArray json = new JSONArray(ctx.body());
@@ -450,6 +481,13 @@ public class AticServer {
         Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
         JSONObject json = datasetGraph.calculateRead(() -> datasetGraph.getWorkbookGraph().getJson(workbook, ictx));
         ctx.json(json.toString());
+    }
+
+    private void deleteWorkbook(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
+        datasetGraph.executeWrite(() -> datasetGraph.getWorkbookGraph().removeWorkbooks(Set.of(workbook), ictx));
+        ctx.status(204);
     }
 
     private void postSheets(Context ctx) {
