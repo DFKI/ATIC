@@ -1,905 +1,1040 @@
-[
-    [
+{
+    "columns": [
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-edfdf523-6c77-44a0-ae04-93bb0fe93b68"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 0,
-            "content": [{
-                "@value": "Alice Smith",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
+            "name": "Name",
+            "property": {"@id": "http://xmlns.com/foaf/0.1/name"},
+            "@id": "urn:atic:column-0916623a-5cff-4c6a-83e5-ba548334e123",
+            "type": "Literal",
+            "direction": "Outgoing"
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-e08f88e1-dc3d-4b95-a066-9a23df997f5e"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 1,
-            "content": [{
-                "@value": "Alice",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
+            "name": "Given Name",
+            "property": {"@id": "https://schema.org/givenName"},
+            "@id": "urn:atic:column-654964e9-64b3-4955-bbae-96fc209404a9",
+            "type": "Literal",
+            "direction": "Outgoing"
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-a1627d98-752b-47b2-ba53-b1ca3b18aa13"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 2,
-            "content": [{
-                "@value": "Smith",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
+            "name": "Family Name",
+            "property": {"@id": "https://schema.org/familyName"},
+            "@id": "urn:atic:column-2ce0b8ec-3854-4e43-9af6-f32ec3a72a2e",
+            "type": "Literal",
+            "direction": "Outgoing"
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-b7235f58-7d91-4fac-b3cf-d20c5ae180ef"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 3,
-            "content": [{
-                "@value": "alice.smith@example.org",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
+            "name": "Email",
+            "property": {"@id": "https://schema.org/email"},
+            "@id": "urn:atic:column-c6cf1911-8e97-45b7-8cf7-d00cafca43ad",
+            "type": "Literal",
+            "direction": "Outgoing"
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-6bfa61e5-e1e5-419a-9737-f605649f2a7b"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 4,
-            "content": [{
-                "@value": "1990-05-14",
-                "@type": "http://www.w3.org/2001/XMLSchema#date"
-            }]
+            "datatype": {"@id": "http://www.w3.org/2001/XMLSchema#date"},
+            "name": "Birth Date",
+            "property": {"@id": "https://schema.org/birthDate"},
+            "@id": "urn:atic:column-6d794d56-dc73-4852-b22d-f220592575bd",
+            "type": "Literal",
+            "direction": "Outgoing"
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-b6c35082-10ee-40c4-9a4f-7e2874425d45"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 5,
-            "content": [{
-                "@value": "Female",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
+            "name": "Gender",
+            "property": {"@id": "https://schema.org/gender"},
+            "@id": "urn:atic:column-d078b4e8-8e0b-4341-8483-a030872369b1",
+            "type": "Literal",
+            "direction": "Outgoing"
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-7d6269fd-92f4-4acb-8eae-9b3fffe2c022"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 6,
-            "content": [{
-                "@value": "German",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
+            "name": "Nationality",
+            "property": {"@id": "https://schema.org/nationality"},
+            "@id": "urn:atic:column-e6105f32-62b7-4874-a816-22dba27887f5",
+            "type": "Literal",
+            "direction": "Outgoing"
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-fdbef9b7-6059-472a-8020-1c53c141b1bc"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 7,
-            "content": [{
-                "@value": true,
-                "@type": "http://www.w3.org/2001/XMLSchema#boolean"
-            }]
+            "name": "Activated",
+            "property": {"@id": "https://schema.org/activated"},
+            "@id": "urn:atic:column-ea8a5c7b-a2b7-44f6-af9d-398243dc3d55",
+            "type": "Literal",
+            "direction": "Outgoing"
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-5d44ad59-cc2e-4d87-81c3-64a2c5e5e3d9"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 8,
-            "content": [
-                {
-                    "@value": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects.",
-                    "@language": "en"
-                },
-                {
-                    "@value": "Alice Smith ist Data Scientist mit Schwerpunkt auf maschinellem Lernen, Datenanalyse und Wissensgraphen. Sie entwickelt datengetriebene Lösungen und arbeitet gerne an innovativen Forschungsprojekten.",
-                    "@language": "de"
-                }
-            ]
+            "name": "Description",
+            "property": {"@id": "https://schema.org/description"},
+            "@id": "urn:atic:column-c8ed9f5e-def2-4b48-9b9d-f4e4a5a62afe",
+            "type": "Literal",
+            "direction": "Outgoing"
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-1f478572-8a84-48f3-9e31-bf49d4293b12"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
+            "name": "Knows",
+            "property": {"@id": "https://schema.org/knows"},
+            "@id": "urn:atic:column-227ea343-c16c-4656-92fa-9fb212784f40",
+            "type": "Literal",
+            "direction": "Outgoing"
+        },
+        {
+            "datatype": {"@id": "http://www.w3.org/2001/XMLSchema#dateTime"},
+            "name": "Created",
+            "property": {"@id": "http://purl.org/dc/terms/created"},
+            "@id": "urn:atic:column-aeeb78a8-6a70-4fab-b637-db8721327b13",
+            "type": "Literal",
+            "direction": "Outgoing"
+        },
+        {
+            "datatype": {"@id": "http://www.w3.org/2001/XMLSchema#dateTime"},
+            "name": "Modified",
+            "property": {"@id": "http://purl.org/dc/terms/modified"},
+            "@id": "urn:atic:column-7a51296f-2999-452e-a71b-89201b1e17b6",
+            "type": "Literal",
+            "direction": "Outgoing"
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+    ],
+    "rows": [
+        {
+            "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+            "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
             "rowIndex": 0,
-            "columnIndex": 9,
+            "columnIndex": -1,
+            "content": [{"@id": "https://example.org/id/alice-smith"}]
+        },
+        {
+            "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+            "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+            "rowIndex": 1,
+            "columnIndex": -1,
             "content": [{"@id": "https://example.org/id/bob-johnson"}]
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-4043262d-7092-44f4-a9d4-bbd071fd071d"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 10,
-            "content": [{
-                "@value": "2025-01-10T09:15:00Z",
-                "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
-            }]
+            "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+            "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+            "rowIndex": 2,
+            "columnIndex": -1,
+            "content": [{"@id": "https://example.org/id/carol-miller"}]
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-1284672a-d93c-4819-bcc5-87dcb3d03143"},
-            "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 11,
-            "content": [{
-                "@value": "2026-07-20T14:30:00Z",
-                "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 12,
+            "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+            "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+            "rowIndex": 3,
+            "columnIndex": -1,
             "content": []
         },
         {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 13,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 14,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 15,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 16,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 17,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 18,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 0,
-            "columnIndex": 19,
+            "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+            "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+            "rowIndex": 4,
+            "columnIndex": -1,
             "content": []
         }
     ],
-    [
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-edfdf523-6c77-44a0-ae04-93bb0fe93b68"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 0,
-            "content": [{
-                "@value": "Bob Johnson",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-e08f88e1-dc3d-4b95-a066-9a23df997f5e"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 1,
-            "content": [{
-                "@value": "Bob",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-a1627d98-752b-47b2-ba53-b1ca3b18aa13"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 2,
-            "content": [{
-                "@value": "Johnson",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-b7235f58-7d91-4fac-b3cf-d20c5ae180ef"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 3,
-            "content": [{
-                "@value": "bob.johnson@example.org",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-6bfa61e5-e1e5-419a-9737-f605649f2a7b"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 4,
-            "content": [{
-                "@value": "1987-11-03",
-                "@type": "http://www.w3.org/2001/XMLSchema#date"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-b6c35082-10ee-40c4-9a4f-7e2874425d45"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 5,
-            "content": [{
-                "@value": "Male",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-7d6269fd-92f4-4acb-8eae-9b3fffe2c022"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 6,
-            "content": [{
-                "@value": "British",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-fdbef9b7-6059-472a-8020-1c53c141b1bc"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 7,
-            "content": [{
-                "@value": true,
-                "@type": "http://www.w3.org/2001/XMLSchema#boolean"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-5d44ad59-cc2e-4d87-81c3-64a2c5e5e3d9"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 8,
-            "content": [
-                {
-                    "@value": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software.",
-                    "@language": "en"
-                },
-                {
-                    "@value": "Bob Johnson ist Softwareentwickler mit Erfahrung in verteilten Systemen, Backend-Entwicklung und Cloud-nativen Anwendungen. Er entwickelt robuste Software und unterstützt gerne sein Team.",
-                    "@language": "de"
-                }
-            ]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-1f478572-8a84-48f3-9e31-bf49d4293b12"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 9,
-            "content": [
-                {"@id": "https://example.org/id/carol-miller"},
-                {"@id": "https://example.org/id/alice-smith"}
-            ]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-4043262d-7092-44f4-a9d4-bbd071fd071d"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 10,
-            "content": [{
-                "@value": "2024-08-05T11:00:00Z",
-                "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-1284672a-d93c-4819-bcc5-87dcb3d03143"},
-            "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 11,
-            "content": [{
-                "@value": "2026-07-18T16:45:00Z",
-                "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 12,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 13,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 14,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 15,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 16,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 17,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 18,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 1,
-            "columnIndex": 19,
-            "content": []
-        }
-    ],
-    [
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-edfdf523-6c77-44a0-ae04-93bb0fe93b68"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 0,
-            "content": [{
-                "@value": "Carol Miller",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-e08f88e1-dc3d-4b95-a066-9a23df997f5e"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 1,
-            "content": [{
-                "@value": "Carol",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-a1627d98-752b-47b2-ba53-b1ca3b18aa13"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 2,
-            "content": [{
-                "@value": "Miller",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-b7235f58-7d91-4fac-b3cf-d20c5ae180ef"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 3,
-            "content": [{
-                "@value": "carol.miller@example.org",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-6bfa61e5-e1e5-419a-9737-f605649f2a7b"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 4,
-            "content": [{
-                "@value": "1992-02-21",
-                "@type": "http://www.w3.org/2001/XMLSchema#date"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-b6c35082-10ee-40c4-9a4f-7e2874425d45"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 5,
-            "content": [{
-                "@value": "Female",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-7d6269fd-92f4-4acb-8eae-9b3fffe2c022"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 6,
-            "content": [{
-                "@value": "Canadian",
-                "@type": "http://www.w3.org/2001/XMLSchema#string"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-fdbef9b7-6059-472a-8020-1c53c141b1bc"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 7,
-            "content": [{
-                "@value": false,
-                "@type": "http://www.w3.org/2001/XMLSchema#boolean"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-5d44ad59-cc2e-4d87-81c3-64a2c5e5e3d9"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 8,
-            "content": [
-                {
-                    "@value": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning.",
-                    "@language": "en"
-                },
-                {
-                    "@value": "Carol Miller ist Projektmanagerin mit Schwerpunkt auf der Koordination interdisziplinärer Teams und der erfolgreichen Umsetzung von Digitalisierungsprojekten. Sie legt großen Wert auf klare Kommunikation und effiziente Planung.",
-                    "@language": "de"
-                }
-            ]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-1f478572-8a84-48f3-9e31-bf49d4293b12"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 9,
-            "content": [{"@id": "https://example.org/id/bob-johnson"}]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-4043262d-7092-44f4-a9d4-bbd071fd071d"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 10,
-            "content": [{
-                "@value": "2025-03-22T08:20:00Z",
-                "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "column": {"@id": "urn:atic:column-1284672a-d93c-4819-bcc5-87dcb3d03143"},
-            "rowEntity": {"@id": "https://example.org/id/carol-miller"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 11,
-            "content": [{
-                "@value": "2026-07-21T10:05:00Z",
-                "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
-            }]
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 12,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 13,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 14,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 15,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 16,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 17,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 18,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 2,
-            "columnIndex": 19,
-            "content": []
-        }
-    ],
-    [
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 0,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 1,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 2,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 3,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 4,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 5,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 6,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 7,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 8,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 9,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 10,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 11,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 12,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 13,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 14,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 15,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 16,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 17,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 18,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 3,
-            "columnIndex": 19,
-            "content": []
-        }
-    ],
-    [
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 0,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 1,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 2,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 3,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 4,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 5,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 6,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 7,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 8,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 9,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 10,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 11,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 12,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 13,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 14,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 15,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 16,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 17,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 18,
-            "content": []
-        },
-        {
-            "workbook": {"@id": "urn:atic:workbook-0565aa36-21ed-4ffa-89e0-82f0e743c184"},
-            "sheet": {"@id": "urn:atic:sheet-b69ac9e0-5e22-4580-8959-f77550105621"},
-            "rowIndex": 4,
-            "columnIndex": 19,
-            "content": []
-        }
+    "cells": [
+        [
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-0916623a-5cff-4c6a-83e5-ba548334e123"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 0,
+                "content": [{
+                    "@value": "Alice Smith",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-654964e9-64b3-4955-bbae-96fc209404a9"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 1,
+                "content": [{
+                    "@value": "Alice",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-2ce0b8ec-3854-4e43-9af6-f32ec3a72a2e"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 2,
+                "content": [{
+                    "@value": "Smith",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-c6cf1911-8e97-45b7-8cf7-d00cafca43ad"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 3,
+                "content": [{
+                    "@value": "alice.smith@example.org",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-6d794d56-dc73-4852-b22d-f220592575bd"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 4,
+                "content": [{
+                    "@value": "1990-05-14",
+                    "@type": "http://www.w3.org/2001/XMLSchema#date"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-d078b4e8-8e0b-4341-8483-a030872369b1"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 5,
+                "content": [{
+                    "@value": "Female",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-e6105f32-62b7-4874-a816-22dba27887f5"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 6,
+                "content": [{
+                    "@value": "German",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-ea8a5c7b-a2b7-44f6-af9d-398243dc3d55"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 7,
+                "content": [{
+                    "@value": true,
+                    "@type": "http://www.w3.org/2001/XMLSchema#boolean"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-c8ed9f5e-def2-4b48-9b9d-f4e4a5a62afe"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 8,
+                "content": [
+                    {
+                        "@value": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects.",
+                        "@language": "en"
+                    },
+                    {
+                        "@value": "Alice Smith ist Data Scientist mit Schwerpunkt auf maschinellem Lernen, Datenanalyse und Wissensgraphen. Sie entwickelt datengetriebene Lösungen und arbeitet gerne an innovativen Forschungsprojekten.",
+                        "@language": "de"
+                    }
+                ]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-227ea343-c16c-4656-92fa-9fb212784f40"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 9,
+                "content": [{"@id": "https://example.org/id/bob-johnson"}]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-aeeb78a8-6a70-4fab-b637-db8721327b13"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 10,
+                "content": [{
+                    "@value": "2025-01-10T09:15:00Z",
+                    "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-7a51296f-2999-452e-a71b-89201b1e17b6"},
+                "rowEntity": {"@id": "https://example.org/id/alice-smith"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 11,
+                "content": [{
+                    "@value": "2026-07-20T14:30:00Z",
+                    "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 12,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 13,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 14,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 15,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 16,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 17,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 18,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 0,
+                "columnIndex": 19,
+                "content": []
+            }
+        ],
+        [
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-0916623a-5cff-4c6a-83e5-ba548334e123"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 0,
+                "content": [{
+                    "@value": "Bob Johnson",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-654964e9-64b3-4955-bbae-96fc209404a9"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 1,
+                "content": [{
+                    "@value": "Bob",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-2ce0b8ec-3854-4e43-9af6-f32ec3a72a2e"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 2,
+                "content": [{
+                    "@value": "Johnson",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-c6cf1911-8e97-45b7-8cf7-d00cafca43ad"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 3,
+                "content": [{
+                    "@value": "bob.johnson@example.org",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-6d794d56-dc73-4852-b22d-f220592575bd"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 4,
+                "content": [{
+                    "@value": "1987-11-03",
+                    "@type": "http://www.w3.org/2001/XMLSchema#date"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-d078b4e8-8e0b-4341-8483-a030872369b1"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 5,
+                "content": [{
+                    "@value": "Male",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-e6105f32-62b7-4874-a816-22dba27887f5"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 6,
+                "content": [{
+                    "@value": "British",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-ea8a5c7b-a2b7-44f6-af9d-398243dc3d55"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 7,
+                "content": [{
+                    "@value": true,
+                    "@type": "http://www.w3.org/2001/XMLSchema#boolean"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-c8ed9f5e-def2-4b48-9b9d-f4e4a5a62afe"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 8,
+                "content": [
+                    {
+                        "@value": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software.",
+                        "@language": "en"
+                    },
+                    {
+                        "@value": "Bob Johnson ist Softwareentwickler mit Erfahrung in verteilten Systemen, Backend-Entwicklung und Cloud-nativen Anwendungen. Er entwickelt robuste Software und unterstützt gerne sein Team.",
+                        "@language": "de"
+                    }
+                ]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-227ea343-c16c-4656-92fa-9fb212784f40"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 9,
+                "content": [
+                    {"@id": "https://example.org/id/carol-miller"},
+                    {"@id": "https://example.org/id/alice-smith"}
+                ]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-aeeb78a8-6a70-4fab-b637-db8721327b13"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 10,
+                "content": [{
+                    "@value": "2024-08-05T11:00:00Z",
+                    "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-7a51296f-2999-452e-a71b-89201b1e17b6"},
+                "rowEntity": {"@id": "https://example.org/id/bob-johnson"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 11,
+                "content": [{
+                    "@value": "2026-07-18T16:45:00Z",
+                    "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 12,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 13,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 14,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 15,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 16,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 17,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 18,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 1,
+                "columnIndex": 19,
+                "content": []
+            }
+        ],
+        [
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-0916623a-5cff-4c6a-83e5-ba548334e123"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 0,
+                "content": [{
+                    "@value": "Carol Miller",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-654964e9-64b3-4955-bbae-96fc209404a9"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 1,
+                "content": [{
+                    "@value": "Carol",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-2ce0b8ec-3854-4e43-9af6-f32ec3a72a2e"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 2,
+                "content": [{
+                    "@value": "Miller",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-c6cf1911-8e97-45b7-8cf7-d00cafca43ad"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 3,
+                "content": [{
+                    "@value": "carol.miller@example.org",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-6d794d56-dc73-4852-b22d-f220592575bd"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 4,
+                "content": [{
+                    "@value": "1992-02-21",
+                    "@type": "http://www.w3.org/2001/XMLSchema#date"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-d078b4e8-8e0b-4341-8483-a030872369b1"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 5,
+                "content": [{
+                    "@value": "Female",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-e6105f32-62b7-4874-a816-22dba27887f5"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 6,
+                "content": [{
+                    "@value": "Canadian",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-ea8a5c7b-a2b7-44f6-af9d-398243dc3d55"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 7,
+                "content": [{
+                    "@value": false,
+                    "@type": "http://www.w3.org/2001/XMLSchema#boolean"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-c8ed9f5e-def2-4b48-9b9d-f4e4a5a62afe"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 8,
+                "content": [
+                    {
+                        "@value": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning.",
+                        "@language": "en"
+                    },
+                    {
+                        "@value": "Carol Miller ist Projektmanagerin mit Schwerpunkt auf der Koordination interdisziplinärer Teams und der erfolgreichen Umsetzung von Digitalisierungsprojekten. Sie legt großen Wert auf klare Kommunikation und effiziente Planung.",
+                        "@language": "de"
+                    }
+                ]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-227ea343-c16c-4656-92fa-9fb212784f40"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 9,
+                "content": [{"@id": "https://example.org/id/bob-johnson"}]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-aeeb78a8-6a70-4fab-b637-db8721327b13"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 10,
+                "content": [{
+                    "@value": "2025-03-22T08:20:00Z",
+                    "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "column": {"@id": "urn:atic:column-7a51296f-2999-452e-a71b-89201b1e17b6"},
+                "rowEntity": {"@id": "https://example.org/id/carol-miller"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 11,
+                "content": [{
+                    "@value": "2026-07-21T10:05:00Z",
+                    "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+                }]
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 12,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 13,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 14,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 15,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 16,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 17,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 18,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 2,
+                "columnIndex": 19,
+                "content": []
+            }
+        ],
+        [
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 0,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 1,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 2,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 3,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 4,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 5,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 6,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 7,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 8,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 9,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 10,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 11,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 12,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 13,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 14,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 15,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 16,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 17,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 18,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 3,
+                "columnIndex": 19,
+                "content": []
+            }
+        ],
+        [
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 0,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 1,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 2,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 3,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 4,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 5,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 6,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 7,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 8,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 9,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 10,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 11,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 12,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 13,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 14,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 15,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 16,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 17,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 18,
+                "content": []
+            },
+            {
+                "workbook": {"@id": "urn:atic:workbook-08a3746a-9b29-4254-b741-0def67081131"},
+                "sheet": {"@id": "urn:atic:sheet-802ce4ff-19d5-48ee-ba30-d0a6a52d510d"},
+                "rowIndex": 4,
+                "columnIndex": 19,
+                "content": []
+            }
+        ]
     ]
-]
-
+}

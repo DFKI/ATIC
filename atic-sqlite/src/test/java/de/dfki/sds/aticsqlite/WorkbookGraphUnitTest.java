@@ -42,6 +42,8 @@ import org.junit.jupiter.api.Test;
 public class WorkbookGraphUnitTest {
 
     private SqliteAticDatasetGraph dataset;
+    
+    private boolean PRINT = false;
 
     @BeforeEach
     void setup(@org.junit.jupiter.api.io.TempDir Path tempDir) throws Exception {
@@ -103,6 +105,7 @@ public class WorkbookGraphUnitTest {
         JSONObject expectedSheet = JSONUtils.createJSONObject()
                 .put("@id", sheets.get(0).getURI())
                 .put("name", "Test Sheet")
+                .put("columns", new JSONArray())
                 .put("rowQuery", "SELECT * WHERE { ?s ?p ?o }");
 
         JSONObject expected = JSONUtils.createJSONObject()
@@ -253,19 +256,21 @@ public class WorkbookGraphUnitTest {
         
         Window window = dataset.calculateRead(() -> wg.get(coordinates.workbook, coordinates.sheet, new Rectangle(0, 0, 20, 5), coordinates.ctx));
 
-        JSONArray expected = (JSONArray) loadJSON("01_expected_get.json");
+        JSONObject actual = window.toJson();
+        
+        if(PRINT) {
+            System.out.println(window.toJson().toString(4));
+        }
+        JSONObject expected = (JSONObject) loadJSON("01_expected_get.json");
 
         Set<CompareMode> modes = Set.of(
                 CompareMode.JSON_ARRAY_NON_EXTENSIBLE,
                 CompareMode.JSON_OBJECT_NON_EXTENSIBLE
         );
         
-        JSONArray actual = window.toJson();
-        
         removeIds(expected);
         removeIds(actual);
-
-        //System.out.println(window.toJson().toString(4));
+        
         JSONCompare.assertMatches(expected.toString(), actual.toString(), modes);
     }
     
@@ -299,16 +304,18 @@ public class WorkbookGraphUnitTest {
     
         Window window = dataset.calculateRead(() -> wg.get(coordinates.workbook, coordinates.sheet, new Rectangle(0, 0, 1, 1), coordinates.ctx));
         
-        JSONArray expected = (JSONArray) loadJSON(expectedFilename);
+        JSONObject actual = window.toJson();
+        
+        if(PRINT) {
+            System.out.println(actual.toString(4));
+        }
+        
+        JSONObject expected = (JSONObject) loadJSON(expectedFilename);
 
         Set<CompareMode> modes = Set.of(
                 CompareMode.JSON_ARRAY_NON_EXTENSIBLE,
                 CompareMode.JSON_OBJECT_NON_EXTENSIBLE
         );
-        
-        JSONArray actual = window.toJson();
-        
-        //System.out.println(actual.toString(4));
         
         removeIds(expected);
         removeIds(actual);

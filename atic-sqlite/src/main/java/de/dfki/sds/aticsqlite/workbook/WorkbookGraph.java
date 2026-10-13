@@ -452,6 +452,9 @@ public class WorkbookGraph implements AticGraph {
     }
 
     public Window get(Node workbook, Node sheet, Rectangle rect, InvocationContext ctx) {
+        JSONObject selectedWorkbook = getJson(workbook, ctx);
+        JSONObject selectedSheet = getSheet(selectedWorkbook, sheet);
+        
         Window window = new Window();
         for (int rowIndex = rect.y; rowIndex < rect.y + rect.height; rowIndex++) {
             List<Cell> row = new ArrayList<>();
@@ -461,6 +464,44 @@ public class WorkbookGraph implements AticGraph {
                 row.add(cell);
             }
         }
+        
+        SheetCache cache = cacheMap.computeIfAbsent(new WorkbookSheet(workbook, sheet), k -> new SheetCache());
+        for (int colIndex = rect.x; colIndex < rect.x + rect.width; colIndex++) {
+            Node col = cache.columnCache.getObject(colIndex);
+            
+            if(col == null) {
+                window.getColHeader().add(null);
+                
+            } else {
+        
+                //TODO improve this later
+                JSONObject selectedColumn = getColumn(selectedSheet, col);
+                ColumnConfig columnConfig = ColumnConfig.fromJson(selectedColumn);
+
+                columnConfig.setColumnUri(col.getURI());
+
+                window.getColHeader().add(columnConfig);
+            }
+        }
+        
+        for (int rowIndex = rect.y; rowIndex < rect.y + rect.height; rowIndex++) {
+            Node row = cache.rowCache.getObject(rowIndex);
+            
+            Cell.Builder cellBuilder = Cell.builder()
+                .workbook(workbook)
+                .sheet(sheet)
+                .location(rowIndex, -1);
+         
+            if(row != null) {
+                cellBuilder
+                 //.column(row)
+                 //.rowEntity(row)
+                 .addNode(row);
+            }
+            
+            window.getRowHeader().add(cellBuilder.build());
+        }
+        
         return window;
     }
 

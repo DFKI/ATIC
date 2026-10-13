@@ -10,6 +10,8 @@ import org.json.JSONObject;
  *
  */
 public class ColumnConfig {
+    
+    private String columnUri;
 
     private final String name;
 
@@ -46,6 +48,10 @@ public class ColumnConfig {
                         .put("@id", property.getURI()))
                 .put("type", type.name())
                 .put("direction", direction.name());
+        
+        if(getColumnUri() != null) {
+            json.put("@id", getColumnUri());
+        }
 
         if (datatype != null) {
             json.put("datatype", new JSONObject()
@@ -81,6 +87,14 @@ public class ColumnConfig {
 
     public String getLanguage() {
         return language;
+    }
+
+    public String getColumnUri() {
+        return columnUri;
+    }
+
+    public void setColumnUri(String columnUri) {
+        this.columnUri = columnUri;
     }
 
     public static class Builder {

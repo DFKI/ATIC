@@ -1,0 +1,144 @@
+
+.workbook-card {
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+.workbook-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.sheet-tab {
+    cursor: pointer;
+    white-space: nowrap;
+}
+.sheet-tab.active {
+    background-color: #0d6efd !important;
+    color: #fff !important;
+}
+.sheet-tab {
+    border: 1px solid #dee2e6;
+    padding: 6px 14px;
+    border-radius: 4px;
+    margin-right: 4px;
+    font-size: 13px;
+    background: #f8f9fa;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.sheet-tab .delete-sheet {
+    display: none;
+    cursor: pointer;
+    color: inherit;
+    font-size: 11px;
+}
+.sheet-tab:hover .delete-sheet {
+    display: inline;
+}
+.cell {
+    min-width: 140px;
+    min-height: 32px;
+    padding: 4px 6px;
+    border: 1px solid #dee2e6;
+    cursor: pointer;
+    font-size: 13px;
+    overflow: hidden;
+    word-break: break-word;
+    background: #fff;
+}
+.cell:hover {
+    background: #e8f0fe;
+    border-color: #0d6efd;
+}
+.cell-header {
+    background: #f1f3f5;
+    font-weight: 600;
+    font-size: 12px;
+    text-align: center;
+    min-width: 140px;
+    border: 1px solid #dee2e6;
+    padding: 6px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.row-header {
+    background: #f1f3f5;
+    font-weight: 600;
+    text-align: center;
+    min-width: 48px;
+    width: 48px;
+    border: 1px solid #dee2e6;
+    padding: 6px 4px;
+    font-size: 12px;
+}
+.table-container {
+    max-height: 460px;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+.table-container table {
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 100%;
+}
+.table-container th,
+.table-container td {
+    border: 1px solid #dee2e6;
+}
+.table-container .sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.table-container .sticky-entity-col {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #f1f3f5;
+}
+.table-container .sticky-corner {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    background: #f1f3f5;
+}
+.cell-value-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #e9ecef;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: 1px 2px;
+    font-size: 12px;
+}
+.cell-value-tag .remove-val {
+    cursor: pointer;
+    color: #dc3545;
+    font-weight: bold;
+    font-size: 11px;
+}
+.multi-expand {
+    cursor: pointer;
+    color: #0d6efd;
+    font-weight: 600;
+    font-size: 12px;
+}
+.scroll-arrow {
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 16px;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    color: #6c757d;
+}
+.scroll-arrow:hover {
+    color: #0d6efd;
+}
+.badge-type {
+    font-size: 10px;
+    padding: 2px 5px;
+}
