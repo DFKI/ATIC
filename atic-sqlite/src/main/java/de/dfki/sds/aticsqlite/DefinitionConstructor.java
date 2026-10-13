@@ -2,6 +2,7 @@ package de.dfki.sds.aticsqlite;
 
 import de.dfki.sds.atic.helper.JSONUtils;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -283,7 +284,20 @@ public class DefinitionConstructor {
         String typeCuri = uriToCuri(type.getURI(), prefixMap);
         wherePatterns.add(subjectVar + " a " + typeCuri);
 
-        for (Property prop : props) {
+        List<Property> orderedProps = props.stream()
+        .sorted(Comparator
+                .comparingInt((Property prop) ->
+                        analyzer.getResourceProperties().contains(prop)
+                                && analyzer.getDomainCardinality().get(prop) == RdfsAnalyzer.Cardinality.MULTI
+                                && analyzer.getPropertyRanges().containsKey(prop)
+                                && !analyzer.getPropertyRanges().get(prop).isEmpty()
+                                        ? 1 : 0)
+                .thenComparing(
+                        prop -> AticGraphUtils.getLocalName(prop.getURI()),
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+        .toList();
+        
+        for (Property prop : orderedProps) {
             String propLocalName = AticGraphUtils.getLocalName(prop.getURI());
             if (propLocalName == null || propLocalName.isBlank()) {
                 continue;
