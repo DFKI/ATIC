@@ -243,6 +243,7 @@ public class WorkbookGraph implements AticGraph {
 
             JSONObject sheetJson = sheetConfig.toJson();
             sheetJson.put("@id", urn);
+            sheetJson.put("columns", new JSONArray());
 
             sheets.put(sheetJson);
             result.add(sheet);

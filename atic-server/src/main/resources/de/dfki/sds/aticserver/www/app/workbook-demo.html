@@ -265,51 +265,32 @@
                     <button class="btn btn-sm btn-outline-primary ms-2" @click="openCreateSheetModal" title="Create Sheet">
                         <i class="fa fa-plus"></i>
                     </button>
+
+                    <!-- Viewport display -->
+                    <span class="ms-3 badge bg-info" style="font-size: 12px;">
+                        Viewport: ({{ viewportX }},{{ viewportY }}) → ({{ viewportX + viewportWidth - 1 }},{{ viewportY + viewportHeight - 1 }})
+                        &nbsp;{{ viewportWidth }}×{{ viewportHeight }}
+                    </span>
                 </div>
 
                 <!-- Data Table -->
                 <div class="table-container card">
                     <table class="mb-0">
-                        <thead>
-                            <!-- Column header row -->
-                            <tr>
-                                <th class="sticky-corner row-header" style="min-width: 48px; width: 48px; left: 0;"></th>
-                                <th class="cell-header" v-for="(col, ci) in columns" :key="col['@id'] || ci">
-                                    <div :title="col.property?.['@id'] || col.property">{{ col.name || col.property?.['@id']?.split('#')?.pop()?.split('/')?.pop() || ('Col ' + (ci + 1)) }}</div>
-                                </th>
-                                <th class="cell-header" style="min-width: 48px; width: 48px;">
-                                    <button class="btn btn-sm btn-outline-primary w-100" @click="openCreateColumnModal" title="Add Column">
-                                        <i class="fa fa-plus"></i>
-                                    </button>
-                                </th>
-                            </tr>
-                        </thead>
                         <tbody>
-                            <tr v-for="r in tableRows" :key="r">
-                                <!-- Entity column -->
-                                <td class="row-header sticky-entity-col" style="left: 0;">
-                                    <span class="text-nowrap">
-                                        {{ r }}
-                                        <span class="text-muted" style="font-size: 10px;">{{ cells[r]?.[0]?.rowEntity ? '🔗' : '' }}</span>
-                                    </span>
-                                </td>
-
-                                <!-- Data cells -->
-                                <td class="cell"
-                                    v-for="(cell, ci) in getColumnCells(r)"
-                                    :key="ci"
-                                    @click="openCellEditor(r, ci, cell)">
+                            <tr v-for="(row, ri) in cells" :key="ri">
+                                <td v-for="(cell, ci) in row" :key="ci"
+                                    class="cell"
+                                    @click="openCellEditor(ri, ci, cell)">
                                     <template v-if="cell && !cell.isEmpty()">
-                                        <!-- Single value cells -->
                                         <template v-if="cell.content.length === 1">
                                             <render-cell-value :val="cell.content[0]"></render-cell-value>
                                         </template>
-                                        <!-- Multi-value cells -->
                                         <template v-else>
                                             <template v-for="(v, vi) in cell.content.slice(0, 3)" :key="vi">
                                                 <render-cell-value :val="v"></render-cell-value>
                                             </template>
-                                            <span v-if="cell.content.length > 3" class="multi-expand" @click.stop="openCellEditor(r, ci, cell)">
+                                            <span v-if="cell.content.length > 3" class="multi-expand"
+                                                  @click.stop="openCellEditor(ri, ci, cell)">
                                                 ... ({{ cell.content.length - 3 }})
                                             </span>
                                         </template>
@@ -318,22 +299,15 @@
                                         <span class="text-muted" style="font-size: 12px;">—</span>
                                     </template>
                                 </td>
-
-                                <!-- Plus cell for adding new column data -->
-                                <td class="cell" style="text-align: center; background: #f8f9fa;">
-                                    <button class="btn btn-sm btn-link text-decoration-none p-0" @click="openCreateColumnModal" title="Add column">
-                                        <i class="fa fa-plus text-muted"></i>
-                                    </button>
-                                </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
 
                 <div class="mt-2 text-muted" style="font-size: 12px;">
-                    Showing {{ tableRows.length }} rows × {{ columns.length }} columns
-                    <span v-if="sheets.length > 5">• {{ sheets.length }} sheets total</span>
-                    <span class="ms-2">Scroll to explore • Click a cell to edit</span>
+                    Viewport: ({{ viewportX }},{{ viewportY }}) &rarr; ({{ viewportX + viewportWidth - 1 }},{{ viewportY + viewportHeight - 1 }})
+                    &nbsp;{{ viewportWidth }}&times;{{ viewportHeight }}
+                    <span v-if="sheets.length > 5"> | {{ sheets.length }} sheets</span>
                 </div>
             </div>
 
@@ -399,7 +373,7 @@
                             <div class="mb-3">
                                 <label class="form-label">SPARQL Row Query</label>
                                 <textarea class="form-control" rows="4" v-model="newSheetRowQuery"
-                                          placeholder="SELECT ?rowEntity WHERE { ... }"
+                                          placeholder="?rowEntity a ..."
                                           style="font-family: monospace; font-size: 12px;"></textarea>
                                 <div class="form-text">
                                     Must include <code>?rowEntity</code> variable. This query determines which resources appear as rows.
@@ -689,14 +663,19 @@ createApp({
             // Sheet tab scrolling
             sheetViewStart: 0,
 
-            // Table viewport
-            rows: 20,
-            cells: [], // cells[rowIndex][columnIndex] = Cell
+            // Table viewport (x, y, width, height)
+            viewportX: 0,
+            viewportY: 0,
+            viewportWidth: 10,
+            viewportHeight: 20,
+
+            // Table cells as 2D array: cells[rowIndex][colIndex]
+            cells: [], // [[cell, cell, ...], ...]
 
             // Modals
             newWorkbookName: '',
             newSheetName: '',
-            newSheetRowQuery: 'SELECT ?rowEntity WHERE { ?rowEntity a <http://www.w3.org/2000/01/rdf-schema#Resource> . }',
+            newSheetRowQuery: '?rowEntity a rdf:Resource .',
             newColumnName: '',
             newColumnProperty: 'http://schema.org/name',
             newColumnDirection: 'Outgoing',
@@ -729,8 +708,8 @@ createApp({
             return this.sheets.slice(s, s + 5);
         },
         tableRows() {
-            return Array.from({length: this.rows}, (_, i) => i + 1);
-        }
+            return Array.from({length: this.cells.length}, (_, i) => i);
+        },
     },
 
     created() {
@@ -837,7 +816,11 @@ createApp({
             this.currentView = 'detail';
             this.sheetViewStart = 0;
             this.currentSheetIndex = 0;
-            this.cells = {};
+            this.viewportX = 0;
+            this.viewportY = 0;
+            this.viewportWidth = 10;
+            this.viewportHeight = 20;
+            this.cells = [];
             this.columns = [];
             this.sheets = [];
             this.loadWorkbookDetail();
@@ -875,7 +858,7 @@ createApp({
         // ===================== SHEETS =====================
         selectSheet(si) {
             this.currentSheetIndex = si;
-            this.cells = {};
+            this.cells = [];
             this.columns = [];
             this.loadSheet();
         },
@@ -884,80 +867,36 @@ createApp({
             if (!this.currentSheet)
                 return;
 
-            // Load column config from the sheet config
-            if (this.currentSheet.columns) {
-                this.columns = this.currentSheet.columns.map(c => ({
-                        '@id': c['@id'],
-                        name: c.name,
-                        property: c.property,
-                        type: c.type,
-                        direction: c.direction,
-                        datatype: c.datatype,
-                        language: c.language
-                    }));
-            }
+            const windowStr = [this.viewportX, this.viewportY, this.viewportWidth, this.viewportHeight].join(',');
+            this.loading = true;
 
-            // Fetch initial cells: first 20 rows × first 4 columns (or all if fewer)
-            const maxCols = Math.max(4, this.columns.length);
-            const cols = this.columns.slice(0, maxCols);
-
-            if (cols.length === 0) {
-                // No columns configured yet - show empty table
-                this.cells = {};
-                return;
-            }
-
-            const colIndices = cols.map((_, i) => i);
-            const cellData = {};
-
-            // Load first page of rows for each column
-            const promises = colIndices.map(ci => {
-                const windowStr = '0,0,' + maxCols + ',' + this.rows;
-                return axios.get('/workbooks/' + encodeURIComponent(this.workbookUri) +
-                        '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
-                        '/cells', {params: {window: windowStr}});
-            });
-
-            Promise.all(promises)
-                    .then(responses => {
-                        // Each response is a 2D array of cells [rows][cols]
-                        // We need to merge them by the actual column index
-                        // Actually, each response should be the same window data
-                        // Let's use the first response
-                        const windowData = responses[0].data;
-                        if (Array.isArray(windowData)) {
-                            this.cells = {};
-                            for (let r = 0; r < windowData.length; r++) {
-                                if (!this.cells[r + 1])
-                                    this.cells[r + 1] = {};
-                                for (let c = 0; c < windowData[r].length; c++) {
-                                    const cell = windowData[r][c];
-                                    if (cell) {
-                                        this.cells[r + 1][c] = cell;
-                                        // Carry rowEntity from first cell in row
-                                        if (cell.rowEntity && !this.cells[r + 1][0]?.rowEntity) {
-                                            this.cells[r + 1][0] = {...this.cells[r + 1][0], rowEntity: cell.rowEntity};
-                                        }
-                                    }
-                                }
-                            }
-                            // Set first cell's rowEntity for display
-                            for (const r of Object.keys(this.cells)) {
-                                const rowCells = this.cells[r];
-                                for (const c of Object.keys(rowCells)) {
-                                    if (rowCells[c]?.rowEntity) {
-                                        for (const cc of Object.keys(rowCells)) {
-                                            rowCells[cc] = {...rowCells[cc], rowEntity: rowCells[c].rowEntity};
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
+            axios.get('/workbooks/' + encodeURIComponent(this.workbookUri) +
+                    '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
+                    '/cells', {params: {window: windowStr}})
+                    .then(response => {
+                        const windowData = response.data;
+                        if (!Array.isArray(windowData)) {
+                            this.cells = [];
+                            return;
                         }
+
+                        // Use the array 1:1 - wrap each cell with isEmpty helper
+                        this.cells = windowData.map(row => {
+                            if (!Array.isArray(row)) return [];
+                            return row.map(cell => cell ? {
+                                content: cell.content || [],
+                                rowEntity: cell.rowEntity || null,
+                                isEmpty: function() { return this.content.length === 0; }
+                            } : {
+                                content: [],
+                                rowEntity: null,
+                                isEmpty: function() { return true; }
+                            });
+                        });
                     })
                     .catch(err => {
                         console.error('Error loading sheet:', err);
-                        this.cells = {};
+                        this.cells = [];
                     })
                     .finally(() => {
                         this.loading = false;
@@ -966,7 +905,7 @@ createApp({
 
         openCreateSheetModal() {
             this.newSheetName = '';
-            this.newSheetRowQuery = 'SELECT ?rowEntity WHERE { ?rowEntity a <http://www.w3.org/2000/01/rdf-schema#Resource> . }';
+            this.newSheetRowQuery = '?rowEntity a rdfs:Resource .';
             const modalInstance = new window.bootstrap.Modal(this.$refs.create_sheet_modal);
             modalInstance.show();
             setTimeout(() => {
@@ -1012,7 +951,7 @@ createApp({
                         if (this.sheets.length > 0) {
                             this.loadSheet();
                         } else {
-                            this.cells = {};
+                            this.cells = [];
                             this.columns = [];
                         }
                     });
@@ -1067,13 +1006,6 @@ createApp({
         },
 
         // ===================== CELL EDITOR =====================
-        getColumnCells(rowIndex) {
-            return this.columns.map((_, ci) => {
-                const cell = this.cells[rowIndex]?.[ci] || null;
-                return cell || {content: [], isEmpty: () => true, rowIndex, columnIndex: ci};
-            });
-        },
-
         openCellEditor(rowIndex, colIndex, existingCell) {
             this.cellEditor = {
                 rowIndex: rowIndex,
@@ -1088,11 +1020,9 @@ createApp({
                 error: null
             };
 
-            const cell = existingCell;
-
             // Build the content array from the cell
-            if (cell && cell.content && Array.isArray(cell.content)) {
-                this.cellEditor.values = cell.content.map(v => JSON.parse(JSON.stringify(v)));
+            if (existingCell && existingCell.content && Array.isArray(existingCell.content)) {
+                this.cellEditor.values = existingCell.content.map(v => JSON.parse(JSON.stringify(v)));
             }
 
             // If no content and column has datatype/language info, pre-select type
@@ -1112,20 +1042,15 @@ createApp({
                 }
             }
 
-            // Fetch from server to ensure we have the latest data
+            // Fetch from server to get fresh cell data
             this.loading = true;
             axios.get('/workbooks/' + encodeURIComponent(this.workbookUri) +
                     '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
-                    '/cells', {params: {position: (rowIndex - 1) + ',' + colIndex}})
+                    '/cells', {params: {position: rowIndex + ',' + colIndex}})
                     .then(response => {
                         const cellData = response.data;
                         if (cellData && cellData.content && Array.isArray(cellData.content)) {
                             this.cellEditor.values = cellData.content.map(v => JSON.parse(JSON.stringify(v)));
-                            // Also get rowEntity for display
-                            if (cellData.rowEntity) {
-                                // Store on a temporary property for display
-                                this.$set(this.cellEditor, '_rowEntity', cellData.rowEntity);
-                            }
                         }
                     })
                     .catch(err => {
@@ -1178,15 +1103,9 @@ createApp({
 
         saveCellValue() {
             const cellObj = {content: this.cellEditor.values};
-            const op = this.cellEditor.values.length === 0 ? 'Remove' : 'Set';
+            const operation = this.cellEditor.values.length === 0 ? 'Remove' : 'Set';
 
             this.cellEditor.loading = true;
-
-            // Determine operation based on whether we're removing all values
-            let operation = 'Set';
-            if (this.cellEditor.values.length === 0) {
-                operation = 'Remove';
-            }
 
             axios.post('/workbooks/' + encodeURIComponent(this.workbookUri) +
                     '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
@@ -1195,19 +1114,25 @@ createApp({
                     JSON.stringify(cellObj),
                     {headers: {'Content-Type': 'application/json'}})
                     .then(() => {
-                        // Update local cell data
-                        if (!this.cells[this.cellEditor.rowIndex]) {
-                            this.cells[this.cellEditor.rowIndex] = {};
+                        // Ensure the row exists in the cells array
+                        while (this.cells.length <= this.cellEditor.rowIndex) {
+                            this.cells.push(new Array(this.viewportWidth).fill(null).map(() => ({
+                                content: [],
+                                rowEntity: null,
+                                isEmpty: function() { return true; }
+                            })));
                         }
                         if (this.cellEditor.values.length > 0) {
                             this.cells[this.cellEditor.rowIndex][this.cellEditor.colIndex] = {
                                 content: [...this.cellEditor.values],
-                                rowIndex: this.cellEditor.rowIndex,
-                                columnIndex: this.cellEditor.colIndex,
+                                rowEntity: null,
                                 isEmpty: () => false
                             };
                         } else {
-                            delete this.cells[this.cellEditor.rowIndex][this.cellEditor.colIndex];
+                            if (this.cells[this.cellEditor.rowIndex]?.[this.cellEditor.colIndex]) {
+                                this.cells[this.cellEditor.rowIndex][this.cellEditor.colIndex].content = [];
+                                this.cells[this.cellEditor.rowIndex][this.cellEditor.colIndex].isEmpty = function() { return true; };
+                            }
                         }
 
                         const modalEl = this.$refs.cell_editor_modal;
