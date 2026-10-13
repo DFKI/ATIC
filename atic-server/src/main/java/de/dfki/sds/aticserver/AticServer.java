@@ -19,6 +19,7 @@ import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticsqlite.AticGraphUtils;
 import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
@@ -26,6 +27,7 @@ import de.dfki.sds.aticsqlite.DatabaseOptions;
 import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
 import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
+import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph.OntologyFormat;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import de.dfki.sds.rdfpatchsqlite.Converter;
@@ -58,6 +60,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -90,6 +93,7 @@ import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.TxnType;
 import org.apache.jena.rdf.model.Model;
+import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.rdfpatch.changes.RDFChangesBase;
@@ -349,6 +353,8 @@ public class AticServer {
         routes.get("/graph", this::getGraph);
         routes.post("/graph", this::postGraph);
         routes.delete("/graph/{uri}", this::deleteGraph);
+        routes.post("/graph/derived-ontology", this::postDerivedOntology);
+        routes.post("/graph/derived-bridge-template", this::postDerivedBridgeTemplate);
 
         routes.post("/rml/execution", this::postRmlExecution);
 
@@ -661,6 +667,54 @@ public class AticServer {
                     "error", "Failed to delete graph"
             ));
         }
+    }
+
+    private void postDerivedOntology(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        JSONObject jsonConf = new JSONObject(ctx.body());
+
+        String uri = jsonConf.getString("uri");
+        OntologyFormat format = OntologyFormat.valueOf(jsonConf.getString("format").toUpperCase());
+        String prefix = jsonConf.getString("prefix");
+        String iri = jsonConf.getString("iri");
+
+        Graph ontology = datasetGraph.calculateRead(() -> {
+            AticGraph graph = datasetGraph.getGraph(NodeFactory.createURI(uri), ictx);
+            return datasetGraph.deriveOntologyFromABox(graph, prefix, iri, format, ictx);
+        });
+
+        ctx.contentType("text/turtle");
+        StringWriter sw = new StringWriter();
+        RDFDataMgr.write(sw, ModelFactory.createModelForGraph(ontology), Lang.TURTLE);
+        ctx.result(sw.toString());
+    }
+
+    private void postDerivedBridgeTemplate(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        JSONObject jsonConf = new JSONObject(ctx.body());
+        String uri = jsonConf.getString("uri");
+
+        Map<Node, JSONObject> map = datasetGraph.calculateRead(() -> {
+            AticGraph graph = datasetGraph.getGraph(NodeFactory.createURI(uri), ictx);
+            return datasetGraph.deriveBridgeTemplatesFromABox(graph, ictx);
+        });
+
+        JSONArray result = new JSONArray();
+
+        map.entrySet().stream()
+                .sorted(Comparator.comparing(entry -> entry.getKey().getURI()))
+                .forEach(entry -> {
+                    JSONObject item = new JSONObject();
+                    item.put("uri", entry.getKey().getURI());
+                    item.put("name", AticGraphUtils.getLocalName(entry.getKey().getURI()));
+                    item.put("template", entry.getValue());
+                    result.put(item);
+                });
+
+        ctx.contentType("application/json");
+        ctx.result(result.toString());
     }
 
     //------------------------------------------
