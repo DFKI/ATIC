@@ -117,22 +117,62 @@
                         <i class="fa fa-chevron-right"></i>
                     </span>
 
-                    <button class="btn btn-sm btn-outline-primary ms-2" @click="openCreateSheetModal" title="Create Sheet">
-                        <i class="fa fa-plus"></i>
+                    <button class="btn btn-sm btn-outline-primary ms-2" @click="openCreateSheetModal" title="Add Sheet">
+                        <i class="fa fa-file-alt me-1"></i><i class="fa fa-plus"></i>
                     </button>
-
-                    <!-- Viewport display -->
-                    <span class="ms-3 badge bg-info" style="font-size: 12px;">
-                        Viewport: ({{ viewportX }},{{ viewportY }}) → ({{ viewportX + viewportWidth - 1 }},{{ viewportY + viewportHeight - 1 }})
-                        &nbsp;{{ viewportWidth }}×{{ viewportHeight }}
-                    </span>
+                    
+                    <button class="btn btn-sm btn-outline-primary ms-2" @click="openCreateColumnModal" title="Add Column" :disabled="sheets.length == 0">
+                        <i class="fa fa-columns me-1"></i></i><i class="fa fa-plus"></i>
+                    </button>
                 </div>
 
                 <!-- Data Table -->
                 <div class="table-container card">
                     <table class="mb-0">
+                        <!-- Column Headers -->
+                        <thead>
+                            <tr>
+                                <!-- Corner cell (empty, sticky) -->
+                                <th class="row-header sticky-corner" rowspan="1">
+                                    <i class="fa fa-arrows-alt text-muted" title="Sheet area"></i>
+                                </th>
+                                <th class="cell-header sticky-header"
+                                    v-for="(col, ci) in windowColumns"
+                                    :key="'col-' + ci">
+                                    <div class="col-header-content">
+                                        <div v-if="col" class="d-flex align-items-center justify-content-between">
+                                            <div v-if="col?.property?.['@id']" class="col-prop" @click.stop="copyToClipboard(col.property['@id'])" title="Click to copy property URI">
+                                                <i class="fa fa-copy copy-icon me-1"></i>
+                                            </div>
+                                            <div class="col-name me-1">
+                                                {{ col.name }}
+                                            </div>
+                                            <div v-if="col?.direction" class="col-direction me-1">
+                                                <i v-if="col.direction === 'Incoming'" class="fa fa-arrow-right"></i>
+                                                <i class="fa fa-circle"></i>
+                                                <i v-if="col.direction === 'Outgoing'" class="fa fa-arrow-right"></i>
+                                            </div>
+                                            <div class="col-direction">
+                                                <i v-if="col.type === 'Literal'" class="fa fa-quote-right"></i>
+                                                <i v-if="col.type === 'Resource'" class="fa fa-link"></i>
+                                            </div>
+                                        </div>
+                                        <span v-else >&nbsp;</span>
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
                         <tbody>
                             <tr v-for="(row, ri) in cells" :key="ri">
+                                <!-- Row Header with copy button -->
+                                <td class="row-header sticky-entity-col">
+                                    <i v-if="windowRows[ri].content.length > 0"
+                                       class="fa fa-copy copy-icon"
+                                       @click.stop="copyToClipboard(windowRows[ri].content[0]['@id'])"
+                                       title="Copy resource URI"></i>
+                                    <span v-else >&nbsp;</span>
+                                </td>
+                                <!-- Data Cells -->
                                 <td v-for="(cell, ci) in row" :key="ci"
                                     class="cell"
                                     @click="openCellEditor(ri, ci, cell)">
@@ -397,10 +437,17 @@
                                 </datalist>
                             </div>
                             <div class="mb-3">
+                                <label class="form-label">Type</label>
+                                <select class="form-select" v-model="newColumnType">
+                                    <option value="Literal">Literal</option>
+                                    <option value="Resource">Resource</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label">Direction</label>
                                 <select class="form-select" v-model="newColumnDirection">
-                                    <option value="Outgoing">Outgoing (row → value)</option>
-                                    <option value="Incoming">Incoming (value → row)</option>
+                                    <option value="Outgoing">Outgoing</option>
+                                    <option value="Incoming">Incoming</option>
                                 </select>
                             </div>
                         </div>
@@ -524,16 +571,19 @@ createApp({
             viewportWidth: 10,
             viewportHeight: 20,
 
-            // Table cells as 2D array: cells[rowIndex][colIndex]
-            cells: [], // [[cell, cell, ...], ...]
+            // Window data: columns (ColumnConfig[] or null), rows (Cell[] or null), cells (2D matrix)
+            windowColumns: [],
+            windowRows: [],
+            cells: [],
 
             // Modals
             newWorkbookName: '',
             newSheetName: '',
             newSheetRowQuery: '?rowEntity a rdf:Resource .',
             newColumnName: '',
-            newColumnProperty: 'http://schema.org/name',
+            newColumnProperty: 'pimo:core#prefLabel',
             newColumnDirection: 'Outgoing',
+            newColumnType: 'Literal',
 
             // Cell editor
             cellEditor: {
@@ -714,7 +764,8 @@ createApp({
         selectSheet(si) {
             this.currentSheetIndex = si;
             this.cells = [];
-            this.columns = [];
+            this.windowColumns = [];
+            this.windowRows = [];
             this.loadSheet();
         },
 
@@ -729,25 +780,38 @@ createApp({
                     '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
                     '/cells', {params: {window: windowStr}})
                     .then(response => {
-                        const windowData = response.data;
-                        if (!Array.isArray(windowData)) {
-                            this.cells = [];
-                            return;
+                        const data = response.data;
+                        // columns and rows can be null/empty, cells is the 2D matrix
+                        this.windowColumns = data.columns || [];
+                        this.windowRows = data.rows || [];
+                        this.cells = [];
+                        if (data.cells && Array.isArray(data.cells)) {
+                            for (let r = 0; r < data.cells.length; r++) {
+                                const row = [];
+                                const cellRow = data.cells[r];
+                                if (Array.isArray(cellRow)) {
+                                    for (let c = 0; c < cellRow.length; c++) {
+                                        const cell = cellRow[c];
+                                        if (cell) {
+                                            row.push({
+                                                content: cell.content || [],
+                                                isEmpty: function () {
+                                                    return this.content.length === 0;
+                                                }
+                                            });
+                                        } else {
+                                            row.push({
+                                                content: [],
+                                                isEmpty: function () {
+                                                    return true;
+                                                }
+                                            });
+                                        }
+                                    }
+                                }
+                                this.cells.push(row);
+                            }
                         }
-
-                        // Use the array 1:1 - wrap each cell with isEmpty helper
-                        this.cells = windowData.map(row => {
-                            if (!Array.isArray(row)) return [];
-                            return row.map(cell => cell ? {
-                                content: cell.content || [],
-                                rowEntity: cell.rowEntity || null,
-                                isEmpty: function() { return this.content.length === 0; }
-                            } : {
-                                content: [],
-                                rowEntity: null,
-                                isEmpty: function() { return true; }
-                            });
-                        });
                     })
                     .catch(err => {
                         console.error('Error loading sheet:', err);
@@ -807,7 +871,8 @@ createApp({
                             this.loadSheet();
                         } else {
                             this.cells = [];
-                            this.columns = [];
+                            this.windowColumns = [];
+                            this.windowRows = [];
                         }
                     });
         },
@@ -821,7 +886,8 @@ createApp({
         // ===================== COLUMNS =====================
         openCreateColumnModal() {
             this.newColumnName = '';
-            this.newColumnProperty = 'http://schema.org/name';
+            this.newColumnProperty = 'pimo:core#prefLabel';
+            this.newColumnType = 'Literal';
             this.newColumnDirection = 'Outgoing';
             const modalInstance = new window.bootstrap.Modal(this.$refs.create_column_modal);
             modalInstance.show();
@@ -840,7 +906,7 @@ createApp({
             const colConfig = {
                 name: this.newColumnName.trim(),
                 property: {'@id': this.newColumnProperty.trim()},
-                type: 'VALUE',
+                type: this.newColumnType,
                 direction: this.newColumnDirection
             };
 
@@ -865,7 +931,7 @@ createApp({
             this.cellEditor = {
                 rowIndex: rowIndex,
                 colIndex: colIndex,
-                column: this.columns[colIndex] || null,
+                column: this.windowColumns[colIndex] || null,
                 values: [],
                 showAllValues: false,
                 newValueType: 'string',
@@ -897,26 +963,66 @@ createApp({
                 }
             }
 
-            // Fetch from server to get fresh cell data
-            this.loading = true;
-            axios.get('/workbooks/' + encodeURIComponent(this.workbookUri) +
+            // If no local content, fetch fresh data from server
+            if (this.cellEditor.values.length === 0) {
+                axios.get('/workbooks/' + encodeURIComponent(this.workbookUri) +
+                        '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
+                        '/cells', {params: {position: rowIndex + ',' + colIndex}})
+                        .then(response => {
+                            const cellData = response.data;
+                            if (cellData && cellData.content && Array.isArray(cellData.content)) {
+                                this.cellEditor.values = cellData.content.map(v => JSON.parse(JSON.stringify(v)));
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Error fetching cell:', err);
+                            this.cellEditor.error = err.message || 'Failed to load cell data';
+                        })
+                        .finally(() => {
+                            this.cellEditor.loading = false;
+                            const modalInstance = new window.bootstrap.Modal(this.$refs.cell_editor_modal);
+                            modalInstance.show();
+                        });
+            } else {
+                this.cellEditor.loading = false;
+                const modalInstance = new window.bootstrap.Modal(this.$refs.cell_editor_modal);
+                modalInstance.show();
+            }
+        },
+
+        getColumnConfig(colIndex) {
+            return this.windowColumns[colIndex] || null;
+        },
+
+        saveCellValue() {
+            const cellObj = {content: this.cellEditor.values};
+            const operation = this.cellEditor.values.length === 0 ? 'Remove' : 'Set';
+
+            this.cellEditor.loading = true;
+
+            axios.post('/workbooks/' + encodeURIComponent(this.workbookUri) +
                     '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
-                    '/cells', {params: {position: rowIndex + ',' + colIndex}})
-                    .then(response => {
-                        const cellData = response.data;
-                        if (cellData && cellData.content && Array.isArray(cellData.content)) {
-                            this.cellEditor.values = cellData.content.map(v => JSON.parse(JSON.stringify(v)));
+                    '/cells?position=' + this.cellEditor.rowIndex + ',' + this.cellEditor.colIndex +
+                    '&operation=' + operation,
+                    JSON.stringify(cellObj),
+                    {headers: {'Content-Type': 'application/json'}})
+                    .then(() => {
+                        // Update local cells array
+                        const row = this.cells[this.cellEditor.rowIndex];
+                        if (row && row[this.cellEditor.colIndex]) {
+                            row[this.cellEditor.colIndex].content = [...this.cellEditor.values];
                         }
+
+                        const modalEl = this.$refs.cell_editor_modal;
+                        const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
+                        if (modalInstance)
+                            modalInstance.hide();
                     })
                     .catch(err => {
-                        console.error('Error fetching cell:', err);
-                        this.cellEditor.error = err.message || 'Failed to load cell data';
+                        this.cellEditor.error = err.message || 'Failed to save cell';
                     })
                     .finally(() => {
-                        this.loading = false;
                         this.cellEditor.loading = false;
-                        const modalInstance = new window.bootstrap.Modal(this.$refs.cell_editor_modal);
-                        modalInstance.show();
                     });
         },
 
@@ -954,53 +1060,6 @@ createApp({
 
         removeCellValue(idx) {
             this.cellEditor.values.splice(idx, 1);
-        },
-
-        saveCellValue() {
-            const cellObj = {content: this.cellEditor.values};
-            const operation = this.cellEditor.values.length === 0 ? 'Remove' : 'Set';
-
-            this.cellEditor.loading = true;
-
-            axios.post('/workbooks/' + encodeURIComponent(this.workbookUri) +
-                    '/sheets/' + encodeURIComponent(this.currentSheet['@id']) +
-                    '/cells?position=' + this.cellEditor.rowIndex + ',' + this.cellEditor.colIndex +
-                    '&operation=' + operation,
-                    JSON.stringify(cellObj),
-                    {headers: {'Content-Type': 'application/json'}})
-                    .then(() => {
-                        // Ensure the row exists in the cells array
-                        while (this.cells.length <= this.cellEditor.rowIndex) {
-                            this.cells.push(new Array(this.viewportWidth).fill(null).map(() => ({
-                                content: [],
-                                rowEntity: null,
-                                isEmpty: function() { return true; }
-                            })));
-                        }
-                        if (this.cellEditor.values.length > 0) {
-                            this.cells[this.cellEditor.rowIndex][this.cellEditor.colIndex] = {
-                                content: [...this.cellEditor.values],
-                                rowEntity: null,
-                                isEmpty: () => false
-                            };
-                        } else {
-                            if (this.cells[this.cellEditor.rowIndex]?.[this.cellEditor.colIndex]) {
-                                this.cells[this.cellEditor.rowIndex][this.cellEditor.colIndex].content = [];
-                                this.cells[this.cellEditor.rowIndex][this.cellEditor.colIndex].isEmpty = function() { return true; };
-                            }
-                        }
-
-                        const modalEl = this.$refs.cell_editor_modal;
-                        const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
-                        if (modalInstance)
-                            modalInstance.hide();
-                    })
-                    .catch(err => {
-                        this.cellEditor.error = err.message || 'Failed to save cell';
-                    })
-                    .finally(() => {
-                        this.cellEditor.loading = false;
-                    });
         },
 
         // ===================== CELL VALUE HELPERS =====================
@@ -1056,6 +1115,22 @@ createApp({
         },
 
         // ===================== UI HELPERS =====================
+        copyToClipboard(text) {
+            if (!text)
+                return;
+            console.log(text);
+            navigator.clipboard.writeText(text).then(() => {
+                // Brief visual feedback
+                const toast = document.createElement('div');
+                toast.className = 'clipboard-toast';
+                toast.textContent = 'Copied: ' + text;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+            });
+        },
+
         open_error_modal(msg) {
             this.error = msg;
             this.loading = false;
