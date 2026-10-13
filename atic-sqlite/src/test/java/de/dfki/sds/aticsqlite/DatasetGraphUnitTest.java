@@ -5,7 +5,7 @@ import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticTriple;
 import de.dfki.sds.atic.jenatic.InvocationContext;
-import de.dfki.sds.aticsqlite.s16n.WorkbookGraph;
+import de.dfki.sds.aticsqlite.workbook.WorkbookGraph;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;

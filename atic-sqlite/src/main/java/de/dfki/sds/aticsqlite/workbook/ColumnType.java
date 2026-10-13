@@ -1,5 +1,5 @@
 
-package de.dfki.sds.aticsqlite.s16n;
+package de.dfki.sds.aticsqlite.workbook;
 
 /**
  * The type of the column.

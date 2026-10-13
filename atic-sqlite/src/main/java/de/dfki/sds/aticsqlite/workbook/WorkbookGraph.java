@@ -1,4 +1,4 @@
-package de.dfki.sds.aticsqlite.s16n;
+package de.dfki.sds.aticsqlite.workbook;
 
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;

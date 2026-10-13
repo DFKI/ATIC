@@ -1,5 +1,5 @@
 
-package de.dfki.sds.aticsqlite.s16n;
+package de.dfki.sds.aticsqlite.workbook;
 
 import java.util.AbstractCollection;
 import java.util.ArrayList;

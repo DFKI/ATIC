@@ -1,4 +1,4 @@
-package de.dfki.sds.aticsqlite.s16n;
+package de.dfki.sds.aticsqlite.workbook;
 
 import java.util.ArrayList;
 import java.util.List;

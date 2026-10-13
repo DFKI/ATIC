@@ -27,7 +27,7 @@ import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import static de.dfki.sds.aticsqlite.AticGraphUtils.createURN;
 import de.dfki.sds.aticsqlite.agent.AgentSessionManager;
-import de.dfki.sds.aticsqlite.s16n.WorkbookGraph;
+import de.dfki.sds.aticsqlite.workbook.WorkbookGraph;
 import edu.lehigh.swat.bench.uba.Generator;
 import edu.lehigh.swat.bench.uba.StreamRDFWriter;
 import java.io.File;

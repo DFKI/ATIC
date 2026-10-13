@@ -1,5 +1,5 @@
 
-package de.dfki.sds.aticsqlite.s16n;
+package de.dfki.sds.aticsqlite.workbook;
 
 /**
  * The direction of a {@link Property} in a {@link Column}.
