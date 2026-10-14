@@ -88,60 +88,27 @@
 
                 <!-- Sheet Tabs -->
                 <div class="mb-2 d-flex align-items-center">
-                    <span class="scroll-arrow me-1" @click="scrollSheets(-1)" title="Scroll left">
-                        <i class="fa fa-chevron-left"></i>
-                    </span>
-
-                    <div class="d-flex flex-nowrap overflow-hidden" :style="{ maxWidth: '600px' }">
-                        <span class="sheet-tab"
-                              :class="{ active: si === currentSheetIndex }"
-                              v-for="(sh, si) in visibleSheets"
-                              :key="sh['@id']"
-                              @click="selectSheet(si)"
-                              :title="sh.name || 'Sheet ' + (si + 1)">
-
-                            <i class="fa fa-file-alt me-1" :style="{ color: si === currentSheetIndex ? '#fff' : '#6c757d' }"></i>
-                            {{ sh.name || 'Sheet ' + (si + 1) }}
-
-                            <span class="delete-sheet" @click.stop="deleteSheet(si)" title="Delete sheet">
-                                <i class="fa fa-times"></i>
-                            </span>
-                        </span>
-
-                        <span v-if="sheets.length > 5" class="text-muted ms-1" style="font-size: 12px;">
-                            ... +{{ sheets.length - 5 }}
-                        </span>
-                    </div>
-
-                    <span class="scroll-arrow ms-1 me-1" @click="scrollSheets(1)" title="Scroll right">
-                        <i class="fa fa-chevron-right"></i>
-                    </span>
-
-                    <button class="btn btn-sm btn-outline-primary ms-2" @click="openCreateSheetModal" title="Add Sheet">
-                        <i class="fa fa-file-alt me-1"></i><i class="fa fa-plus"></i>
-                    </button>
-                    
                     <button class="btn btn-sm btn-outline-primary ms-2" @click="openCreateColumnModal" title="Add Column" :disabled="sheets.length == 0">
                         <i class="fa fa-columns me-1"></i></i><i class="fa fa-plus"></i>
                     </button>
                 </div>
 
                 <!-- Data Table -->
-                <div class="table-container card">
+                <div class="table-container card" @scroll.passive="onTableScroll">
                     <table class="mb-0">
                         <!-- Column Headers -->
                         <thead>
                             <tr>
                                 <!-- Corner cell (empty, sticky) -->
                                 <th class="row-header sticky-corner" rowspan="1">
-                                    <i class="fa fa-arrows-alt text-muted" title="Sheet area"></i>
+                                    &nbsp;
                                 </th>
                                 <th class="cell-header sticky-header"
                                     v-for="(col, ci) in windowColumns"
                                     :key="'col-' + ci">
                                     <div class="col-header-content">
                                         <div v-if="col" class="d-flex align-items-center justify-content-between">
-                                            <div v-if="col?.property?.['@id']" class="col-prop" @click.stop="copyToClipboard(col.property['@id'])" title="Click to copy property URI">
+                                            <div v-if="col?.property?.['@id']" class="col-prop" @click.stop="copyToClipboard(col.property['@id'])" title="Copy property URI">
                                                 <i class="fa fa-copy copy-icon me-1"></i>
                                             </div>
                                             <div class="col-name me-1">
@@ -197,6 +164,41 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <div class="mt-2 d-flex align-items-center">
+                    <span class="scroll-arrow me-1" @click="scrollSheets(-1)" title="Scroll left">
+                        <i class="fa fa-chevron-left"></i>
+                    </span>
+
+                    <div class="d-flex flex-nowrap overflow-hidden" :style="{ maxWidth: '600px' }">
+                        <span class="sheet-tab"
+                              :class="{ active: si === currentSheetIndex }"
+                              v-for="(sh, si) in visibleSheets"
+                              :key="sh['@id']"
+                              @click="selectSheet(si)"
+                              :title="sh.name || 'Sheet ' + (si + 1)">
+
+                            <i class="fa fa-file-alt me-1" :style="{ color: si === currentSheetIndex ? '#fff' : '#6c757d' }"></i>
+                            {{ sh.name || 'Sheet ' + (si + 1) }}
+
+                            <span class="delete-sheet" @click.stop="deleteSheet(si)" title="Delete sheet">
+                                <i class="fa fa-times"></i>
+                            </span>
+                        </span>
+
+                        <span v-if="sheets.length > 5" class="text-muted ms-1" style="font-size: 12px;">
+                            ... +{{ sheets.length - 5 }}
+                        </span>
+                    </div>
+
+                    <span class="scroll-arrow ms-1 me-1" @click="scrollSheets(1)" title="Scroll right">
+                        <i class="fa fa-chevron-right"></i>
+                    </span>
+
+                    <button class="btn btn-sm btn-outline-primary ms-2" @click="openCreateSheetModal" title="Add Sheet">
+                        <i class="fa fa-file-alt me-1"></i><i class="fa fa-plus"></i>
+                    </button>
                 </div>
 
                 <div class="mt-2 text-muted" style="font-size: 12px;">
