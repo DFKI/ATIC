@@ -15,6 +15,10 @@ import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.Session;
 import de.dfki.sds.atic.agent.SessionListener;
 import de.dfki.sds.atic.conf.ConfigLoader;
+import de.dfki.sds.atic.helper.JSONUtils;
+import de.dfki.sds.atic.invex.AticQueryResults;
+import de.dfki.sds.atic.invex.QueryOptions;
+import de.dfki.sds.atic.invex.QueryResults;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
@@ -337,6 +341,11 @@ public class AticServer {
         routes.post("/sparql", this::handleSparql);
         // SPARQL update endpoint
         routes.post("/update", this::handleSparqlUpdate);
+
+        routes.get("/invex", this::handleInvex);
+        routes.query("/invex", this::handleInvex);
+        routes.get("/invex/health", this::getInvexHealth);
+        routes.post("/invex/rebuild", this::postInvexRebuild);
 
         routes.patch("/dataset", this::patchDataset);
 
@@ -1152,6 +1161,205 @@ public class AticServer {
         } finally {
             datasetGraph.end();
         }
+    }
+
+    //-----------------------------------------
+    //invex
+    private void handleInvex(Context ctx) throws IOException, Exception {
+        String accept = ctx.header("Accept");
+        HandlerType method = ctx.method();
+
+        //HTML version for human
+        if (HandlerType.GET.equals(method) && accept != null && accept.contains("text/html")) {
+            try (InputStream is = AticServer.class.getResourceAsStream(
+                    "/de/dfki/sds/aticserver/www/app/invex.html")) {
+                if (is == null) {
+                    ctx.status(404).result("invex.html not found");
+                    return;
+                }
+                String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                ctx.html(html);
+                return;
+            }
+        }
+
+        //need QUERY
+        if (!HandlerType.QUERY.equals(method)) {
+            ctx.status(405).result("Method not allowed. Use QUERY.");
+            return;
+        }
+
+        //from auth
+        int userId = ctx.attribute("user.id");
+
+        JSONObject body = new JSONObject(ctx.body());
+        if (!body.has("operation")
+                || body.isNull("operation")
+                || !(body.opt("operation") instanceof String)
+                || body.getString("operation").isBlank()) {
+            ctx.status(400).json(Map.of(
+                    "status", "failed",
+                    "message", "Missing or invalid 'operation'. Allowed values: initialize, continue."
+            ));
+            return;
+        }
+        String operation = body.getString("operation");
+        if (!operation.equals("initialize") && !operation.equals("continue")) {
+            ctx.status(400).json(Map.of(
+                    "status", "failed",
+                    "message", "Unsupported operation '" + operation
+                    + "'. Allowed values: initialize, continue."
+            ));
+            return;
+        }
+
+        AticQueryResults aqr = null;
+
+        if (operation.equals("continue")) {
+            String queryProcessId = body.optString("queryProcessID");
+            
+            aqr = datasetGraph.calculateRead(() -> {
+                try {
+                    return datasetGraph.proceedWithQuery(queryProcessId);
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            });
+
+        } else if (operation.equals("initialize")) {
+
+            //TODO later maybe fromJson impl in QueryOptions
+            QueryOptions qo = new QueryOptions();
+            if (body.has("queryProcessID") && !body.isNull("queryProcessID")) {
+                qo.setQueryProcessID(body.getString("queryProcessID"));
+            }
+            if (body.has("searchString") && !body.isNull("searchString")) {
+                qo.setSearchString(body.getString("searchString"));
+            }
+            if (body.has("limit") && !body.isNull("limit")) {
+                qo.setLimit(body.getInt("limit"));
+            }
+            if (body.has("offset") && !body.isNull("offset")) {
+                qo.setOffset(body.getInt("offset"));
+            }
+
+            //from auth
+            qo.setUserID(userId);
+
+            aqr = datasetGraph.initializeQuery(qo);
+        }
+
+        if (aqr == null) {
+            ctx.status(500).json(Map.of(
+                    "status", "failed",
+                    "message", "AticQueryResults was null"
+            ));
+            return;
+        }
+
+        JSONObject resp = JSONUtils.createJSONObject();
+        resp.put("success", aqr.isSuccess());
+        resp.put("queryAccepted", aqr.isQueryAccepted());
+
+        // Found nodes
+        List<Node> nodes = aqr.getFoundNodes();
+        if (nodes != null) {
+            JSONArray nodesJson = new JSONArray();
+            for (Node node : nodes) {
+                if (node != null) {
+                    nodesJson.put(node.toString());
+                } else {
+                    nodesJson.put(JSONObject.NULL);
+                }
+            }
+            resp.put("foundNodes", nodesJson);
+        }
+
+        String processID = aqr.getQueryProcessID();
+        if (processID != null) {
+            resp.put("queryProcessID", processID);
+        }
+
+        // Raw query result metadata
+        QueryResults raw = aqr.getRawResults();
+
+        if (raw != null) {
+            JSONObject rawJson = new JSONObject();
+
+            rawJson.put("success", raw.isSuccess());
+            rawJson.put("queryAccepted", raw.isQueryAccepted());
+            rawJson.put("responseTime", raw.getResponseTime());
+            rawJson.put("limit", raw.getLimit());
+            rawJson.put("offset", raw.getOffset());
+            rawJson.put("luceneUpperBoundGuestimation", raw.getLuceneUpperBoundGuestimation());
+            rawJson.put("luceneUpperBoundGuestimationTime", raw.getLuceneUpperBoundGuestimationTime());
+            rawJson.put("luceneLowerBound", raw.getLuceneLowerBound());
+            rawJson.put("returnedResourceIDsCount", raw.getReturnedResourceIDsCount());
+
+            String rawProcessID = raw.getQueryProcessID();
+            if (rawProcessID != null) {
+                rawJson.put("queryProcessID", rawProcessID);
+            }
+
+            String error = raw.getError();
+            if (error != null) {
+                rawJson.put("error", error);
+            }
+
+            long[] ids = raw.getFoundResourceIDs();
+            if (ids != null) {
+                JSONArray idsJson = new JSONArray();
+                for (long id : ids) {
+                    idsJson.put(id);
+                }
+                rawJson.put("foundResourceIDs", idsJson);
+            }
+
+            resp.put("rawResults", rawJson);
+        }
+
+        ctx.json(resp.toString(4));
+    }
+
+    private void getInvexHealth(Context ctx) {
+        JSONObject json = new JSONObject();
+
+        json.put("available", datasetGraph.isInvexAvailable());
+
+        ctx.status(200)
+                .contentType("application/json")
+                .result(json.toString());
+    }
+
+    //TODO later should be done with servicia for long-running job
+    private void postInvexRebuild(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        if (!datasetGraph.isAdmin(ictx)) {
+            ctx.status(403).json(Map.of(
+                    "status", "failed",
+                    "message", "Administrator privileges are required to rebuild the index."
+            ));
+            return;
+        }
+
+        JSONObject json = new JSONObject();
+
+        try {
+            datasetGraph.rebuildInvex();
+        } catch (Exception ex) {
+            json.put("status", "failed");
+            json.put("stacktrace", ExceptionUtils.getStackTrace(ex));
+            json.put("message", ex.getMessage());
+
+            ctx.status(500)
+                    .contentType("application/json")
+                    .result(json.toString());
+            return;
+        }
+
+        json.put("status", "success");
+        ctx.status(200).json(json.toString());
     }
 
     //-----------------------------------------

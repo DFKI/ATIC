@@ -1441,7 +1441,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      * @param ctx the invocation context containing caller information
      * @return {@code true} if the caller is the admin user
      */
-    /*package*/ boolean isAdmin(InvocationContext ctx) {
+    public boolean isAdmin(InvocationContext ctx) {
         return ctx.getUserId() == adminUser.getId();
     }
 
