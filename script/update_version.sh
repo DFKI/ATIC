@@ -16,6 +16,7 @@ PROJECTS=(
     "atic-server"
     "atic-sqlite-jmh"
     "atic-sqlite-tdb2tests"
+    "."
 )
 
 for project in "${PROJECTS[@]}"; do
