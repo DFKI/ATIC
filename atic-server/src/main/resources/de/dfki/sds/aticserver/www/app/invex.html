@@ -98,8 +98,7 @@
                                 </select>
                             </div>
 
-                            <div class="col-md-9"
-                                 v-if="operation === 'initialize'">
+                            <div class="col-md-9">
                                 <label for="searchString" class="form-label">
                                     Search string
                                 </label>
@@ -107,47 +106,85 @@
                                        type="text"
                                        class="form-control"
                                        v-model="searchString"
+                                       @focus="operation = 'initialize'"
+                                       @input="operation = 'initialize'"
                                        placeholder="Enter search string">
                             </div>
 
-                            <div class="col-md-9"
-                                 v-if="operation === 'continue'">
-                                <label for="queryProcessID" class="form-label">
-                                    Query process ID
-                                </label>
-                                <input id="queryProcessID"
-                                       type="text"
-                                       class="form-control"
-                                       v-model="queryProcessID"
-                                       placeholder="Enter query process ID"
-                                       required>
-                            </div>
+
 
                             <template v-if="operation === 'initialize'">
-                                <div class="col-md-3">
-                                    <label for="limit" class="form-label">
-                                        Limit
-                                    </label>
-                                    <input id="limit"
-                                           type="number"
-                                           class="form-control"
-                                           v-model="limit"
-                                           min="1"
-                                           step="1"
-                                           placeholder="Default">
-                                </div>
+                                <div class="col-12">
+                                    <div class="d-flex align-items-center flex-wrap gap-3 border rounded px-2 py-2 bg-body-tertiary">
+                                        <small class="text-muted">
+                                            <i class="fa fa-sliders-h me-1"></i>
+                                            Options
+                                        </small>
 
-                                <div class="col-md-3">
-                                    <label for="offset" class="form-label">
-                                        Offset
-                                    </label>
-                                    <input id="offset"
-                                           type="number"
-                                           class="form-control"
-                                           v-model="offset"
-                                           min="0"
-                                           step="1"
-                                           placeholder="Default">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <label for="limit" class="form-label small mb-0">
+                                                Limit
+                                            </label>
+                                            <input id="limit"
+                                                   type="number"
+                                                   class="form-control form-control-sm"
+                                                   style="width: 85px"
+                                                   v-model="limit"
+                                                   min="1"
+                                                   step="1"
+                                                   placeholder="Default">
+                                        </div>
+
+                                        <div class="d-flex align-items-center gap-2">
+                                            <label for="offset" class="form-label small mb-0">
+                                                Offset
+                                            </label>
+                                            <input id="offset"
+                                                   type="number"
+                                                   class="form-control form-control-sm"
+                                                   style="width: 85px"
+                                                   v-model="offset"
+                                                   min="0"
+                                                   step="1"
+                                                   placeholder="Default">
+                                        </div>
+
+                                        <div class="form-check form-switch mb-0">
+                                            <input id="autoContinue"
+                                                   type="checkbox"
+                                                   class="form-check-input"
+                                                   role="switch"
+                                                   v-model="autoContinue">
+                                            <label for="autoContinue"
+                                                   class="form-check-label small">
+                                                Auto-continue
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <template v-if="operation === 'continue'">
+                                <div class="col-12">
+                                    <div class="d-flex align-items-center flex-wrap gap-3 border rounded px-2 py-2 bg-body-tertiary">
+                                        <small class="text-muted">
+                                            <i class="fa fa-sliders-h me-1"></i>
+                                            Options
+                                        </small>
+
+                                        <div class="d-flex align-items-center gap-2">
+                                            <label for="queryProcessID" class="form-label small mb-0 text-nowrap">
+                                                Query process ID
+                                            </label>
+                                            <input id="queryProcessID"
+                                                   type="text"
+                                                   class="form-control form-control-sm"
+                                                   v-model="queryProcessID"
+                                                   placeholder="Enter query process ID"
+                                                   style="width: 38ch"
+                                                   required>
+                                        </div>
+                                    </div>
                                 </div>
                             </template>
 
@@ -166,10 +203,18 @@
 
                                 <button type="button"
                                         class="btn btn-outline-secondary"
+                                        @click="back()"
+                                        v-if="operation === 'continue'"
+                                        :disabled="querying">
+                                    Back
+                                </button>
+
+                                <!-- button type="button"
+                                        class="btn btn-outline-secondary"
                                         @click="clearQuery()"
                                         :disabled="querying">
                                     Clear
-                                </button>
+                                </button -->
 
                                 <small v-if="queryMessage"
                                        :class="querySuccess
@@ -266,240 +311,251 @@
         </div>
 
         <script>
-        const {createApp} = Vue;
+const {createApp} = Vue;
 
-        createApp({
-            data() {
-                return {
-                    user: null,
+createApp({
+    data() {
+        return {
+            user: null,
 
-                    healthAvailable: null,
-                    healthMessage: 'Checking health...',
+            healthAvailable: null,
+            healthMessage: 'Checking health...',
 
-                    rebuilding: false,
-                    rebuildMessage: '',
-                    rebuildSuccess: null,
+            rebuilding: false,
+            rebuildMessage: '',
+            rebuildSuccess: null,
 
-                    operation: 'initialize',
-                    searchString: '',
-                    queryProcessID: '',
-                    limit: '',
-                    offset: '',
+            operation: 'initialize',
+            searchString: '',
+            queryProcessID: '',
+            limit: 20,
+            offset: '',
 
-                    querying: false,
-                    queryMessage: '',
-                    querySuccess: false,
-                    queryResult: null,
-                    showJson: false
-                };
-            },
+            querying: false,
+            queryMessage: '',
+            querySuccess: false,
+            queryResult: null,
+            showJson: false,
 
-            computed: {
-                foundNodes() {
-                    const nodes = this.queryResult?.foundNodes;
-                    return Array.isArray(nodes) ? nodes : [];
+            autoContinue: true
+        };
+    },
+
+    computed: {
+        foundNodes() {
+            const nodes = this.queryResult?.foundNodes;
+            return Array.isArray(nodes) ? nodes : [];
+        }
+    },
+
+    created() {
+        this.getAuthMe();
+        this.getInvexHealth();
+    },
+
+    methods: {
+        getAuthMe() {
+            axios.get('/auth/me')
+                    .then(response => {
+                        this.user = response.data;
+                    })
+                    .catch(error => {
+                        if (error.response?.status === 401) {
+                            window.location.href = '/app/unauthorized.html';
+                        }
+                    });
+        },
+
+        getInvexHealth() {
+            axios.get('/invex/health')
+                    .then(response => {
+                        this.healthAvailable = response.data?.available === true;
+                        this.healthMessage = this.healthAvailable ? 'available' : 'unavailable';
+                    })
+                    .catch(() => {
+                        this.healthAvailable = false;
+                        this.healthMessage = 'Health check failed';
+                    });
+        },
+
+        postInvexRebuild() {
+            if (this.rebuilding) {
+                return;
+            }
+
+            this.rebuilding = true;
+            this.rebuildMessage = 'Rebuilding...';
+            this.rebuildSuccess = null;
+
+            axios.post('/invex/rebuild')
+                    .then(response => {
+                        const data = response.data || {};
+
+                        this.rebuildSuccess = data.status === 'success'
+                                || data.status === 'completed';
+
+                        this.rebuildMessage = data.message
+                                || (this.rebuildSuccess
+                                        ? 'Rebuild completed.'
+                                        : 'Rebuild failed.');
+
+                        this.getInvexHealth();
+                    })
+                    .catch(error => {
+                        this.rebuildSuccess = false;
+                        this.rebuildMessage =
+                                error.response?.data?.message
+                                || `Rebuild failed (HTTP ${
+                                error.response?.status || 'network error'
+                                }).`;
+                    })
+                    .finally(() => {
+                        this.rebuilding = false;
+                    });
+        },
+
+        postQuery() {
+            if (this.querying) {
+                return;
+            }
+
+            const body = {
+                operation: this.operation
+            };
+
+            if (this.operation === 'initialize') {
+                if (this.searchString.trim() !== '') {
+                    body.searchString = this.searchString.trim();
                 }
-            },
 
-            created() {
-                this.getAuthMe();
-                this.getInvexHealth();
-            },
+                if (this.limit !== '') {
+                    const value = Number(this.limit);
 
-            methods: {
-                getAuthMe() {
-                    axios.get('/auth/me')
-                            .then(response => {
-                                this.user = response.data;
-                            })
-                            .catch(error => {
-                                if (error.response?.status === 401) {
-                                    window.location.href = '/app/unauthorized.html';
-                                }
-                            });
-                },
-
-                getInvexHealth() {
-                    axios.get('/invex/health')
-                            .then(response => {
-                                this.healthAvailable = response.data?.available === true;
-                                this.healthMessage = this.healthAvailable ? 'available' : 'unavailable';
-                            })
-                            .catch(() => {
-                                this.healthAvailable = false;
-                                this.healthMessage = 'Health check failed';
-                            });
-                },
-
-                postInvexRebuild() {
-                    if (this.rebuilding) {
-                        return;
-                    }
-
-                    this.rebuilding = true;
-                    this.rebuildMessage = 'Rebuilding...';
-                    this.rebuildSuccess = null;
-
-                    axios.post('/invex/rebuild')
-                            .then(response => {
-                                const data = response.data || {};
-
-                                this.rebuildSuccess = data.status === 'success'
-                                        || data.status === 'completed';
-
-                                this.rebuildMessage = data.message
-                                        || (this.rebuildSuccess
-                                                ? 'Rebuild completed.'
-                                                : 'Rebuild failed.');
-
-                                this.getInvexHealth();
-                            })
-                            .catch(error => {
-                                this.rebuildSuccess = false;
-                                this.rebuildMessage =
-                                        error.response?.data?.message
-                                        || `Rebuild failed (HTTP ${
-                                        error.response?.status || 'network error'
-                                        }).`;
-                            })
-                            .finally(() => {
-                                this.rebuilding = false;
-                            });
-                },
-
-                postQuery() {
-                    if (this.querying) {
-                        return;
-                    }
-
-                    const body = {
-                        operation: this.operation
-                    };
-
-                    if (this.operation === 'initialize') {
-                        if (this.searchString.trim() !== '') {
-                            body.searchString = this.searchString.trim();
-                        }
-
-                        if (this.limit !== '') {
-                            const value = Number(this.limit);
-
-                            if (!Number.isInteger(value) || value < 1) {
-                                this.queryMessage =
-                                        'Limit must be a positive integer.';
-                                this.querySuccess = false;
-                                return;
-                            }
-
-                            body.limit = value;
-                        }
-
-                        if (this.offset !== '') {
-                            const value = Number(this.offset);
-
-                            if (!Number.isInteger(value) || value < 0) {
-                                this.queryMessage =
-                                        'Offset must be a non-negative integer.';
-                                this.querySuccess = false;
-                                return;
-                            }
-
-                            body.offset = value;
-                        }
-                    } else if (this.operation === 'continue') {
-                        if (!this.queryProcessID.trim()) {
-                            this.queryMessage = 'Query process ID is required.';
-                            this.querySuccess = false;
-                            return;
-                        }
-
-                        body.queryProcessID = this.queryProcessID.trim();
-                    } else {
-                        this.queryMessage = 'Unsupported operation.';
+                    if (!Number.isInteger(value) || value < 1) {
+                        this.queryMessage =
+                                'Limit must be a positive integer.';
                         this.querySuccess = false;
                         return;
                     }
 
-                    this.querying = true;
-                    this.queryMessage = '';
-                    this.queryResult = null;
-                    this.showJson = false;
+                    body.limit = value;
+                }
 
-                    axios.request({
-                        method: 'QUERY',
-                        url: '/invex',
-                        data: body,
-                        headers: {
-                            'Content-Type': 'application/json'
+                if (this.offset !== '') {
+                    const value = Number(this.offset);
+
+                    if (!Number.isInteger(value) || value < 0) {
+                        this.queryMessage =
+                                'Offset must be a non-negative integer.';
+                        this.querySuccess = false;
+                        return;
+                    }
+
+                    body.offset = value;
+                }
+            } else if (this.operation === 'continue') {
+                if (!this.queryProcessID.trim()) {
+                    this.queryMessage = 'Query process ID is required.';
+                    this.querySuccess = false;
+                    return;
+                }
+
+                body.queryProcessID = this.queryProcessID.trim();
+            } else {
+                this.queryMessage = 'Unsupported operation.';
+                this.querySuccess = false;
+                return;
+            }
+
+            this.querying = true;
+            this.queryMessage = '';
+            this.queryResult = null;
+            this.showJson = false;
+
+            axios.request({
+                method: 'QUERY',
+                url: '/invex',
+                data: body,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+                    .then(response => {
+                        this.queryResult = response.data;
+                        this.querySuccess = response.data?.success === true;
+
+                        this.queryMessage = this.querySuccess
+                                ? 'Query completed successfully.'
+                                : 'Query returned an unsuccessful result.';
+
+                        const processID =
+                                response.data?.queryProcessID
+                                || response.data?.rawResults?.queryProcessID;
+
+                        if (processID) {
+                            this.queryProcessID = processID;
+                        }
+
+                        //auto continue
+                        if (this.autoContinue && this.querySuccess && this.operation === 'initialize') {
+                            this.querying = false;
+                            this.operation = 'continue';
+                            this.postQuery();
                         }
                     })
-                            .then(response => {
-                                this.queryResult = response.data;
-                                this.querySuccess =
-                                        response.data?.success === true
-                                        || response.data?.rawResults?.success === true;
+                    .catch(error => {
+                        this.querySuccess = false;
+                        this.queryMessage =
+                                error.response?.data?.message
+                                || `Query failed (HTTP ${
+                                error.response?.status || 'network error'
+                                }).`;
 
-                                this.queryMessage = this.querySuccess
-                                        ? 'Query completed successfully.'
-                                        : 'Query returned an unsuccessful result.';
+                        if (error.response?.data) {
+                            this.queryResult = error.response.data;
+                            this.showJson = true;
+                        }
+                    })
+                    .finally(() => {
+                        this.querying = false;
+                    });
+        },
 
-                                const processID =
-                                        response.data?.queryProcessID
-                                        || response.data?.rawResults?.queryProcessID;
-
-                                if (processID) {
-                                    this.queryProcessID = processID;
-                                }
-                            })
-                            .catch(error => {
-                                this.querySuccess = false;
-                                this.queryMessage =
-                                        error.response?.data?.message
-                                        || `Query failed (HTTP ${
-                                        error.response?.status || 'network error'
-                                        }).`;
-
-                                if (error.response?.data) {
-                                    this.queryResult = error.response.data;
-                                    this.showJson = true;
-                                }
-                            })
-                            .finally(() => {
-                                this.querying = false;
-                            });
-                },
-
-                formatNode(node) {
-                    if (node == null) {
-                        return '';
-                    }
-
-                    if (typeof node === 'string') {
-                        return node;
-                    }
-
-                    return JSON.stringify(node, null, 2);
-                },
-
-                clearQuery() {
-                    this.searchString = '';
-                    this.queryProcessID = '';
-                    this.limit = '';
-                    this.offset = '';
-                    this.queryMessage = '';
-                    this.queryResult = null;
-                    this.querySuccess = false;
-                    this.showJson = false;
-                },
-
-                postLogout() {
-                    axios.post('/auth/logout')
-                            .then(response => {
-                                window.location.href = response.data.redirect;
-                            });
-                }
+        formatNode(node) {
+            if (node == null) {
+                return '';
             }
-        }).mount('#app');
+
+            if (typeof node === 'string') {
+                return node;
+            }
+
+            return JSON.stringify(node, null, 2);
+        },
+
+        back() {
+            this.operation = 'initialize';
+        },
+
+        clearQuery() {
+            this.searchString = '';
+            this.queryProcessID = '';
+            this.limit = '';
+            this.offset = '';
+            this.queryMessage = '';
+            this.queryResult = null;
+            this.querySuccess = false;
+            this.showJson = false;
+        },
+
+        postLogout() {
+            axios.post('/auth/logout')
+                    .then(response => {
+                        window.location.href = response.data.redirect;
+                    });
+        }
+    }
+}).mount('#app');
         </script>
 
     </body>
