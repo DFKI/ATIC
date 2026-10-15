@@ -91,6 +91,10 @@
                     <button class="btn btn-sm btn-outline-primary ms-2" @click="openCreateColumnModal" title="Add Column" :disabled="sheets.length == 0">
                         <i class="fa fa-columns me-1"></i></i><i class="fa fa-plus"></i>
                     </button>
+                    
+                    <button class="btn btn-sm btn-outline-primary ms-2" @click="suggestColumns" title="Suggest Columns" :disabled="sheets.length == 0">
+                        <i class="fa fa-columns me-1"></i></i><i class="fa fa-magic"></i>
+                    </button>
                 </div>
 
                 <!-- Data Table -->
@@ -915,6 +919,22 @@ createApp({
             axios.post('/workbooks/' + encodeURIComponent(this.workbookUri) +
                     '/sheets/' + encodeURIComponent(this.currentSheet['@id']) + '/columns',
                     [colConfig])
+                    .then(response => {
+                        // Reload workbook to get updated columns
+                        this.loadWorkbookDetail();
+                    })
+                    .finally(() => {
+                        this.loading = false;
+                        const modalEl = this.$refs.create_column_modal;
+                        const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
+                        if (modalInstance)
+                            modalInstance.hide();
+                    });
+        },
+        
+        suggestColumns() {
+            axios.post('/workbooks/' + encodeURIComponent(this.workbookUri) +
+                    '/sheets/' + encodeURIComponent(this.currentSheet['@id']) + '/suggested-columns', {})
                     .then(response => {
                         // Reload workbook to get updated columns
                         this.loadWorkbookDetail();

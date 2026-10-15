@@ -8,12 +8,16 @@ import de.dfki.sds.aticsqlite.bridge.FragmentSettings;
 import de.dfki.sds.aticsqlite.bridge.ResultSetJsonMapper;
 import java.awt.Rectangle;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.stream.Collectors;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.WordUtils;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.GraphEventManager;
 import org.apache.jena.graph.Node;
@@ -45,13 +49,10 @@ import org.json.JSONObject;
  */
 public class WorkbookGraph implements AticGraph {
 
-    
     //TODO if @type is same for all in content, could be also on Cell
     //TODO turn uri nodes to FragmentNodes
-    
     //TODO build an endpoint: /workbooks/{uri}/sheets/{uri}/cells    with ?window=0,0,10,10 or ?position=0,0
     //use GET POST DELETE
-    
     public static final Node node = NodeFactory.createURI("urn:atic:workbooks");
 
     /**
@@ -74,7 +75,7 @@ public class WorkbookGraph implements AticGraph {
     private final Node entityRowColumn = NodeFactory.createURI("urn:entity:row");
 
     private Map<WorkbookSheet, SheetCache> cacheMap;
-    
+
     private ResultSetJsonMapper mapper;
 
     //TODO expiration time would be useful
@@ -116,10 +117,10 @@ public class WorkbookGraph implements AticGraph {
         graphEventManager = new SimpleEventManager();
 
         cacheMap = new HashMap<>();
-        
+
         mapper = new ResultSetJsonMapper(FragmentSettings.defaultSettings());
     }
-    
+
     public void ensureGraph(InvocationContext ctx) {
         boolean exists = datasetGraph.calculateRead(() -> {
             return datasetGraph.containsGraph(node, ctx);
@@ -279,14 +280,12 @@ public class WorkbookGraph implements AticGraph {
     public List<Node> addColumns(Node workbook, Node sheet, List<ColumnConfig> columnConfigs, InvocationContext ctx) {
         JSONObject json = getJson(workbook, ctx);
         JSONArray sheets = json.optJSONArray("sheets");
-
         if (sheets == null) {
             throw new IllegalStateException("No sheets available for workbook: " + workbook);
         }
 
         JSONObject sheetJson = null;
         String sheetUri = sheet.getURI();
-
         for (int i = 0; i < sheets.length(); i++) {
             JSONObject candidate = sheets.getJSONObject(i);
             if (sheetUri.equals(candidate.optString("@id", null))) {
@@ -294,7 +293,6 @@ public class WorkbookGraph implements AticGraph {
                 break;
             }
         }
-
         if (sheetJson == null) {
             throw new IllegalStateException("Sheet not found in workbook: " + sheetUri);
         }
@@ -305,16 +303,41 @@ public class WorkbookGraph implements AticGraph {
             sheetJson.put("columns", columns);
         }
 
+        // Collect property URIs already configured for this sheet.
+        Set<String> existingPropertyUris = new HashSet<>();
+        for (int i = 0; i < columns.length(); i++) {
+            JSONObject columnJson = columns.optJSONObject(i);
+            if (columnJson == null) {
+                continue;
+            }
+
+            JSONObject propertyJson = columnJson.optJSONObject("property");
+            if (propertyJson != null) {
+                String propertyUri = propertyJson.optString("@id", null);
+                if (propertyUri != null) {
+                    existingPropertyUris.add(propertyUri);
+                }
+            }
+        }
+
         List<Node> result = new ArrayList<>();
-
         for (ColumnConfig columnConfig : columnConfigs) {
-            String urn = AticGraphUtils.createURN("column");
-            Node column = NodeFactory.createURI(urn);
+            Node property = columnConfig.getProperty();
+            if (property == null || !property.isURI()) {
+                continue;
+            }
 
+            String propertyUri = property.getURI();
+            // Also prevents duplicates within this input batch.
+            if (!existingPropertyUris.add(propertyUri)) {
+                continue;
+            }
+
+            String urn = AticGraphUtils.createURN("column");
             JSONObject columnJson = columnConfig.toJson();
             columnJson.put("@id", urn);
             columns.put(columnJson);
-            result.add(column);
+            result.add(NodeFactory.createURI(urn));
         }
 
         setJson(workbook, json, ctx);
@@ -361,16 +384,13 @@ public class WorkbookGraph implements AticGraph {
     }
 
     //sheet stuff
-    
     public Cell get(Node workbook, Node sheet, int rowIndex, int columnIndex, InvocationContext ctx) {
 
         SheetCache cache = cacheMap.computeIfAbsent(new WorkbookSheet(workbook, sheet), k -> new SheetCache());
 
         //get the config
         JSONObject selectedWorkbook = getJson(workbook, ctx);
-
         JSONObject selectedSheet = getSheet(selectedWorkbook, sheet);
-
         SheetConfig sheetConfig = SheetConfig.fromJson(selectedSheet);
 
         //we can not load all of them but a window
@@ -429,9 +449,7 @@ public class WorkbookGraph implements AticGraph {
         }
 
         //JSONObject selectedColumn = getColumn(selectedSheet, column);
-
         //ColumnConfig columnConfig = ColumnConfig.fromJson(selectedColumn);
-
         ResourceColumn key = updateValueCache(cache, rowEntity, rowIndex, column, selectedSheet, ctx);
 
         //value cache is now filled
@@ -454,7 +472,7 @@ public class WorkbookGraph implements AticGraph {
     public Window get(Node workbook, Node sheet, Rectangle rect, InvocationContext ctx) {
         JSONObject selectedWorkbook = getJson(workbook, ctx);
         JSONObject selectedSheet = getSheet(selectedWorkbook, sheet);
-        
+
         Window window = new Window();
         for (int rowIndex = rect.y; rowIndex < rect.y + rect.height; rowIndex++) {
             List<Cell> row = new ArrayList<>();
@@ -464,16 +482,16 @@ public class WorkbookGraph implements AticGraph {
                 row.add(cell);
             }
         }
-        
+
         SheetCache cache = cacheMap.computeIfAbsent(new WorkbookSheet(workbook, sheet), k -> new SheetCache());
         for (int colIndex = rect.x; colIndex < rect.x + rect.width; colIndex++) {
             Node col = cache.columnCache.getObject(colIndex);
-            
-            if(col == null) {
+
+            if (col == null) {
                 window.getColHeader().add(null);
-                
+
             } else {
-        
+
                 //TODO improve this later
                 JSONObject selectedColumn = getColumn(selectedSheet, col);
                 ColumnConfig columnConfig = ColumnConfig.fromJson(selectedColumn);
@@ -483,25 +501,25 @@ public class WorkbookGraph implements AticGraph {
                 window.getColHeader().add(columnConfig);
             }
         }
-        
+
         for (int rowIndex = rect.y; rowIndex < rect.y + rect.height; rowIndex++) {
             Node row = cache.rowCache.getObject(rowIndex);
-            
+
             Cell.Builder cellBuilder = Cell.builder()
-                .workbook(workbook)
-                .sheet(sheet)
-                .location(rowIndex, -1);
-         
-            if(row != null) {
+                    .workbook(workbook)
+                    .sheet(sheet)
+                    .location(rowIndex, -1);
+
+            if (row != null) {
                 cellBuilder
-                 //.column(row)
-                 //.rowEntity(row)
-                 .addNode(row);
+                        //.column(row)
+                        //.rowEntity(row)
+                        .addNode(row);
             }
-            
+
             window.getRowHeader().add(cellBuilder.build());
         }
-        
+
         return window;
     }
 
@@ -511,7 +529,7 @@ public class WorkbookGraph implements AticGraph {
         JSONObject selectedWorkbook = getJson(workbook, ctx);
         JSONObject selectedSheet = getSheet(selectedWorkbook, sheet);
         SheetConfig sheetConfig = SheetConfig.fromJson(selectedSheet);
-        
+
         updateRowCache(cache, sheetConfig.getRowQuery(), rowIndex, ctx);
 
         Node rowEntity = cache.rowCache.getObject(rowIndex);
@@ -544,10 +562,10 @@ public class WorkbookGraph implements AticGraph {
                 removeColumnValues(rowEntity, property, columnConfig.getDirection(), cell.getNodes(), ctx);
                 break;
         }
-        
+
         //since add is lazy, we need to flush
         datasetGraph.flush();
-        
+
         //since resource changed, cache might be old so we invalidate it by deleting it
         ResourceColumn key = new ResourceColumn(rowEntity, column);
         cache.valueCache.remove(key);
@@ -564,10 +582,93 @@ public class WorkbookGraph implements AticGraph {
         }
     }
 
+    //extra
+    
+    public void addSuggestedColumns(Node workbook, Node sheet, InvocationContext ctx) {
+        SheetCache cache = cacheMap.computeIfAbsent(
+                new WorkbookSheet(workbook, sheet),
+                k -> new SheetCache()
+        );
+
+        JSONObject selectedWorkbook = getJson(workbook, ctx);
+        JSONObject selectedSheet = getSheet(selectedWorkbook, sheet);
+        SheetConfig sheetConfig = SheetConfig.fromJson(selectedSheet);
+
+        // TODO later: sample from SPARQL query
+        List<Node> sample = cache.rowCache.toDeflatedList();
+
+        if (sample == null || sample.isEmpty()) {
+            return;
+        }
+
+        Set<Node> visitedProperties = new HashSet<>();
+        List<ColumnConfig> columnConfigs = new ArrayList<>();
+
+        for (Node rowEntity : sample) {
+            if (rowEntity == null || !rowEntity.isConcrete()) {
+                continue;
+            }
+
+            for (Direction direction : List.of(
+                    Direction.Outgoing,
+                    Direction.Incoming)) {
+
+                ExtendedIterator<Quad> iterator = direction == Direction.Outgoing
+                        ? (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, rowEntity, Node.ANY, Node.ANY, ctx)
+                        : (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, Node.ANY, Node.ANY, rowEntity, ctx);
+
+                try {
+                    while (iterator.hasNext()) {
+                        Quad quad = iterator.next();
+                        Node property = quad.getPredicate();
+
+                        // The first occurrence determines the column configuration.
+                        if (!visitedProperties.add(property)) {
+                            continue;
+                        }
+
+                        ColumnType type;
+                        if (direction == Direction.Incoming) {
+                            type = ColumnType.Resource;
+                        } else if (quad.getObject().isLiteral()) {
+                            type = ColumnType.Literal;
+                        } else {
+                            type = ColumnType.Resource;
+                        }
+
+                        String localName = property.getLocalName(); //TODO later AticGraphUtils.getLocalName(property.getURI());
+                        String[] segments = StringUtils.splitByCharacterTypeCamelCase(localName);
+
+                        StringJoiner name = new StringJoiner(" ");
+                        for (String segment : segments) {
+                            if (!segment.isBlank()) {
+                                name.add(WordUtils.capitalizeFully(segment));
+                            }
+                        }
+
+                        ColumnConfig columnConfig = ColumnConfig.builder()
+                                .name(name.toString())
+                                .property(property)
+                                .type(type)
+                                .direction(direction)
+                                .build();
+
+                        columnConfigs.add(columnConfig);
+                    }
+                } finally {
+                    iterator.close();
+                }
+            }
+        }
+
+        if (!columnConfigs.isEmpty()) {
+            columnConfigs.sort(Comparator.comparing(ColumnConfig::getName, String.CASE_INSENSITIVE_ORDER));
+            addColumns(workbook, sheet, columnConfigs, ctx);
+        }
+    }
+
     //set helper
-    
     //TODO solve Quad.defaultGraphIRI for set
-    
     private void addColumnValues(Node rowEntity, Node property, Direction direction, List<Node> values, InvocationContext ctx) {
         for (Node value : values) {
             if (direction == Direction.Outgoing) {
@@ -610,7 +711,6 @@ public class WorkbookGraph implements AticGraph {
         }
     }
 
-    
     //cache update
     private void updateColumnCache(JSONArray columns, SheetCache cache) {
         for (int i = 0; i < columns.length(); i++) {
@@ -705,7 +805,6 @@ public class WorkbookGraph implements AticGraph {
                     }
 
                     //TODO uri node can be enriched to FragmentNodes
-                    
                     //update cache
                     cache.valueCache.put(new ResourceColumn(res, col), values);
                 }
@@ -980,9 +1079,8 @@ public class WorkbookGraph implements AticGraph {
     public boolean dependsOn(Graph other, InvocationContext ctx) {
         throw new UnsupportedOperationException("Not supported yet.");
     }
-    
+
     //getter & setter
-    
     public FragmentSettings getFragmentSettings() {
         return mapper.getFragmentSettings();
     }

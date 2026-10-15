@@ -401,6 +401,7 @@ public class AticServer {
         routes.post("/workbooks/{workbookUri}/sheets/{sheetUri}/cells", this::postCell);
         routes.delete("/workbooks/{workbookUri}/sheets/{sheetUri}/cells", this::deleteCell);
         routes.delete("/workbooks/{workbookUri}", this::deleteWorkbook);
+        routes.post("/workbooks/{workbookUri}/sheets/{sheetUri}/suggested-columns", this::postSuggestedColumns);
     }
 
     private void getAppLogin(Context ctx) throws IOException {
@@ -673,6 +674,14 @@ public class AticServer {
 
         datasetGraph.executeWrite(() -> graph.set(workbook, sheet, rect, cell, Operation.Remove, ictx));
         ctx.status(204);
+    }
+    
+    private void postSuggestedColumns(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Node workbook = NodeFactory.createURI(ctx.pathParam("workbookUri"));
+        Node sheet = NodeFactory.createURI(ctx.pathParam("sheetUri"));
+
+        datasetGraph.executeWrite(() -> datasetGraph.getWorkbookGraph().addSuggestedColumns(workbook, sheet, ictx));
     }
 
     //------------------------------------------
