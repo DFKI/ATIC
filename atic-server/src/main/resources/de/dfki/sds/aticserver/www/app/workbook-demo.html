@@ -259,7 +259,7 @@
 
             <!-- =================== CREATE SHEET MODAL =================== -->
             <div class="modal" id="createSheetModal" tabindex="-1" ref="create_sheet_modal">
-                <div class="modal-dialog">
+                <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">Create Sheet</h5>
@@ -273,7 +273,7 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">SPARQL Row Query</label>
-                                <textarea class="form-control" rows="4" v-model="newSheetRowQuery"
+                                <textarea class="form-control" rows="15" v-model="newSheetRowQuery"
                                           placeholder="?rowEntity a ..."
                                           style="font-family: monospace; font-size: 12px;"></textarea>
                                 <div class="form-text">
@@ -474,9 +474,9 @@
         <script id="render-cell-value-template" type="x-template">
             <div class="cell-value-tag" :title="fullValueText">
             <span v-if="isResource">
-            <a :href="value" target="_blank" class="text-decoration-none" style="font-size: 13px;">
-            <i class="fa fa-link me-1"></i>{{ displayText }}
-            </a>
+            <div @click.stop="copyToClipboard(fullValueText)" title="Copy">
+                <i class="fa fa-link me-1"></i>{{ fullValueText }}
+            </div>
             </span>
             <span v-else-if="isBoolean">
             <input type="checkbox" :checked="value === true" disabled style="cursor: default;">
@@ -491,7 +491,7 @@
             {{ valueText }}
             </span>
             <span v-else>
-            <i class="fa fa-font me-1 text-muted"></i>
+            <!-- i class="fa fa-font me-1 text-muted"></i -->
             {{ valueText }}
             </span>
             </div>
@@ -539,7 +539,24 @@ const CellValueRenderer = {
             return u.length > 60 ? u.substring(0, 57) + '...' : u;
         },
         fullValueText() {
-            return this.isResource ? this.val['@id'] : JSON.stringify(this.val);
+            return this.isResource ? this.val['@id'] : this.val['@value'];
+        }
+    },
+    methods: {
+        copyToClipboard(text) {
+            if (!text)
+                return;
+            console.log(text);
+            navigator.clipboard.writeText(text).then(() => {
+                // Brief visual feedback
+                const toast = document.createElement('div');
+                toast.className = 'clipboard-toast';
+                toast.textContent = 'Copied: ' + text;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+            });
         }
     }
 };
@@ -585,7 +602,7 @@ createApp({
             // Modals
             newWorkbookName: '',
             newSheetName: '',
-            newSheetRowQuery: '?rowEntity a rdf:Resource .',
+            newSheetRowQuery: '',
             newColumnName: '',
             newColumnProperty: 'pimo:core#prefLabel',
             newColumnDirection: 'Outgoing',
@@ -830,7 +847,15 @@ createApp({
 
         openCreateSheetModal() {
             this.newSheetName = '';
-            this.newSheetRowQuery = '?rowEntity a rdfs:Resource .';
+            this.newSheetRowQuery = `PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+PREFIX owl:  <http://www.w3.org/2002/07/owl#>
+
+SELECT *
+WHERE {
+    ?rowEntity a rdfs:Resource .
+}`;
             const modalInstance = new window.bootstrap.Modal(this.$refs.create_sheet_modal);
             modalInstance.show();
             setTimeout(() => {

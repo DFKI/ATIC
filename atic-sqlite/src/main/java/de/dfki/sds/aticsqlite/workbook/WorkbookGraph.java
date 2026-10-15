@@ -31,6 +31,7 @@ import org.apache.jena.query.DatasetFactory;
 import org.apache.jena.query.Query;
 import org.apache.jena.query.QueryExecution;
 import org.apache.jena.query.QueryFactory;
+import org.apache.jena.query.QueryParseException;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.rdf.model.Resource;
@@ -225,8 +226,11 @@ public class WorkbookGraph implements AticGraph {
         }
     }
 
-    //TODO double check that the rowQuery has correct syntax and contains the variable
     public List<Node> addSheets(Node workbook, List<SheetConfig> sheetConfigs, InvocationContext ctx) {
+
+        for (SheetConfig sheetConfig : sheetConfigs) {
+            validateRowQuery(sheetConfig.getRowQuery());
+        }
 
         JSONObject json = getJson(workbook, ctx);
         JSONArray sheets = json.optJSONArray("sheets");
@@ -583,7 +587,6 @@ public class WorkbookGraph implements AticGraph {
     }
 
     //extra
-    
     public void addSuggestedColumns(Node workbook, Node sheet, InvocationContext ctx) {
         SheetCache cache = cacheMap.computeIfAbsent(
                 new WorkbookSheet(workbook, sheet),
@@ -890,7 +893,9 @@ public class WorkbookGraph implements AticGraph {
     }
 
     //query management
-    private Query getRowQuery(SheetCache cache, String rowQuery, int indexIndicator) {
+    
+    @Deprecated
+    private Query getRowQueryOld(SheetCache cache, String rowQuery, int indexIndicator) {
         StringBuilder sb = new StringBuilder();
         sb.append(getPrefixes());
         //I guess we have to add distinct because bgps may yield multiple rows with same row
@@ -962,6 +967,18 @@ public class WorkbookGraph implements AticGraph {
         return q;
     }
 
+    private Query getRowQuery(SheetCache cache, String rowQuery, int indexIndicator) {
+        Query q = QueryFactory.create(rowQuery);
+
+        q.setDistinct(true);
+
+        setOffsetAndLimit(cache.pageSize, q, indexIndicator);
+
+        cache.recentQuery = q;
+
+        return q;
+    }
+
     private String getPrefixes() {
         StringBuilder sb = new StringBuilder();
         this.datasetGraph.prefixes().forEach((prefix, uri) -> {
@@ -982,6 +999,30 @@ public class WorkbookGraph implements AticGraph {
             offset = 0;
         }
         return new int[]{offset, offset + pageSize};
+    }
+
+    private void validateRowQuery(String rowQuery) {
+        if (rowQuery == null || rowQuery.isBlank()) {
+            throw new IllegalArgumentException("rowQuery must not be empty");
+        }
+
+        final Query query;
+        try {
+            query = QueryFactory.create(rowQuery);
+        } catch (QueryParseException e) {
+            throw new IllegalArgumentException(
+                    "Invalid SPARQL rowQuery syntax", e);
+        }
+
+        if (!query.isSelectType()) {
+            throw new IllegalArgumentException(
+                    "rowQuery must be a SPARQL SELECT query");
+        }
+
+        if (!query.getResultVars().contains(ROW_ENTITY_VAR.substring(1))) {
+            throw new IllegalArgumentException(
+                    "rowQuery must select the variable " + ROW_ENTITY_VAR);
+        }
     }
 
     //----------------------------------
