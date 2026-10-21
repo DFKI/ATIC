@@ -151,6 +151,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     private Capabilities capabilities;
 
     private InvexEmbedded invexEmbedded;
+    
+    private FragmentStorage fragmentStorage;
 
     public SqliteAticDatasetGraph(Database db) {
         this(db, null);
@@ -175,6 +177,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         if (mainListener != null) {
             this.rdfPatchEmitter.addListener(mainListener);
         }
+        this.fragmentStorage = new FragmentStorage(this);
         bootstrap();
     }
 
@@ -225,7 +228,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         bootstrapSparqlFunctions();
 
         bootstrapInvex();
-
+        
+        this.executeWrite(() -> {
+            try {
+                fragmentStorage.bootstrap();
+            } catch (SQLException ex) {
+                throw new RuntimeException("Failed to bootstrap fragment storage", ex);
+            }
+        });
+        
         this.executeWrite(() -> {
             try {
                 bootstrapIndices();
@@ -233,7 +244,6 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 throw new RuntimeException("Failed to bootstrap indices", ex);
             }
         });
-
     }
 
     /**
