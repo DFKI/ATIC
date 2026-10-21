@@ -487,7 +487,7 @@ public class FragmentUnitTest {
 
         JSONObject actual = fragment.toJsonFragment(Locale.ENGLISH, true);
 
-        System.out.println(actual.toString(4));
+        //System.out.println(actual.toString(4));
 
         JSONCompare.assertMatches(expected.toString(), actual.toString(),
                 Set.of(
@@ -737,7 +737,7 @@ public class FragmentUnitTest {
 
         JSONObject actual = fragment.toJsonFragment();
         
-        System.out.println(actual.toString(4));
+        //System.out.println(actual.toString(4));
 
         assertEquals("http://example.org/fragment", actual.getString("@id"));
 
