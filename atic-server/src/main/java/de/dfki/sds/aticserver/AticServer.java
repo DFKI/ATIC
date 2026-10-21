@@ -22,12 +22,14 @@ import de.dfki.sds.atic.invex.QueryResults;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
+import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.AticGraphUtils;
 import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
 import de.dfki.sds.aticsqlite.DatabaseOptions;
+import de.dfki.sds.aticsqlite.FragmentStorage.FragmentSettingsEntry;
 import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
 import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
@@ -387,6 +389,12 @@ public class AticServer {
         routes.get("/users", this::getUsers);
         routes.get("/agents", this::getAgents);
         routes.get("/principal", this::getQueryPrincipal);
+
+        // Fragment Settings CRUD
+        routes.post("/fragment/settings", this::postFragmentSettings);
+        routes.get("/fragment/settings", this::getFragmentSettings);
+        routes.get("/fragment/settings/all", this::getFragmentSettingsAll);
+        routes.delete("/fragment/settings", this::deleteFragmentSettings);
 
         routes.get("/vkg/{uri}/**", this::handleVirtualGraphRequest);
 
@@ -1217,7 +1225,7 @@ public class AticServer {
 
         if (operation.equals("continue")) {
             String queryProcessId = body.optString("queryProcessID");
-            
+
             aqr = datasetGraph.calculateRead(() -> {
                 try {
                     return datasetGraph.proceedWithQuery(queryProcessId);
@@ -2029,6 +2037,85 @@ public class AticServer {
             return;
         }
         session.setTitle(title);
+        ctx.json(Map.of("success", true));
+    }
+
+    //---------------------------------------
+    //Fragment Settings CRUD
+    private void postFragmentSettings(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        JSONObject body = new JSONObject(ctx.body());
+
+        String contextUri = body.optString("contextUri", null);
+        String groupName = body.optString("groupName", null);
+
+        Node context = contextUri != null ? NodeFactory.createURI(contextUri) : null;
+        FragmentSettings settings = FragmentSettings.fromJson(body.getJSONObject("settings"));
+
+        datasetGraph.executeWrite(() -> {
+            datasetGraph.getFragmentStorage().save(context, groupName, settings, ictx);
+        });
+
+        ctx.json(Map.of("success", true));
+    }
+
+    private void getFragmentSettings(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        String contextUri = ctx.queryParam("contextUri");
+        String groupName = ctx.queryParam("groupName");
+
+        Node context = contextUri != null ? NodeFactory.createURI(contextUri) : null;
+
+        FragmentSettings settings = datasetGraph.calculateRead(() -> {
+            if (groupName != null && !groupName.isEmpty()) {
+                return datasetGraph.getFragmentStorage().load(context, groupName, ictx);
+            } else if (context != null) {
+                return datasetGraph.getFragmentStorage().load(context, ictx);
+            } else {
+                return datasetGraph.getFragmentStorage().load(ictx);
+            }
+        });
+
+        if (settings == null) {
+            ctx.status(404).json(Map.of("error", "Fragment settings not found"));
+            return;
+        }
+
+        ctx.json(settings.toJson().toMap());
+    }
+
+    private void getFragmentSettingsAll(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        List<FragmentSettingsEntry> entries = datasetGraph.calculateRead(() -> datasetGraph.getFragmentStorage().loadAll(ictx));
+
+        JSONArray array = new JSONArray();
+        for (FragmentSettingsEntry entry : entries) {
+            array.put(entry.toJson());
+        }
+
+        ctx.json(Map.of("fragmentSettings", array.toList()));
+    }
+
+    private void deleteFragmentSettings(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        String contextUri = ctx.queryParam("contextUri");
+        String groupName = ctx.queryParam("groupName");
+
+        Node context = contextUri != null ? NodeFactory.createURI(contextUri) : null;
+
+        datasetGraph.executeWrite(() -> {
+            if (groupName != null && !groupName.isEmpty()) {
+                datasetGraph.getFragmentStorage().delete(context, groupName, ictx);
+            } else if (context != null) {
+                datasetGraph.getFragmentStorage().delete(context, ictx);
+            } else {
+                datasetGraph.getFragmentStorage().delete(ictx);
+            }
+        });
+
         ctx.json(Map.of("success", true));
     }
 
