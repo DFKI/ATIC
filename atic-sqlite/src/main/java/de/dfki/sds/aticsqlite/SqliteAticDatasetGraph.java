@@ -833,6 +833,32 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             );
         }
     }
+    
+    public Group getGroup(int groupId, InvocationContext ctx) {
+
+        try {
+            return db.read(
+                    "SELECT id, uri, groupname FROM \"group\" WHERE id = ?",
+                    rs -> {
+                        if (rs.next()) {
+                            return new Group(
+                                    rs.getInt("id"),
+                                    rs.getString("uri"),
+                                    rs.getString("groupname")
+                            );
+                        }
+                        throw new IllegalStateException("Group not found: " + groupId);
+                    },
+                    groupId
+            );
+
+        } catch (SQLException e) {
+            throw new RuntimeException(
+                    "Failed to fetch group: " + groupId,
+                    e
+            );
+        }
+    }
 
     /**
      * Assigns a user to a group via the {@code user_group_assignment} table. Requires ADMIN permission.
@@ -4342,6 +4368,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return agentSessionManager;
     }
 
+    public FragmentStorage getFragmentStorage() {
+        return fragmentStorage;
+    }
+    
     //==========================================================
     //extra
     /**
