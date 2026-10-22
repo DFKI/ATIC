@@ -1,6 +1,5 @@
 package de.dfki.sds.atic.invex;
 
-import de.dfki.sds.invex.temp.CategorizedResults;
 import java.io.Serializable;
 
 public class QueryResults implements Serializable {

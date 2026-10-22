@@ -1,4 +1,4 @@
-package de.dfki.sds.invex.temp;
+package de.dfki.sds.atic.invex;
 
 import java.io.Serializable;
 
