@@ -549,8 +549,13 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         long[] foundResourceIds = queryResults.getFoundResourceIDs();
 
-        List<Node> nodes = AticGraphUtils.resolveResourceIds(foundResourceIds, db);
-
+        List<Node> nodes;
+        if(foundResourceIds == null || foundResourceIds.length == 0) {
+            nodes = new ArrayList<>();
+        } else {
+            nodes = AticGraphUtils.resolveResourceIds(foundResourceIds, db);
+        }
+        
         AticQueryResults aticQueryResults = AticQueryResults.builder(queryResults).foundNodes(nodes).build();
         return aticQueryResults;
     }
