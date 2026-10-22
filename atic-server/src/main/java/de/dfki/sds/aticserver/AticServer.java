@@ -23,6 +23,7 @@ import de.dfki.sds.atic.invex.QueryResults;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
+import de.dfki.sds.atic.jenatic.Fragment;
 import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.AticGraphUtils;
@@ -1175,6 +1176,8 @@ public class AticServer {
     //-----------------------------------------
     //invex
     private void handleInvex(Context ctx) throws IOException, Exception {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        
         String accept = ctx.header("Accept");
         HandlerType method = ctx.method();
 
@@ -1199,7 +1202,7 @@ public class AticServer {
         }
 
         //from auth
-        int userId = ctx.attribute("user.id");
+        int userId = ictx.getUserId();
 
         JSONObject body = new JSONObject(ctx.body());
         if (!body.has("operation")
@@ -1229,7 +1232,7 @@ public class AticServer {
 
             aqr = datasetGraph.calculateRead(() -> {
                 try {
-                    return datasetGraph.proceedWithQuery(queryProcessId);
+                    return datasetGraph.proceedWithQuery(queryProcessId, ictx);
                 } catch (Exception ex) {
                     throw new RuntimeException(ex);
                 }
@@ -1296,17 +1299,17 @@ public class AticServer {
                 JSONObject categoryJson = JSONUtils.createJSONObject();
                 categoryJson.put("categoryName", r.getCategoryName());
 
-                JSONArray categoryNodesJson = new JSONArray();
-                List<Node> categoryNodes = r.getNodes();
+                JSONArray categoryFragmentJson = new JSONArray();
+                List<Fragment> categoryFragments = r.getFragments();
 
-                if (categoryNodes != null) {
-                    for (Node node : categoryNodes) {
+                if (categoryFragments != null) {
+                    for (Fragment frag : categoryFragments) {
                         //we assume only resources here
-                        categoryNodesJson.put(new JSONObject().put("@id", node.toString()));
+                        categoryFragmentJson.put(frag.toJsonFragment(ictx.getLocale()));
                     }
                 }
 
-                categoryJson.put("nodes", categoryNodesJson);
+                categoryJson.put("fragments", categoryFragmentJson);
                 categoriesJson.put(categoryJson);
             }
 
@@ -2382,6 +2385,13 @@ public class AticServer {
         for (Map group : groups) {
             builder.addGroupId((int) group.get("id"));
         }
+        
+        //for now we take locale from Accept-Language header
+        String acceptLanguage = ctx.header("Accept-Language");
+        Locale locale = (acceptLanguage == null || acceptLanguage.isBlank())
+                ? Locale.ENGLISH //TODO later from config, like Locale.forLanguageTag(config.getLocale())
+                : Locale.forLanguageTag(acceptLanguage);
+        builder.locale(locale);
 
         return builder.build();
     }

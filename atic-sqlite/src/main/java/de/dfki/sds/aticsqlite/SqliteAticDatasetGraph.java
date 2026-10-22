@@ -26,6 +26,7 @@ import de.dfki.sds.atic.invex.QueryResults;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
+import de.dfki.sds.atic.jenatic.Fragment;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.agent.AgentSessionManager;
 import edu.lehigh.swat.bench.uba.Generator;
@@ -553,7 +554,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return aticQueryResults;
     }
 
-    public AticQueryResults proceedWithQuery(String queryProcessId) throws Exception {
+    public AticQueryResults proceedWithQuery(String queryProcessId, InvocationContext ctx) throws Exception {
         if (!isInvexAvailable()) {
             throw new IllegalStateException("Invex not loaded");
         }
@@ -595,10 +596,19 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         List<Node> resolvedNodes = resourceIds.length == 0
                 ? new ArrayList<>()
                 : AticGraphUtils.resolveResourceIds(resourceIds, db);
+        
+        List<Fragment> fragments = resourceIds.length == 0
+                ? new ArrayList<>()
+                : getFragmentStorage().buildFragments(resourceIds, ctx);
 
         Map<Long, Node> nodesById = new HashMap<>();
         for (int i = 0; i < ids.size(); i++) {
             nodesById.put(ids.get(i), resolvedNodes.get(i));
+        }
+        
+        Map<Long, Fragment> fragmentsById = new HashMap<>();
+        for (int i = 0; i < ids.size(); i++) {
+            fragmentsById.put(ids.get(i), fragments.get(i));
         }
 
         if (categories != null) {
@@ -616,8 +626,18 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                         }
                     }
                 }
+                
+                List<Fragment> fragmentList = new ArrayList<>();
+                if (categoryIds != null) {
+                    for (long id : categoryIds) {
+                        Fragment frag = fragmentsById.get(id);
+                        if (frag != null) {
+                            fragmentList.add(frag);
+                        }
+                    }
+                }
 
-                AticCategorizedResults aticCategorizedResults = new AticCategorizedResults(result.getCategory(), nodeList);
+                AticCategorizedResults aticCategorizedResults = new AticCategorizedResults(result.getCategory(), fragmentList);
                 l.add(aticCategorizedResults);
             }
             

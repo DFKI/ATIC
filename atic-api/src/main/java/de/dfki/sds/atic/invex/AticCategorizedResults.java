@@ -2,8 +2,8 @@
 
 package de.dfki.sds.atic.invex;
 
+import de.dfki.sds.atic.jenatic.Fragment;
 import java.util.List;
-import org.apache.jena.graph.Node;
 
 /**
  *
@@ -11,11 +11,11 @@ import org.apache.jena.graph.Node;
 public class AticCategorizedResults {
     
     private String categoryName;
-    private List<Node> nodes;
+    private List<Fragment> fragments;
 
-    public AticCategorizedResults(String categoryName, List<Node> nodes) {
+    public AticCategorizedResults(String categoryName, List<Fragment> fragments) {
         this.categoryName = categoryName;
-        this.nodes = nodes;
+        this.fragments = fragments;
     }
 
     public String getCategoryName() {
@@ -26,13 +26,12 @@ public class AticCategorizedResults {
         this.categoryName = categoryName;
     }
 
-    public List<Node> getNodes() {
-        return nodes;
+    public List<Fragment> getFragments() {
+        return fragments;
     }
 
-    public void setNodes(List<Node> nodes) {
-        this.nodes = nodes;
+    public void setFragments(List<Fragment> fragments) {
+        this.fragments = fragments;
     }
- 
     
 }

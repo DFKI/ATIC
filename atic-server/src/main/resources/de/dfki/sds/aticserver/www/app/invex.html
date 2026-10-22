@@ -263,7 +263,7 @@
                                 <strong>Accepted:</strong>
                                 {{ queryResult.rawResults.queryAccepted }}
                             </span>
-                            
+
                             <span class="me-3">
                                 <strong>Complete:</strong>
                                 {{ queryResult.rawResults.complete }}
@@ -299,7 +299,7 @@
                                         <div class="card-header fw-bold text-break">
                                             {{ category.categoryName }}
                                             <span class="badge bg-secondary float-end">
-                                                {{ category.nodes ? category.nodes.length : 0 }}
+                                                {{ category.fragments ? category.fragments.length : 0 }}
                                             </span>
                                         </div>
 
@@ -309,23 +309,23 @@
                                                 style="max-height: 300px;"
                                                 >
                                                 <div
-                                                    v-for="(node, nodeIndex) in category.nodes"
-                                                    :key="nodeIndex"
+                                                    v-for="(fragment, fragmentIndex) in category.fragments"
+                                                    :key="fragmentIndex"
                                                     class="list-group-item"
                                                     >
                                                     <div class="d-flex gap-2">
                                                         <span class="text-muted small">
-                                                            {{ nodeIndex + 1 }}.
+                                                            {{ fragmentIndex + 1 }}.
                                                         </span>
                                                         <code
                                                             class="text-break"
                                                             style="white-space: pre-wrap;"
-                                                            >{{ formatNode(node) }}</code>
+                                                            >{{ formatNode(fragment) }}</code>
                                                     </div>
                                                 </div>
 
                                                 <div
-                                                    v-if="!category.nodes || !category.nodes.length"
+                                                    v-if="!category.fragments || !category.fragments.length"
                                                     class="list-group-item text-muted small"
                                                     >
                                                     No nodes in this category.
@@ -562,11 +562,11 @@ createApp({
             if (typeof node === 'string') {
                 return node;
             }
-            
-            //for now: nodes are only resources
-            return node['@id'];
-            
-            //return JSON.stringify(node, null, 2);
+
+            const copy = {...node};
+            delete copy['@context'];
+
+            return JSON.stringify(copy, null, 2);
         },
 
         back() {
