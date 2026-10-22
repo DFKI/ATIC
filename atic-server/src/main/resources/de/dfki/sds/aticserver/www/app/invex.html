@@ -263,6 +263,11 @@
                                 <strong>Accepted:</strong>
                                 {{ queryResult.rawResults.queryAccepted }}
                             </span>
+                            
+                            <span class="me-3">
+                                <strong>Complete:</strong>
+                                {{ queryResult.rawResults.complete }}
+                            </span>
 
                             <span class="me-3" v-if="queryResult.rawResults.responseTime != null">
                                 <strong>Response time:</strong>
@@ -280,31 +285,59 @@
                             </div>
                         </div>
 
-                        <div v-if="foundNodes.length === 0"
-                             class="text-muted">
-                            No nodes found.
+                        <!-- Categorized Results -->
+                        <div v-if="queryResult.categorizedResults && queryResult.categorizedResults.length">
+                            <h5 class="mb-3">Categorized Results</h5>
+
+                            <div class="row g-3">
+                                <div
+                                    v-for="(category, categoryIndex) in queryResult.categorizedResults"
+                                    :key="categoryIndex"
+                                    class="col-12 col-md-6 col-xl-4"
+                                    >
+                                    <div class="card h-100">
+                                        <div class="card-header fw-bold text-break">
+                                            {{ category.categoryName }}
+                                            <span class="badge bg-secondary float-end">
+                                                {{ category.nodes ? category.nodes.length : 0 }}
+                                            </span>
+                                        </div>
+
+                                        <div class="card-body p-0">
+                                            <div
+                                                class="list-group list-group-flush overflow-auto"
+                                                style="max-height: 300px;"
+                                                >
+                                                <div
+                                                    v-for="(node, nodeIndex) in category.nodes"
+                                                    :key="nodeIndex"
+                                                    class="list-group-item"
+                                                    >
+                                                    <div class="d-flex gap-2">
+                                                        <span class="text-muted small">
+                                                            {{ nodeIndex + 1 }}.
+                                                        </span>
+                                                        <code
+                                                            class="text-break"
+                                                            style="white-space: pre-wrap;"
+                                                            >{{ formatNode(node) }}</code>
+                                                    </div>
+                                                </div>
+
+                                                <div
+                                                    v-if="!category.nodes || !category.nodes.length"
+                                                    class="list-group-item text-muted small"
+                                                    >
+                                                    No nodes in this category.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div v-else class="table-responsive">
-                            <table class="table table-sm table-striped table-hover">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 70px">#</th>
-                                        <th>Node</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="(node, index) in foundNodes"
-                                        :key="index">
-                                        <td>{{ index + 1 }}</td>
-                                        <td>
-                                            <code class="text-break"
-                                                  style="white-space: pre-wrap;">{{ formatNode(node) }}</code>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+
                     </template>
                 </div>
             </div>

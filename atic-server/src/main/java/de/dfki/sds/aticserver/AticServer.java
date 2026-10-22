@@ -16,6 +16,7 @@ import de.dfki.sds.atic.agent.Session;
 import de.dfki.sds.atic.agent.SessionListener;
 import de.dfki.sds.atic.conf.ConfigLoader;
 import de.dfki.sds.atic.helper.JSONUtils;
+import de.dfki.sds.atic.invex.AticCategorizedResults;
 import de.dfki.sds.atic.invex.AticQueryResults;
 import de.dfki.sds.atic.invex.QueryOptions;
 import de.dfki.sds.atic.invex.QueryResults;
@@ -1217,7 +1218,7 @@ public class AticServer {
 
         if (operation.equals("continue")) {
             String queryProcessId = body.optString("queryProcessID");
-            
+
             aqr = datasetGraph.calculateRead(() -> {
                 try {
                     return datasetGraph.proceedWithQuery(queryProcessId);
@@ -1235,6 +1236,9 @@ public class AticServer {
             }
             if (body.has("searchString") && !body.isNull("searchString")) {
                 qo.setSearchString(body.getString("searchString"));
+            } else {
+                //TODO for now we ensure that searchstring is never null
+                qo.setSearchString("");
             }
             if (body.has("limit") && !body.isNull("limit")) {
                 qo.setLimit(body.getInt("limit"));
@@ -1267,12 +1271,38 @@ public class AticServer {
             JSONArray nodesJson = new JSONArray();
             for (Node node : nodes) {
                 if (node != null) {
-                    nodesJson.put(node.toString());
+                    nodesJson.put(new JSONObject().put("@id", node.toString()));
                 } else {
                     nodesJson.put(JSONObject.NULL);
                 }
             }
             resp.put("foundNodes", nodesJson);
+        }
+
+        // Categorized results
+        List<AticCategorizedResults> catResults = aqr.getCategorizedResults();
+        if (catResults != null) {
+            JSONArray categoriesJson = new JSONArray();
+
+            for (AticCategorizedResults r : catResults) {
+                JSONObject categoryJson = JSONUtils.createJSONObject();
+                categoryJson.put("categoryName", r.getCategoryName());
+
+                JSONArray categoryNodesJson = new JSONArray();
+                List<Node> categoryNodes = r.getNodes();
+
+                if (categoryNodes != null) {
+                    for (Node node : categoryNodes) {
+                        //we assume only resources here
+                        categoryNodesJson.put(new JSONObject().put("@id", node.toString()));
+                    }
+                }
+
+                categoryJson.put("nodes", categoryNodesJson);
+                categoriesJson.put(categoryJson);
+            }
+
+            resp.put("categorizedResults", categoriesJson);
         }
 
         String processID = aqr.getQueryProcessID();
@@ -1287,6 +1317,7 @@ public class AticServer {
             JSONObject rawJson = new JSONObject();
 
             rawJson.put("success", raw.isSuccess());
+            rawJson.put("complete", raw.isComplete());
             rawJson.put("queryAccepted", raw.isQueryAccepted());
             rawJson.put("responseTime", raw.getResponseTime());
             rawJson.put("limit", raw.getLimit());

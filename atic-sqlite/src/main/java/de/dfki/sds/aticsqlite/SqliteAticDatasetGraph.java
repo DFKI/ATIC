@@ -552,8 +552,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         
         AticQueryResults.Builder aticQueryResultsBuilder = AticQueryResults.builder(queryResults);
 
+        /*
         long[] foundResourceIds = queryResults.getFoundResourceIDs();
-
         List<Node> foundNodes;
         if (foundResourceIds == null || foundResourceIds.length == 0) {
             foundNodes = new ArrayList<>();
@@ -561,6 +561,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             foundNodes = AticGraphUtils.resolveResourceIds(foundResourceIds, db);
         }
         aticQueryResultsBuilder.foundNodes(foundNodes);
+        */
+        //TODO might be later as category
+        aticQueryResultsBuilder.foundNodes(new ArrayList<>());
         
         CategorizedResults[] categories = queryResults.getFoundResourcesCategorized();
 
