@@ -562,8 +562,11 @@ createApp({
             if (typeof node === 'string') {
                 return node;
             }
-
-            return JSON.stringify(node, null, 2);
+            
+            //for now: nodes are only resources
+            return node['@id'];
+            
+            //return JSON.stringify(node, null, 2);
         },
 
         back() {
