@@ -123,8 +123,4 @@ public class BSBMUnitTest {
         });
     }
 
-    public static void main(String[] args) {
-
-    }
-
 }

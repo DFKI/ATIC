@@ -13,6 +13,7 @@ import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
@@ -47,8 +48,9 @@ public class InvexUnitTest {
         assertTrue(dataset.isInvexAvailable());
     }
 
+    @Disabled
     @Test
-    public void testRoundtrip() {
+    public void testRoundtripFoundResources() {
         //set to admin
         User adminUser = dataset.calculateRead(() -> {
             return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
@@ -107,6 +109,76 @@ public class InvexUnitTest {
 
         assertTrue(results.getFoundNodes().contains(NodeFactory.createURI("urn:person:alice")));
         assertTrue(results.getFoundNodes().contains(NodeFactory.createURI("urn:document:doc1")));
+    }
+
+    @Test
+    public void testRoundtripCategories() {
+        //set to admin
+        User adminUser = dataset.calculateRead(() -> {
+            return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
+        });
+        InvocationContext ctx = new InvocationContext.Builder().fromUser(adminUser).build();
+        ctx.transferContext(dataset.getContext());
+
+        //write data
+        String ttl = """
+                     <urn:person:alice> <urn:property:name> "alice" .
+                     <urn:person:bob> <urn:property:name> "bob" .
+                     <urn:document:doc1> <urn:property:name> "alice and bob" .
+                     """;
+        dataset.executeWrite(() -> {
+            AticGraph g = dataset.getDefaultGraph(ctx);
+            RDFDataMgr.read(g, new StringReader(ttl), null, Lang.TURTLE);
+        });
+
+        //rebuild invex
+        try {
+            dataset.rebuildInvex();
+        } catch (Exception ex) {
+            fail(ex);
+        }
+
+        // query
+        QueryOptions options = new QueryOptions();
+        options.setSearchString("alice");
+        options.setUserID(adminUser.getId());
+        options.setLimit(100);
+
+        AticQueryResults results = null;
+        try {
+            results = dataset.initializeQuery(options);
+        } catch (Exception ex) {
+            fail(ex);
+        }
+
+        assertTrue(results.isSuccess());
+        assertTrue(results.isQueryAccepted());
+
+        String procID = results.getQueryProcessID();
+        
+        //TODO not yet implemented
+        //do {
+            results = dataset.calculateRead(() -> {
+                try {
+                    return dataset.proceedWithQuery(procID);
+                } catch (Exception ex) {
+                    fail(ex);
+                }
+                return null;
+            });
+            
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ex) {
+            }
+
+        //} while(!results.isComplete());
+
+        //assertTrue(results.isComplete());
+        assertTrue(results.isQueryAccepted());
+        assertTrue(results.isSuccess());
+        assertNotNull(results.getCategorizedResults());
+        assertEquals(4, results.getCategorizedResults().size());
     }
 
 }

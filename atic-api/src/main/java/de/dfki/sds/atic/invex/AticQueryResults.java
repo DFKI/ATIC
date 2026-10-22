@@ -13,10 +13,13 @@ public class AticQueryResults {
 
     private final QueryResults rawResults;
     private List<Node> foundNodes;
+    
+    private List<AticCategorizedResults> categorizedResults;
 
-    private AticQueryResults(QueryResults rawResults, List<Node> foundNodes) {
+    private AticQueryResults(QueryResults rawResults, List<Node> foundNodes, List<AticCategorizedResults> categorizedResults) {
         this.rawResults = rawResults;
         this.foundNodes = foundNodes;
+        this.categorizedResults = categorizedResults;
     }
 
     public QueryResults getRawResults() {
@@ -38,6 +41,14 @@ public class AticQueryResults {
     public boolean isQueryAccepted() {
         return rawResults.isQueryAccepted();
     }
+
+    public boolean isComplete() {
+        return rawResults.isComplete();
+    }
+
+    public List<AticCategorizedResults> getCategorizedResults() {
+        return categorizedResults;
+    }
     
     public static Builder builder(QueryResults rawResults) {
         return new Builder(rawResults);
@@ -47,6 +58,7 @@ public class AticQueryResults {
 
         private final QueryResults rawResults;
         private List<Node> foundNodes;
+        private List<AticCategorizedResults> categorizedResults;
 
         private Builder(QueryResults rawResults) {
             this.rawResults = Objects.requireNonNull(rawResults, "rawResults must not be null");
@@ -56,9 +68,14 @@ public class AticQueryResults {
             this.foundNodes = foundNodes;
             return this;
         }
+        
+        public Builder categorizedResults(List<AticCategorizedResults> categorizedResults) {
+            this.categorizedResults = categorizedResults;
+            return this;
+        }
 
         public AticQueryResults build() {
-            return new AticQueryResults(rawResults, foundNodes);
+            return new AticQueryResults(rawResults, foundNodes, categorizedResults);
         }
     }
     

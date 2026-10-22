@@ -15,7 +15,9 @@ import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.RdfNodesAttachment;
 import de.dfki.sds.atic.agent.Session;
 import de.dfki.sds.atic.api.IdAndUri;
+import de.dfki.sds.atic.invex.AticCategorizedResults;
 import de.dfki.sds.atic.invex.AticQueryResults;
+import de.dfki.sds.atic.invex.CategorizedResults;
 import de.dfki.sds.atic.invex.ExternalComponents;
 import de.dfki.sds.atic.invex.InvexEmbedded;
 import de.dfki.sds.atic.invex.Normalizer;
@@ -46,6 +48,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -544,20 +547,71 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         if (!isInvexAvailable()) {
             throw new IllegalStateException("Invex not loaded");
         }
-
+        
         QueryResults queryResults = invexEmbedded.proceedWithQuery(queryProcessId);
+        
+        AticQueryResults.Builder aticQueryResultsBuilder = AticQueryResults.builder(queryResults);
 
         long[] foundResourceIds = queryResults.getFoundResourceIDs();
 
-        List<Node> nodes;
-        if(foundResourceIds == null || foundResourceIds.length == 0) {
-            nodes = new ArrayList<>();
+        List<Node> foundNodes;
+        if (foundResourceIds == null || foundResourceIds.length == 0) {
+            foundNodes = new ArrayList<>();
         } else {
-            nodes = AticGraphUtils.resolveResourceIds(foundResourceIds, db);
+            foundNodes = AticGraphUtils.resolveResourceIds(foundResourceIds, db);
         }
+        aticQueryResultsBuilder.foundNodes(foundNodes);
         
-        AticQueryResults aticQueryResults = AticQueryResults.builder(queryResults).foundNodes(nodes).build();
-        return aticQueryResults;
+        CategorizedResults[] categories = queryResults.getFoundResourcesCategorized();
+
+        Set<Long> uniqueIds = new LinkedHashSet<>();
+        if (categories != null) {
+            for (CategorizedResults result : categories) {
+                long[] ids = result.getFoundResourceIDs();
+                if (ids != null) {
+                    for (long id : ids) {
+                        uniqueIds.add(id);
+                    }
+                }
+            }
+        }
+
+        List<Long> ids = new ArrayList<>(uniqueIds);
+        long[] resourceIds = ids.stream().mapToLong(Long::longValue).toArray();
+
+        List<Node> resolvedNodes = resourceIds.length == 0
+                ? new ArrayList<>()
+                : AticGraphUtils.resolveResourceIds(resourceIds, db);
+
+        Map<Long, Node> nodesById = new HashMap<>();
+        for (int i = 0; i < ids.size(); i++) {
+            nodesById.put(ids.get(i), resolvedNodes.get(i));
+        }
+
+        if (categories != null) {
+            List<AticCategorizedResults> l = new ArrayList<>();
+            
+            for (CategorizedResults result : categories) {
+                long[] categoryIds = result.getFoundResourceIDs();
+
+                List<Node> nodeList = new ArrayList<>();
+                if (categoryIds != null) {
+                    for (long id : categoryIds) {
+                        Node node = nodesById.get(id);
+                        if (node != null) {
+                            nodeList.add(node);
+                        }
+                    }
+                }
+
+                AticCategorizedResults aticCategorizedResults = new AticCategorizedResults(result.getCategory(), nodeList);
+                l.add(aticCategorizedResults);
+            }
+            
+            aticQueryResultsBuilder.categorizedResults(l);
+        }
+
+        return aticQueryResultsBuilder.build();
     }
 
     public void rebuildInvex() throws Exception {
