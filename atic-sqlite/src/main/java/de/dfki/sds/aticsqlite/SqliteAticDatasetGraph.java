@@ -154,6 +154,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     private Capabilities capabilities;
 
     private InvexEmbedded invexEmbedded;
+    
+    private FragmentStorage fragmentStorage;
 
     public SqliteAticDatasetGraph(Database db) {
         this(db, null);
@@ -178,6 +180,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         if (mainListener != null) {
             this.rdfPatchEmitter.addListener(mainListener);
         }
+        this.fragmentStorage = new FragmentStorage(this);
         bootstrap();
     }
 
@@ -228,7 +231,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         bootstrapSparqlFunctions();
 
         bootstrapInvex();
-
+        
+        this.executeWrite(() -> {
+            try {
+                fragmentStorage.bootstrap();
+            } catch (SQLException ex) {
+                throw new RuntimeException("Failed to bootstrap fragment storage", ex);
+            }
+        });
+        
         this.executeWrite(() -> {
             try {
                 bootstrapIndices();
@@ -236,7 +247,6 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 throw new RuntimeException("Failed to bootstrap indices", ex);
             }
         });
-
     }
 
     /**
@@ -881,6 +891,32 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         } catch (SQLException e) {
             throw new RuntimeException(
                     "Failed to fetch group: " + groupname,
+                    e
+            );
+        }
+    }
+    
+    public Group getGroup(int groupId, InvocationContext ctx) {
+
+        try {
+            return db.read(
+                    "SELECT id, uri, groupname FROM \"group\" WHERE id = ?",
+                    rs -> {
+                        if (rs.next()) {
+                            return new Group(
+                                    rs.getInt("id"),
+                                    rs.getString("uri"),
+                                    rs.getString("groupname")
+                            );
+                        }
+                        throw new IllegalStateException("Group not found: " + groupId);
+                    },
+                    groupId
+            );
+
+        } catch (SQLException e) {
+            throw new RuntimeException(
+                    "Failed to fetch group: " + groupId,
                     e
             );
         }
@@ -4394,6 +4430,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return agentSessionManager;
     }
 
+    public FragmentStorage getFragmentStorage() {
+        return fragmentStorage;
+    }
+    
     //==========================================================
     //extra
     /**

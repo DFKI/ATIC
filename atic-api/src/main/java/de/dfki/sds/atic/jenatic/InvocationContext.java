@@ -4,8 +4,12 @@ import de.dfki.sds.atic.ac.User;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import static java.util.stream.Collectors.toSet;
+import org.apache.jena.graph.Node;
 import org.apache.jena.sparql.util.Context;
 import org.apache.jena.sparql.util.Symbol;
 
@@ -22,34 +26,45 @@ public class InvocationContext {
     public static final Symbol USER_ID = Symbol.create("atic.userId");
     public static final Symbol PRIMARY_GROUP_ID = Symbol.create("atic.primaryGroupId");
     public static final Symbol GROUP_IDS = Symbol.create("atic.groupIds");
-    
+
     private Integer userId;
     private Integer primaryGroupId;
     private Set<Integer> groupIds;
+
+    private Locale locale;
     
+    //* context URI(s): 
+    // pointing to something that might change the invocation, 
+    //it could be a graph, 
+    //it could be an application reference
+    //or contextspace
+    //or a literal
+    //it is a list because ranking might be important
+    private List<Node> contextualNodes;
+
     private InvocationContext() {
-        
+
     }
 
     private InvocationContext(Builder builder) {
-        
-        if(builder.user != null) {
+
+        if (builder.user != null) {
             this.userId = builder.user.getId();
             this.primaryGroupId = builder.user.getPrimaryGroup().getId();
             this.groupIds = Collections.unmodifiableSet(builder.user.getGroups().stream().map(g -> g.getId()).collect(toSet()));
-            
-        } else if(builder.context != null) {
-            
-            for(Symbol symbol : Arrays.asList(USER_ID, PRIMARY_GROUP_ID, GROUP_IDS)) {
-                if(!builder.context.isDefined(symbol)) {
+
+        } else if (builder.sparqlContext != null) {
+
+            for (Symbol symbol : Arrays.asList(USER_ID, PRIMARY_GROUP_ID, GROUP_IDS)) {
+                if (!builder.sparqlContext.isDefined(symbol)) {
                     throw new IllegalArgumentException("Missing " + symbol + " in Jena Context.");
                 }
             }
-            
-            this.userId = builder.context.get(USER_ID);
-            this.primaryGroupId = builder.context.get(PRIMARY_GROUP_ID);
-            this.groupIds = Collections.unmodifiableSet(builder.context.get(GROUP_IDS));
-            
+
+            this.userId = builder.sparqlContext.get(USER_ID);
+            this.primaryGroupId = builder.sparqlContext.get(PRIMARY_GROUP_ID);
+            this.groupIds = Collections.unmodifiableSet(builder.sparqlContext.get(GROUP_IDS));
+
         } else {
             this.userId = builder.userId;
             this.primaryGroupId = builder.primaryGroupId;
@@ -57,21 +72,24 @@ public class InvocationContext {
                     ? Collections.unmodifiableSet(builder.groupIds)
                     : Collections.emptySet();
         }
+
+        this.locale = builder.locale;
+        this.contextualNodes = builder.contextualNodes;
     }
-    
+
     public static InvocationContext fromContextIfEmpty(InvocationContext invocationContext, Context context) {
-        if(invocationContext.isEmpty()) {
-            return new Builder().fromContext(context).build();
+        if (invocationContext.isEmpty()) {
+            return new Builder().fromSparqlContext(context).build();
         }
         return invocationContext;
     }
-    
+
     public void transferContext(org.apache.jena.sparql.util.Context jenaContext) {
         jenaContext.put(InvocationContext.USER_ID, this.getUserId());
         jenaContext.put(InvocationContext.PRIMARY_GROUP_ID, this.getPrimaryGroupId());
         jenaContext.put(InvocationContext.GROUP_IDS, this.getGroupIds());
     }
-    
+
     public boolean isEmpty() {
         return false;
     }
@@ -88,6 +106,14 @@ public class InvocationContext {
         return groupIds;
     }
 
+    public Locale getLocale() {
+        return locale;
+    }
+
+    public List<Node> getContextualNodes() {
+        return List.copyOf(contextualNodes);
+    }
+
     @Override
     public String toString() {
         return "InvocationContext{"
@@ -100,18 +126,21 @@ public class InvocationContext {
     public static Builder builder() {
         return new Builder();
     }
-    
+
     // -------- Builder --------
     public static class Builder {
 
         private Integer userId;
         private Integer primaryGroupId;
         private Set<Integer> groupIds;
-        private Context context;
+        private Context sparqlContext;
         private User user;
+        private Locale locale = Locale.ENGLISH;
+        private List<Node> contextualNodes;
 
         public Builder() {
             // no required fields
+            contextualNodes = new LinkedList<>();
         }
 
         public Builder userId(int userId) {
@@ -139,9 +168,15 @@ public class InvocationContext {
             this.groupIds.add(groupId);
             return this;
         }
-        
-        public Builder fromContext(Context context) {
-            this.context = context.copy();
+
+        public Builder addContextNode(Node node) {
+            contextualNodes.remove(node);
+            contextualNodes.add(node);
+            return this;
+        }
+
+        public Builder fromSparqlContext(Context sparqlContext) {
+            this.sparqlContext = sparqlContext.copy();
             return this;
         }
 
@@ -149,7 +184,12 @@ public class InvocationContext {
             this.user = user;
             return this;
         }
-        
+
+        public Builder locale(Locale locale) {
+            this.locale = locale;
+            return this;
+        }
+
         public InvocationContext build() {
             return new InvocationContext(this);
         }
