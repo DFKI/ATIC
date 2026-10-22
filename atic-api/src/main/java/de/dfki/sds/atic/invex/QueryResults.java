@@ -1,35 +1,33 @@
 package de.dfki.sds.atic.invex;
 
+import de.dfki.sds.invex.temp.CategorizedResults;
 import java.io.Serializable;
 
 public class QueryResults implements Serializable {
-    
+
     private static final long serialVersionUID = 8586175856931624204L;
 
     //__________________________________________________________________________
     // FIELDS: GENERAL METADATA
     //__________________________________________________________________________
-    
     private boolean success;
     private String error;
-    
+
     private long responseTime;
 
     //__________________________________________________________________________
     // FIELDS: SPECIFIC METADATA (INIT PHASE)
     //__________________________________________________________________________
-
     private String queryProcessID;
 
     private boolean queryAccepted;
 
     private long luceneUpperBoundGuestimation;
     private long luceneUpperBoundGuestimationTime;
-    
+
     //__________________________________________________________________________
     // FIELDS: SPECIFIC METADATA (MAIN PHASE)
     //__________________________________________________________________________
-
     private long luceneLowerBound;
     private long returnedResourceIDsCount;
 
@@ -39,20 +37,21 @@ public class QueryResults implements Serializable {
     //__________________________________________________________________________
     // FIELDS: DATA (ONLY IN MAIN PHASE)
     //__________________________________________________________________________
-    
     private long[] foundResourceIDs;
-    
+
+    private boolean complete;
+
+    private CategorizedResults[] foundResourcesCategorized;
+
     //__________________________________________________________________________
     // CONSTRUCTOR
     //__________________________________________________________________________
-    
     public QueryResults() {
     }
 
     //__________________________________________________________________________
     // METHODS
     //__________________________________________________________________________
-    
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder(128);
@@ -69,11 +68,10 @@ public class QueryResults implements Serializable {
         sb.append(" ... )");
         return sb.toString();
     }
-    
+
     //__________________________________________________________________________
     // GETTERS & SETTERS
     //__________________________________________________________________________
-    
     public boolean isSuccess() {
         return success;
     }
@@ -169,5 +167,21 @@ public class QueryResults implements Serializable {
 
     public void setFoundResourceIDs(long[] foundResourceIDs) {
         this.foundResourceIDs = foundResourceIDs;
+    }
+
+    public boolean isComplete() {
+        return complete;
+    }
+
+    public void setComplete(boolean complete) {
+        this.complete = complete;
+    }
+
+    public CategorizedResults[] getFoundResourcesCategorized() {
+        return foundResourcesCategorized;
+    }
+
+    public void setFoundResourcesCategorized(CategorizedResults[] foundResourcesCategorized) {
+        this.foundResourcesCategorized = foundResourcesCategorized;
     }
 }

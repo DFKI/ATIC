@@ -2,7 +2,6 @@
 
 package de.dfki.sds.atic.invex;
 
-import de.dfki.sds.atic.invex.QueryResults;
 import java.util.List;
 import java.util.Objects;
 import org.apache.jena.graph.Node;
@@ -62,4 +61,5 @@ public class AticQueryResults {
             return new AticQueryResults(rawResults, foundNodes);
         }
     }
+    
 }
