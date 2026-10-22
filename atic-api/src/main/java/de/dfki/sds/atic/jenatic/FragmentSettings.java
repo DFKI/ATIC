@@ -155,6 +155,10 @@ public class FragmentSettings {
         public Node getProperty() {
             return property;
         }
+        
+        public boolean hasProperty() {
+            return property != null;
+        }
 
         public Template getTemplate() {
             return template;

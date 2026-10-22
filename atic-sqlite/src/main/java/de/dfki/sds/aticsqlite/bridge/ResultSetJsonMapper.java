@@ -310,6 +310,10 @@ public class ResultSetJsonMapper {
 
         return json;
     }
+    
+    //===========================================
+    //fragment
+    //TODO move to FragmentStorage
 
     private void resolveFragment(
             JSONObject json,
@@ -487,6 +491,8 @@ public class ResultSetJsonMapper {
         }
     }
 
+    //==========================
+    
     //this is called to resolve a value
     private Object resolveValue(
             String key,
@@ -612,6 +618,8 @@ public class ResultSetJsonMapper {
 
         return toJson(model.asRDFNode(current));
     }
+    
+    
 
     private void fillBinding(
             QuerySolution qs,

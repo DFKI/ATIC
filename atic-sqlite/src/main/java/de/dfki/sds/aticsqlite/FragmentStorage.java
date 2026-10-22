@@ -3,13 +3,19 @@ package de.dfki.sds.aticsqlite;
 import de.dfki.sds.atic.ac.Group;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.helper.JSONUtils;
+import de.dfki.sds.atic.jenatic.Fragment;
 import de.dfki.sds.atic.jenatic.FragmentSettings;
+import de.dfki.sds.atic.jenatic.FragmentSettings.FragmentProperty;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import org.apache.jena.graph.Node;
+import org.apache.jena.sparql.core.Quad;
+import org.apache.jena.util.iterator.ExtendedIterator;
 import org.json.JSONObject;
 
 /**
@@ -31,6 +37,138 @@ public class FragmentStorage {
     /*package*/ void bootstrap() throws SQLException {
         db.writeQuery("create_table_fragment_settings.sql");
         db.writeQuery("create_table_fragment_cache.sql");
+    }
+
+    //==================================
+    //fragment
+    
+    public List<Fragment> buildFragments(long[] resourceIds, InvocationContext ctx) {
+        //via InvocationContext we get
+        //* userId who, groupIds in which roles
+        //* locale (language)
+        //* context URI(s): pointing to something that might change this, it could be a graph, it could be an application or contextspace
+        //resourceIds is for low-level, like invex results, long[] foundResourceIDs
+        
+        //based on InvocationContext we pick the best suggested FragmentSettings
+        FragmentSettings settings = suggestSettings(ctx);
+
+        //TODO resourceIds might contain duplicates
+        List<Node> nodes;
+        try {
+            nodes = AticGraphUtils.resolveResourceIds(resourceIds, db);
+        } catch (SQLException ex) {
+            throw new RuntimeException(ex);
+        }
+        
+        List<Fragment> fragments = new ArrayList<>(nodes.size());
+        for(Node node : nodes) {
+            
+            Fragment.Builder builder = Fragment.builder(node).settings(settings);
+            
+            //based on FragmentSettings we fill the fragments subgraph
+            for(FragmentProperty prop : settings.getProperties()) {
+                
+                //TODO also implement for prop.hasTemplate()
+                if(!prop.hasProperty()) {
+                    continue;
+                }
+                
+                //fill with data based on settings
+                ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) parent.find(
+                        Node.ANY,
+                        node,
+                        prop.getProperty(),
+                        Node.ANY,
+                        ctx
+                );
+                while(it.hasNext()) {
+                    Quad q = it.next();
+                    builder.add(q.getPredicate(), q.getObject());
+                }
+                it.close();
+                
+            }
+            
+            fragments.add(builder.build());
+        }
+        
+        return fragments;
+    }
+
+    //===================================
+    //fragment settings
+    
+    public FragmentSettings suggestSettings(InvocationContext ctx) {
+        Set<Integer> groupIds = new LinkedHashSet<>(ctx.getGroupIds());
+        List<Node> contextNodes = new ArrayList<>(ctx.getContextualNodes());
+
+        groupIds.add(null);
+        contextNodes.add(null);
+
+        for (Node context : contextNodes) {
+            for (Integer groupId : groupIds) {
+                //TODO later do this as bulk for one SQL query?
+                FragmentSettings settings = load(context, groupId);
+                if (settings != null) {
+                    return settings;
+                }
+            }
+        }
+
+        return FragmentSettings.defaultSettings();
+    }
+    
+    //might be deprecated
+    @Deprecated
+    public FragmentSettings suggestSettings(Node context, String groupname, InvocationContext ctx) {
+        FragmentSettings settings;
+
+        if (context != null && groupname != null) {
+            settings = load(context, groupname, ctx);
+            if (settings != null) {
+                return settings;
+            }
+        }
+
+        if (context != null) {
+            settings = load(context, null, ctx);
+            if (settings != null) {
+                return settings;
+            }
+        }
+
+        if (groupname != null) {
+            settings = load(null, groupname, ctx);
+            if (settings != null) {
+                return settings;
+            }
+        }
+
+        settings = load(null, null, ctx);
+        return settings != null ? settings : FragmentSettings.defaultSettings();
+    }
+
+    public FragmentSettings load(Node context, Integer groupId) {
+        String contextUri = context == null ? EMPTY_CTX : context.getURI();
+        Integer innerGroupId = groupId == null ? EMPTY_GROUP : groupId;
+
+        try {
+            return db.read(
+                    "SELECT settings FROM fragment_settings WHERE context_uri = ? AND group_id = ?",
+                    rs -> {
+                        if (!rs.next()) {
+                            return null;
+                        }
+
+                        return FragmentSettings.fromJson(
+                                new JSONObject(rs.getString("settings"))
+                        );
+                    },
+                    contextUri, innerGroupId
+            );
+        } catch (SQLException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     public FragmentSettings load(Node context, String groupname, InvocationContext ctx) {
@@ -191,8 +329,7 @@ public class FragmentStorage {
 
     //================================
     //records
-    
-    public record FragmentSettingsEntry (
+    public record FragmentSettingsEntry(
             String contextUri,
             Group group,
             FragmentSettings settings,
