@@ -155,6 +155,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     private Capabilities capabilities;
 
     private InvexEmbedded invexEmbedded;
+    private Map<String, InvocationContext> invexProcessIdToContext;
     
     private FragmentStorage fragmentStorage;
 
@@ -182,6 +183,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             this.rdfPatchEmitter.addListener(mainListener);
         }
         this.fragmentStorage = new FragmentStorage(this);
+        this.invexProcessIdToContext = new HashMap<>();
         bootstrap();
     }
 
@@ -543,7 +545,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
     //============================================================
     //invex
-    public AticQueryResults initializeQuery(QueryOptions options) throws Exception {
+    
+    public AticQueryResults initializeQuery(QueryOptions options, InvocationContext ctx) throws Exception {
         if (!isInvexAvailable()) {
             throw new IllegalStateException("Invex not loaded");
         }
@@ -551,13 +554,24 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         QueryResults queryResults = invexEmbedded.initializeQuery(options);
 
         AticQueryResults aticQueryResults = AticQueryResults.builder(queryResults).build();
+        
+        //save it for proceedWithQuery
+        //TODO should expire
+        invexProcessIdToContext.put(aticQueryResults.getQueryProcessID(), ctx);
+        
         return aticQueryResults;
     }
 
-    public AticQueryResults proceedWithQuery(String queryProcessId, InvocationContext ctx) throws Exception {
+    public AticQueryResults proceedWithQuery(String queryProcessId) throws Exception {
         if (!isInvexAvailable()) {
             throw new IllegalStateException("Invex not loaded");
         }
+        
+        if (!invexProcessIdToContext.containsKey(queryProcessId)) {
+            throw new IllegalStateException("Necessary to call initializeQuery first");
+        }
+        
+        InvocationContext ctx = invexProcessIdToContext.get(queryProcessId);
         
         QueryResults queryResults = invexEmbedded.proceedWithQuery(queryProcessId);
         

@@ -1232,7 +1232,7 @@ public class AticServer {
 
             aqr = datasetGraph.calculateRead(() -> {
                 try {
-                    return datasetGraph.proceedWithQuery(queryProcessId, ictx);
+                    return datasetGraph.proceedWithQuery(queryProcessId);
                 } catch (Exception ex) {
                     throw new RuntimeException(ex);
                 }
@@ -1261,7 +1261,7 @@ public class AticServer {
             //from auth
             qo.setUserID(userId);
 
-            aqr = datasetGraph.initializeQuery(qo);
+            aqr = datasetGraph.initializeQuery(qo, ictx);
         }
 
         if (aqr == null) {

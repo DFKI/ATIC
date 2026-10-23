@@ -84,7 +84,7 @@ public class InvexUnitTest {
 
         AticQueryResults results = null;
         try {
-            results = dataset.initializeQuery(options);
+            results = dataset.initializeQuery(options, ctx);
         } catch (Exception ex) {
             fail(ex);
         }
@@ -95,7 +95,7 @@ public class InvexUnitTest {
         String procID = results.getQueryProcessID();
         results = dataset.calculateRead(() -> {
             try {
-                return dataset.proceedWithQuery(procID, ctx);
+                return dataset.proceedWithQuery(procID);
             } catch (Exception ex) {
                 fail(ex);
             }
@@ -146,7 +146,7 @@ public class InvexUnitTest {
 
         AticQueryResults results = null;
         try {
-            results = dataset.initializeQuery(options);
+            results = dataset.initializeQuery(options, ctx);
         } catch (Exception ex) {
             fail(ex);
         }
@@ -160,7 +160,7 @@ public class InvexUnitTest {
         //do {
         results = dataset.calculateRead(() -> {
             try {
-                return dataset.proceedWithQuery(procID, ctx);
+                return dataset.proceedWithQuery(procID);
             } catch (Exception ex) {
                 fail(ex);
             }
@@ -239,7 +239,7 @@ public class InvexUnitTest {
 
         AticQueryResults results = null;
         try {
-            results = dataset.initializeQuery(options);
+            results = dataset.initializeQuery(options, ctx);
         } catch (Exception ex) {
             fail(ex);
         }
@@ -253,7 +253,7 @@ public class InvexUnitTest {
         //do {
         results = dataset.calculateRead(() -> {
             try {
-                return dataset.proceedWithQuery(procID, ctx);
+                return dataset.proceedWithQuery(procID);
             } catch (Exception ex) {
                 fail(ex);
             }
