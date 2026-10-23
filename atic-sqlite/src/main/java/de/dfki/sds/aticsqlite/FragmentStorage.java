@@ -41,14 +41,13 @@ public class FragmentStorage {
 
     //==================================
     //fragment
-    
     public List<Fragment> buildFragments(long[] resourceIds, InvocationContext ctx) {
         //via InvocationContext we get
         //* userId who, groupIds in which roles
         //* locale (language)
         //* context URI(s): pointing to something that might change this, it could be a graph, it could be an application or contextspace
         //resourceIds is for low-level, like invex results, long[] foundResourceIDs
-        
+
         //based on InvocationContext we pick the best suggested FragmentSettings
         FragmentSettings settings = suggestSettings(ctx);
 
@@ -59,45 +58,52 @@ public class FragmentStorage {
         } catch (SQLException ex) {
             throw new RuntimeException(ex);
         }
-        
+
         List<Fragment> fragments = new ArrayList<>(nodes.size());
-        for(Node node : nodes) {
-            
+        for (Node node : nodes) {
+
             Fragment.Builder builder = Fragment.builder(node).settings(settings);
-            
+
             //based on FragmentSettings we fill the fragments subgraph
-            for(FragmentProperty prop : settings.getProperties()) {
+            for (FragmentProperty property : settings.getProperties()) {
+
                 
-                //TODO also implement for prop.hasTemplate()
-                if(!prop.hasProperty()) {
-                    continue;
+                if(property.hasTemplateRanking()) {
+                    //TODO also implement for prop.hasTemplate()
                 }
                 
-                //fill with data based on settings
-                ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) parent.find(
-                        Node.ANY,
-                        node,
-                        prop.getProperty(),
-                        Node.ANY,
-                        ctx
-                );
-                while(it.hasNext()) {
-                    Quad q = it.next();
-                    builder.add(q.getPredicate(), q.getObject());
+                if (property.hasPropertyRanking()) {
+                    
+                    for(Node prop : property.getPropertyRanking()) {
+
+                        //fill with data based on settings
+                        ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) parent.find(
+                                Node.ANY,
+                                node,
+                                prop,
+                                Node.ANY,
+                                ctx
+                        );
+                        while (it.hasNext()) {
+                            Quad q = it.next();
+                            builder.add(q.getPredicate(), q.getObject());
+                        }
+                        it.close();
+                    
+                    }
+
                 }
-                it.close();
-                
+
             }
-            
+
             fragments.add(builder.build());
         }
-        
+
         return fragments;
     }
 
     //===================================
     //fragment settings
-    
     public FragmentSettings suggestSettings(InvocationContext ctx) {
         Set<Integer> groupIds = new LinkedHashSet<>(ctx.getGroupIds());
         List<Node> contextNodes = new ArrayList<>(ctx.getContextualNodes());
@@ -117,7 +123,7 @@ public class FragmentStorage {
 
         return FragmentSettings.defaultSettings();
     }
-    
+
     //might be deprecated
     @Deprecated
     public FragmentSettings suggestSettings(Node context, String groupname, InvocationContext ctx) {

@@ -63,40 +63,51 @@ public class FragmentSettings {
         }
 
         public Builder fromJson(JSONObject json) {
-            JSONArray propertiesArray = json.getJSONArray("properties");
             this.properties = new ArrayList<>();
 
-            for (int i = 0; i < propertiesArray.length(); i++) {
-                JSONObject propertyJson = propertiesArray.getJSONObject(i);
-                JSONObject property = propertyJson.getJSONObject("property");
+            if (json.has("properties")) {
+                JSONArray propertiesArray = json.getJSONArray("properties");
 
-                String key = propertyJson.getString("key");
-                boolean languageAware = propertyJson.getBoolean("languageAware");
+                for (int i = 0; i < propertiesArray.length(); i++) {
+                    JSONObject propertyJson = propertiesArray.getJSONObject(i);
+                    String key = propertyJson.getString("key");
+                    boolean languageAware = propertyJson.getBoolean("languageAware");
+                    JSONArray rankingArray = propertyJson.getJSONArray("properties");
 
-                if (property.has("@id")) {
-                    this.properties.add(new FragmentProperty(
-                            key,
-                            NodeFactory.createURI(property.getString("@id")),
-                            languageAware
-                    ));
-                } else if (property.has("pattern")) {
-                    Template template = new Template(
-                            property.getString("pattern"),
-                            property.optBoolean("trim", true),
-                            property.optBoolean("normalizeWhitespace", true),
-                            property.optBoolean("titleCase", false)
-                    );
+                    List<Node> propertyRanking = new ArrayList<>();
+                    for (int j = 0; j < rankingArray.length(); j++) {
+                        JSONObject rankingJson = rankingArray.getJSONObject(j);
+                        propertyRanking.add(NodeFactory.createURI(rankingJson.getString("@id")));
+                    }
 
-                    this.properties.add(new FragmentProperty(
-                            key,
-                            template,
-                            languageAware
-                    ));
-                } else {
-                    throw new IllegalArgumentException(
-                            "Property must contain either '@id' or 'pattern': " + property
-                    );
+                    this.properties.add(new FragmentProperty(key, propertyRanking, languageAware));
                 }
+            } else if (json.has("templates")) {
+                JSONArray templatesArray = json.getJSONArray("templates");
+
+                for (int i = 0; i < templatesArray.length(); i++) {
+                    JSONObject templateJson = templatesArray.getJSONObject(i);
+                    String key = templateJson.getString("key");
+                    boolean languageAware = templateJson.getBoolean("languageAware");
+                    JSONArray rankingArray = templateJson.getJSONArray("templates");
+
+                    List<Template> templateRanking = new ArrayList<>();
+                    for (int j = 0; j < rankingArray.length(); j++) {
+                        JSONObject rankingJson = rankingArray.getJSONObject(j);
+                        templateRanking.add(new Template(
+                                rankingJson.getString("pattern"),
+                                rankingJson.optBoolean("trim", true),
+                                rankingJson.optBoolean("normalizeWhitespace", true),
+                                rankingJson.optBoolean("titleCase", false)
+                        ));
+                    }
+
+                    this.properties.add(new FragmentProperty(key, languageAware, templateRanking));
+                }
+            } else {
+                throw new IllegalArgumentException(
+                        "JSON must contain either 'properties' or 'templates': " + json
+                );
             }
 
             return this;
@@ -110,41 +121,53 @@ public class FragmentSettings {
     public static class FragmentProperty {
 
         private final String key;
-        private final Node property;
+        private final List<Node> propertyRanking;
+        private final List<Template> templateRanking;
         private final boolean languageAware;
-        private final Template template;
 
         public FragmentProperty(String key, Node property, boolean languageAware) {
+            this(key, List.of(property), languageAware);
+        }
+
+        public FragmentProperty(String key, List<Node> propertyRanking, boolean languageAware) {
             this.key = key;
-            this.property = property;
-            this.template = null;
+            this.propertyRanking = propertyRanking;
+            this.templateRanking = null;
             this.languageAware = languageAware;
         }
 
-        public FragmentProperty(String key, Template template, boolean languageAware) {
+        public FragmentProperty(String key, boolean languageAware, Template template) {
+            this(key, languageAware, List.of(template));
+        }
+
+        public FragmentProperty(String key, boolean languageAware, List<Template> templateRanking) {
             this.key = key;
-            this.property = null;
-            this.template = template;
+            this.propertyRanking = null;
+            this.templateRanking = templateRanking;
             this.languageAware = languageAware;
         }
 
         public JSONObject toJson() {
-            JSONObject propertyJson;
+            JSONArray rankingJson = new JSONArray();
 
-            if (hasTemplate()) {
-                propertyJson = new JSONObject()
-                        .put("pattern", template.getPattern())
-                        .put("trim", template.isTrim())
-                        .put("normalizeWhitespace", template.isNormalizeWhitespace())
-                        .put("titleCase", template.isTitleCase());
+            if (hasTemplateRanking()) {
+                for (Template template : templateRanking) {
+                    rankingJson.put(new JSONObject()
+                            .put("pattern", template.getPattern())
+                            .put("trim", template.isTrim())
+                            .put("normalizeWhitespace", template.isNormalizeWhitespace())
+                            .put("titleCase", template.isTitleCase()));
+                }
             } else {
-                propertyJson = new JSONObject()
-                        .put("@id", property.getURI());
+                for (Node property : propertyRanking) {
+                    rankingJson.put(new JSONObject()
+                            .put("@id", property.getURI()));
+                }
             }
 
             return new JSONObject()
                     .put("key", key)
-                    .put("property", propertyJson)
+                    .put(hasTemplateRanking() ? "templates" : "properties", rankingJson)
                     .put("languageAware", languageAware);
         }
 
@@ -152,24 +175,36 @@ public class FragmentSettings {
             return key;
         }
 
-        public Node getProperty() {
-            return property;
-        }
-        
-        public boolean hasProperty() {
-            return property != null;
+        public List<Node> getPropertyRanking() {
+            return propertyRanking;
         }
 
-        public Template getTemplate() {
-            return template;
+        public List<Template> getTemplateRanking() {
+            return templateRanking;
         }
 
-        public boolean hasTemplate() {
-            return template != null;
+        public boolean hasPropertyRanking() {
+            return propertyRanking != null;
+        }
+
+        public boolean hasTemplateRanking() {
+            return templateRanking != null;
         }
 
         public boolean isLanguageAware() {
             return languageAware;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("FragmentProperty{");
+            sb.append("key=").append(key);
+            sb.append(", propertyRanking=").append(propertyRanking);
+            sb.append(", templateRanking=").append(templateRanking);
+            sb.append(", languageAware=").append(languageAware);
+            sb.append('}');
+            return sb.toString();
         }
     }
 
