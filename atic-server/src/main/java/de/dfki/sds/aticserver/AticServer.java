@@ -2049,8 +2049,9 @@ public class AticServer {
         String contextUri = body.optString("contextUri", null);
         String groupName = body.optString("groupName", null);
 
-        Node context = contextUri != null ? NodeFactory.createURI(contextUri) : null;
         FragmentSettings settings = FragmentSettings.fromJson(body.getJSONObject("settings"));
+
+        Node context = contextUri != null ? NodeFactory.createURI(contextUri) : null;
 
         datasetGraph.executeWrite(() -> {
             datasetGraph.getFragmentStorage().save(context, groupName, settings, ictx);

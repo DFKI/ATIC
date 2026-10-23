@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Fragment Settings | Atic</title>
+    </head>
+    <body>
+        <div class="container-fluid mt-4" id="app">
+
+            <div class="row align-items-center">
+                <div class="col d-flex align-items-center m-2">
+                    <h3 class="mb-0 d-flex align-items-center me-2">
+                        Fragment Settings
+                    </h3>
+                    <div v-if="loading" class="spinner-border text-primary" role="status" style="width: 1.5rem; height: 1.5rem;"
+                         @click="loading = false">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="col-auto ms-auto me-2" v-if="user">
+                    <span class="me-2" :title="user.username">
+                        <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                    </span>
+                    <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col">
+
+                    <!-- Error alerts -->
+                    <div v-if="saveError" class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ saveError }}
+                        <button type="button" class="btn-close" @click="saveError = null"></button>
+                    </div>
+                    <div v-if="deleteError" class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ deleteError }}
+                        <button type="button" class="btn-close" @click="deleteError = null"></button>
+                    </div>
+
+                    <!-- New Entry button -->
+                    <button type="button" class="btn btn-primary mb-4" @click="openNewEntry">
+                        <i class="fa fa-plus me-1"></i> New Entry
+                    </button>
+
+                    <!-- Entries list -->
+                    <div v-if="entries.length === 0" class="text-muted text-center py-5 border rounded">
+                        No fragment settings entries. Click "New Entry" to create one.
+                    </div>
+
+                    <div v-for="(entry, index) in entries" :key="index" class="card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <div class="fw-semibold mb-1">
+                                        Settings #{{ index + 1 }}
+                                    </div>
+                                    <div class="small text-muted">
+                                        <div v-if="entry.contextUri">
+                                            <strong>Context:</strong> <span class="text-break">{{ entry.contextUri }}</span>
+                                        </div>
+                                        <div v-if="entry.groupname">
+                                            <strong>Group:</strong> {{ entry.groupname }}
+                                        </div>
+                                        <div>
+                                            <strong>Creator:</strong> {{ entry.creator }}
+                                        </div>
+                                        <div>
+                                            <strong>Created:</strong> {{ formatDateTime(entry.createdAt) }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2 flex-shrink-0">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @click="openEditEntry(entry)">
+                                        <i class="fa fa-edit me-1"></i> Edit
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" @click="deleteEntry(entry)">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Settings preview -->
+                            <div v-if="entry.settings && entry.settings.properties && entry.settings.properties.length > 0"
+                                 class="mt-2">
+                                <div class="small">
+                                    <strong>Properties:</strong>
+                                    <ul class="mb-0 mt-1">
+                                        <li v-for="(prop, pi) in entry.settings.properties" :key="pi"
+                                            class="mb-1 ps-2">
+                                            <span class="fw-semibold">{{ prop.key }}</span>
+                                            <span v-if="prop.languageAware" class="badge bg-info ms-1">lang-aware</span>
+                                            <span class="text-muted ms-1">—</span>
+                                            <span v-if="prop.properties && prop.properties.length > 0" class="text-muted">
+                                                {{ prop.properties.map(p => '@id=' + p['@id']).join(', ') }}
+                                            </span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div v-else class="small text-muted mt-2">
+                                No properties defined.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+
+            <!-- Edit / New Modal -->
+            <div class="modal fade" id="editModal" tabindex="-1" ref="edit_modal">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">{{ editingEntry ? 'Edit Fragment Settings' : 'New Fragment Settings' }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div v-if="modalError" class="alert alert-danger" role="alert">
+                                {{ modalError }}
+                            </div>
+
+                            <div v-if="editForm.properties.length === 0" class="text-muted text-center py-4">
+                                No properties defined. Click "Add Property" to create one.
+                            </div>
+
+                            <div v-for="(prop, index) in editForm.properties" :key="index"
+                                 class="border rounded mb-3 p-3 bg-light">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-semibold">Property #{{ index + 1 }}</span>
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            @click="removeProperty(index)" title="Remove property">
+                                        <i class="fa fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <div class="row g-3">
+                                    <!-- Key -->
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-normal">Key</label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               v-model.trim="prop.key" placeholder="e.g. label, name, type">
+                                    </div>
+
+                                    <!-- Language Aware -->
+                                    <div class="col-md-3 d-flex align-items-end">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                   v-model="prop.languageAware" id="langAware_{{ index }}">
+                                            <label class="form-check-label" for="langAware_{{ index }}">
+                                                Language Aware
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Properties URIs -->
+                                    <div class="col-md-5">
+                                        <label class="form-label fw-normal">RDF Properties</label>
+                                        <div class="d-flex gap-2 mb-1">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                    @click="addPropertyUri(index)" title="Add property URI">
+                                                <i class="fa fa-plus"></i> Add URI
+                                            </button>
+                                        </div>
+                                        <div v-if="prop.properties && prop.properties.length > 0">
+                                            <div v-for="(uri, uriIdx) in prop.properties" :key="uriIdx"
+                                                 class="d-flex align-items-center gap-1 mb-1">
+                                                <input type="text" class="form-control form-control-sm flex-grow-1"
+                                                       v-model.trim="prop.properties[uriIdx]['@id']"
+                                                       placeholder="http://example.org/property">
+                                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                                        @click="removePropertyUri(index, uriIdx)" title="Remove URI">
+                                                    <i class="fa fa-times"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div v-else class="text-muted small">
+                                            No RDF properties added yet.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="button" class="btn btn-sm btn-outline-primary" @click="addProperty">
+                                <i class="fa fa-plus me-1"></i> Add Property
+                            </button>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" @click="saveEntry"
+                                    :disabled="!editForm.properties.length">
+                                <i class="fa fa-save me-1"></i> Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Modal -->
+            <div class="modal" id="errorModal" tabindex="-1" ref="error_modal">
+                <div class="modal-dialog  modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title fs-5">Error</h1>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-danger" role="alert">
+                                <span style="white-space: pre-wrap; word-break: break-word;">
+                                    {{ error }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                    &nbsp;
+                    &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+                </div>
+            </div>
+
+        </div>
+
+        <script>
+const {createApp} = Vue;
+createApp({
+
+    data() {
+        return {
+            loading: false,
+            error: null,
+            user: null,
+            entries: [],
+
+            editForm: {
+                properties: []
+            },
+            editingEntry: null, // the entry being edited (null for new)
+
+            saveError: null,
+            deleteError: null,
+            modalError: null,
+
+            editModal: null
+        };
+    },
+    created() {
+        axios.interceptors.response.use(
+                response => response,
+                error => {
+                    const errorMsg = error.response?.data || error.message || "Unknown error";
+                    this.open_error_modal(errorMsg);
+                    return Promise.reject(error);
+                }
+        );
+        this.getAuthMe();
+        this.loadEntries();
+    },
+    methods: {
+
+        // ---- Load all entries ----
+        async loadEntries() {
+            this.loading = true;
+            try {
+                const response = await axios.get('/fragment/settings/all');
+                this.entries = response.data.fragmentSettings || [];
+            } catch (error) {
+                console.error('Failed to load fragment settings:', error);
+                this.entries = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        // ---- Open New Entry Modal ----
+        openNewEntry() {
+            this.editingEntry = null;
+            this.editForm = {properties: []};
+            this.modalError = null;
+            const modal = new window.bootstrap.Modal(this.$refs.edit_modal);
+            modal.show();
+        },
+
+        // ---- Open Edit Entry Modal ----
+        openEditEntry(entry) {
+            this.editingEntry = entry;
+            // Deep copy the settings properties to the form
+            const settingsCopy = JSON.parse(JSON.stringify(entry.settings || {}));
+            this.editForm = settingsCopy;
+            this.modalError = null;
+            const modal = new window.bootstrap.Modal(this.$refs.edit_modal);
+            modal.show();
+        },
+
+        // ---- Property CRUD (inside modal) ----
+        addProperty() {
+            this.editForm.properties.push({
+                key: '',
+                languageAware: false,
+                properties: []
+            });
+        },
+        removeProperty(index) {
+            this.editForm.properties.splice(index, 1);
+        },
+        addPropertyUri(propIndex) {
+            this.editForm.properties[propIndex].properties.push({ '@id': '' });
+        },
+        removePropertyUri(propIndex, uriIndex) {
+            this.editForm.properties[propIndex].properties.splice(uriIndex, 1);
+        },
+
+        // ---- Save Entry ----
+        async saveEntry() {
+            this.modalError = null;
+            try {
+                const payload = {
+                    settings: this.editForm
+                };
+                
+                //this should be user given not generated
+                /*
+                // Include contextUri/groupName for existing entries so the server knows which one to update
+                if (this.editingEntry) {
+                    payload.contextUri = this.editingEntry.contextUri;
+                    payload.groupName = this.editingEntry.groupname;
+                }
+                // For new entries, the server will auto-generate a UUID contextUri
+                */
+               
+                await axios.post('/fragment/settings', payload);
+                const modalEl = document.getElementById('editModal');
+                window.bootstrap.Modal.getInstance(modalEl).hide();
+                await this.loadEntries();
+            } catch (error) {
+                console.error('Failed to save fragment settings:', error);
+                this.modalError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+            }
+        },
+
+        // ---- Delete Entry ----
+        async deleteEntry(entry) {
+            if (!confirm('Delete this fragment settings entry?')) {
+                return;
+            }
+            try {
+                const params = new URLSearchParams();
+                if (entry.contextUri) {
+                    params.append('contextUri', entry.contextUri);
+                }
+                if (entry.groupname) {
+                    params.append('groupName', entry.groupname);
+                }
+                await axios.delete('/fragment/settings?' + params.toString());
+                // Reload to reflect server state
+                await this.loadEntries();
+            } catch (error) {
+                console.error('Failed to delete fragment settings:', error);
+                this.deleteError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+            }
+        },
+
+        // ---- Format date ----
+        formatDateTime(isoString) {
+            if (!isoString)
+                return '';
+            try {
+                const d = new Date(isoString);
+                return d.toLocaleString();
+            } catch (e) {
+                return isoString;
+            }
+        },
+
+        // ---- Auth ----
+        getAuthMe() {
+            axios.get('/auth/me').then(response => {
+                this.user = response.data;
+            }).catch(error => {
+                if (error.response && error.response.status === 401) {
+                    window.location.href = '/app/unauthorized.html';
+                }
+            });
+        },
+        postLogout() {
+            axios.post('/auth/logout').then(response => {
+                window.location.href = response.data.redirect;
+            });
+        },
+        open_error_modal(msg) {
+            this.error = msg;
+            this.loading = false;
+            const modalInstance = new window.bootstrap.Modal(this.$refs.error_modal);
+            modalInstance.show();
+        }
+    }
+}).mount("#app");
+        </script>
+    </body>
+</html>
