@@ -71,7 +71,7 @@ public final class Fragment extends ResourceImpl {
         Objects.requireNonNull(locale, "locale");
         return toJsonFragment(locale, false, new HashSet<>());
     }
-    
+
     public JSONObject toJsonFragment(Locale locale, boolean recursiveContext) {
         Objects.requireNonNull(locale, "locale");
         return toJsonFragment(locale, recursiveContext, new HashSet<>());
@@ -91,45 +91,60 @@ public final class Fragment extends ResourceImpl {
 
         try {
             for (FragmentSettings.FragmentProperty property : settings.getProperties()) {
-                List<Triple> matching = subgraph.getGraph()
-                        .find(subject, property.getProperty(), Node.ANY)
-                        .toList();
 
-                if (matching.isEmpty()) {
+                //TODO this needs an implementation
+                if (property.hasTemplateRanking()) {
                     continue;
                 }
 
-                Node object = selectObject(
-                        matching,
-                        locale,
-                        property.isLanguageAware());
+                if (property.hasPropertyRanking()) {
+                    for (Node prop : property.getPropertyRanking()) {
 
-                String key = property.getKey();
+                        List<Triple> matching = subgraph.getGraph()
+                                .find(subject, prop, Node.ANY)
+                                .toList();
 
-                JSONObject contextEntry = JSONUtils.createJSONObject()
-                        .put("@id", property.getProperty().getURI());
+                        //try until one is not empty
+                        if (matching.isEmpty()) {
+                            continue;
+                        }
 
-                if (object.isLiteral()) {
-                    String language = object.getLiteralLanguage();
-                    String datatype = object.getLiteralDatatypeURI();
+                        Node object = selectObject(
+                                matching,
+                                locale,
+                                property.isLanguageAware());
 
-                    if (language != null && !language.isEmpty()) {
-                        contextEntry.put("@language", language);
-                    } else if (datatype != null) {
-                        contextEntry.put("@type", datatype);
+                        String key = property.getKey();
+
+                        JSONObject contextEntry = JSONUtils.createJSONObject()
+                                .put("@id", prop.getURI());
+
+                        if (object.isLiteral()) {
+                            String language = object.getLiteralLanguage();
+                            String datatype = object.getLiteralDatatypeURI();
+
+                            if (language != null && !language.isEmpty()) {
+                                contextEntry.put("@language", language);
+                            } else if (datatype != null) {
+                                contextEntry.put("@type", datatype);
+                            }
+
+                            json.put(key, literalToJsonValue(object));
+                        } else {
+                            json.put(key, objectToJson(object, locale, recursiveContext, recursionPath));
+                        }
+
+                        //do not add "@type" to "@context": it will be a keyword redefinition error in JSON-LD parsing
+                        if (key.equals("@type")) {
+                            continue;
+                        }
+
+                        context.put(key, contextEntry);
+
+                        //we only need one from the ranked list
+                        break;
                     }
-
-                    json.put(key, literalToJsonValue(object));
-                } else {
-                    json.put(key, objectToJson(object, locale, recursiveContext, recursionPath));
                 }
-
-                //do not add "@type" to "@context": it will be a keyword redefinition error in JSON-LD parsing
-                if(key.equals("@type")) {
-                    continue;
-                }
-                
-                context.put(key, contextEntry);
             }
 
             if (!context.isEmpty()) {
@@ -177,7 +192,7 @@ public final class Fragment extends ResourceImpl {
             Fragment fragment = findFragment(object);
             if (fragment != null) {
                 JSONObject fragmentObj = fragment.toJsonFragment(locale, recursiveContext, recursionPath);
-                if(!recursiveContext) {
+                if (!recursiveContext) {
                     fragmentObj.remove("@context");
                 }
                 return fragmentObj;
