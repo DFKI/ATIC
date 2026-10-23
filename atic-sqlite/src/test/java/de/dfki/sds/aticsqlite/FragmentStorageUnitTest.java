@@ -3,6 +3,8 @@ package de.dfki.sds.aticsqlite;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.jenatic.Fragment;
+import de.dfki.sds.atic.jenatic.FragmentSettings;
+import de.dfki.sds.atic.jenatic.FragmentSettings.FragmentProperty;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import java.io.StringReader;
 import java.nio.file.Path;
@@ -259,6 +261,68 @@ public class FragmentStorageUnitTest {
 
         // C's type points back to A. Cycle detection should prevent infinite recursion.
         assertEquals("http://example.org/A", c.getType().getURI());
+    }
+
+    @Test
+    public void buildFragmentsWithDifferentLabelPropertiesTest() {
+        User adminUser = dataset.calculateRead(()
+                -> dataset.getUser(
+                        UserGroupManagement.ADMIN_USERNAME,
+                        InvocationContext.EMPTY
+                )
+        );
+
+        InvocationContext ctx = new InvocationContext.Builder()
+                .fromUser(adminUser)
+                .build();
+
+        ctx.transferContext(dataset.getContext());
+
+        String ttl = """
+            @prefix ex: <http://example.org/> .
+
+            ex:acme
+                ex:companyName "Acme Corporation" .
+
+            ex:alice
+                ex:personName "Alice Smith" .
+            """;
+
+        dataset.executeWrite(() -> {
+            RDFDataMgr.read(
+                    dataset,
+                    new StringReader(ttl),
+                    null,
+                    Lang.TURTLE
+            );
+
+            FragmentSettings settings = FragmentSettings.builder()
+                    .addProperty(new FragmentProperty(
+                            "label",
+                            List.of(
+                                    NodeFactory.createURI(EX + "companyName"),
+                                    NodeFactory.createURI(EX + "personName")
+                            ),
+                            true
+                    ))
+                    .build();
+
+            fragmentStorage.save(settings, ctx);
+        });
+
+        List<Fragment> fragments = dataset.calculateRead(()
+                -> fragmentStorage.buildFragments(
+                        List.of(
+                                NodeFactory.createURI(EX + "acme"),
+                                NodeFactory.createURI(EX + "alice")
+                        ),
+                        ctx
+                )
+        );
+
+        assertEquals(2, fragments.size());
+        assertEquals("Acme Corporation", fragments.get(0).getLabel());
+        assertEquals("Alice Smith", fragments.get(1).getLabel());
     }
     
 }
