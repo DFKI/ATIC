@@ -10,6 +10,8 @@ import de.dfki.sds.atic.jenatic.InvocationContext;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -41,65 +43,78 @@ public class FragmentStorage {
 
     //==================================
     //fragment
+    
     public List<Fragment> buildFragments(long[] resourceIds, InvocationContext ctx) {
-        //via InvocationContext we get
-        //* userId who, groupIds in which roles
-        //* locale (language)
-        //* context URI(s): pointing to something that might change this, it could be a graph, it could be an application or contextspace
-        //resourceIds is for low-level, like invex results, long[] foundResourceIDs
+        // Remove duplicate resource IDs while preserving order.
+        long[] uniqueResourceIds = Arrays.stream(resourceIds)
+                .distinct()
+                .toArray();
 
-        //based on InvocationContext we pick the best suggested FragmentSettings
-        FragmentSettings settings = suggestSettings(ctx);
-
-        //TODO resourceIds might contain duplicates
         List<Node> nodes;
         try {
-            nodes = AticGraphUtils.resolveResourceIds(resourceIds, db);
+            nodes = AticGraphUtils.resolveResourceIds(uniqueResourceIds, db);
         } catch (SQLException ex) {
             throw new RuntimeException(ex);
         }
 
+        return buildFragments(nodes, ctx);
+    }
+
+    public List<Fragment> buildFragments(List<Node> nodes, InvocationContext ctx) {
+        FragmentSettings settings = suggestSettings(ctx);
+
         List<Fragment> fragments = new ArrayList<>(nodes.size());
+
         for (Node node : nodes) {
-
-            Fragment.Builder builder = Fragment.builder(node).settings(settings);
-
-            //based on FragmentSettings we fill the fragments subgraph
-            for (FragmentProperty property : settings.getProperties()) {
-
-                
-                if(property.hasTemplateRanking()) {
-                    //TODO also implement for prop.hasTemplate()
-                }
-                
-                if (property.hasPropertyRanking()) {
-                    
-                    for(Node prop : property.getPropertyRanking()) {
-
-                        //fill with data based on settings
-                        ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) parent.find(
-                                Node.ANY,
-                                node,
-                                prop,
-                                Node.ANY,
-                                ctx
-                        );
-                        while (it.hasNext()) {
-                            Quad q = it.next();
-                            builder.add(q.getPredicate(), q.getObject());
-                        }
-                        it.close();
-                    
-                    }
-
-                }
-
-            }
-
-            fragments.add(builder.build());
+            Set<Node> visited = new HashSet<>();
+            fragments.add(buildFragment(node, settings, ctx, visited));
         }
 
         return fragments;
+    }
+
+    private Fragment buildFragment(Node node, FragmentSettings settings, InvocationContext ctx, Set<Node> visited) {
+        Fragment.Builder builder = Fragment.builder(node).settings(settings);
+
+        // Prevent cycles in the current traversal.
+        if (!visited.add(node)) {
+            return builder.build();
+        }
+
+        for (FragmentProperty property : settings.getProperties()) {
+            if (property.hasTemplateRanking()) {
+                //TODO also implement for prop.hasTemplate()
+            }
+            if (property.hasPropertyRanking()) {
+                for (Node predicate : property.getPropertyRanking()) {
+                    ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) parent.find(
+                            Node.ANY,
+                            node,
+                            predicate,
+                            Node.ANY,
+                            ctx
+                    );
+
+                    try {
+                        while (it.hasNext()) {
+                            Quad q = it.next();
+                            Node object = q.getObject();
+
+                            if (object.isURI()) {
+                                Fragment nested = buildFragment(object, settings, ctx, visited);
+                                builder.add(q.getPredicate(), nested);
+                            } else {
+                                builder.add(q.getPredicate(), object);
+                            }
+                        }
+                    } finally {
+                        it.close();
+                    }
+                }
+            }
+        }
+
+        return builder.build();
     }
 
     //===================================
@@ -122,36 +137,6 @@ public class FragmentStorage {
         }
 
         return FragmentSettings.defaultSettings();
-    }
-
-    //might be deprecated
-    @Deprecated
-    public FragmentSettings suggestSettings(Node context, String groupname, InvocationContext ctx) {
-        FragmentSettings settings;
-
-        if (context != null && groupname != null) {
-            settings = load(context, groupname, ctx);
-            if (settings != null) {
-                return settings;
-            }
-        }
-
-        if (context != null) {
-            settings = load(context, null, ctx);
-            if (settings != null) {
-                return settings;
-            }
-        }
-
-        if (groupname != null) {
-            settings = load(null, groupname, ctx);
-            if (settings != null) {
-                return settings;
-            }
-        }
-
-        settings = load(null, null, ctx);
-        return settings != null ? settings : FragmentSettings.defaultSettings();
     }
 
     public FragmentSettings load(Node context, Integer groupId) {

@@ -1,6 +1,7 @@
 package de.dfki.sds.atic.jenatic;
 
 import de.dfki.sds.atic.helper.JSONUtils;
+import de.dfki.sds.atic.jenatic.FragmentSettings.FragmentProperty;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.HashMap;
@@ -12,6 +13,7 @@ import java.util.Objects;
 import java.util.Set;
 import org.apache.jena.datatypes.xsd.XSDDatatype;
 import org.apache.jena.graph.Node;
+import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.rdf.model.Literal;
 import org.apache.jena.rdf.model.Model;
@@ -42,12 +44,6 @@ public final class Fragment extends ResourceImpl {
         this.fragmentMap = new HashMap<>(Objects.requireNonNull(fragmentMap, "fragmentMap must not be null"));
     }
 
-    private static Model copyModel(Model source) {
-        Model copy = ModelFactory.createDefaultModel();
-        copy.add(source);
-        return copy;
-    }
-
     /**
      * Returns a defensive copy of the fragment's subgraph.
      *
@@ -59,6 +55,34 @@ public final class Fragment extends ResourceImpl {
 
     public FragmentSettings getSettings() {
         return settings;
+    }
+
+    //=======================================
+    //default getter
+    public Fragment getType() {
+        return getFragmentPropertyValue("type");
+    }
+
+    public String getLabel(Locale locale) {
+        return getStringPropertyValue("label", locale);
+    }
+
+    public String getComment(Locale locale) {
+        return getStringPropertyValue("comment", locale);
+    }
+
+    public Fragment getIcon() {
+        return getFragmentPropertyValue("icon");
+    }
+
+    //-----
+    
+    public String getLabel() {
+        return getLabel(Locale.ENGLISH);
+    }
+
+    public String getComment() {
+        return getComment(Locale.ENGLISH);
     }
 
     //===================================================
@@ -538,4 +562,61 @@ public final class Fragment extends ResourceImpl {
                     fragmentMap);
         }
     }
+
+    //==============================================
+    //helper
+    private static Model copyModel(Model source) {
+        Model copy = ModelFactory.createDefaultModel();
+        copy.add(source);
+        return copy;
+    }
+
+    private Fragment getFragmentPropertyValue(String key) {
+        findProperty(key);
+
+        JSONObject json = toJsonFragment();
+        Object value = json.opt(key);
+
+        if (!(value instanceof JSONObject propertyJson) || !propertyJson.has("@id")) {
+            throw new IllegalStateException(
+                    "Expected an object containing '@id' for fragment property '" + key + "'"
+            );
+        }
+
+        String uri = propertyJson.getString("@id");
+        Fragment fragment = findFragment(NodeFactory.createURI(uri));
+
+        if (fragment == null) {
+            throw new IllegalStateException(
+                    "No nested fragment found for property '" + key + "': " + uri
+            );
+        }
+
+        return fragment;
+    }
+
+    private String getStringPropertyValue(String key, Locale locale) {
+        findProperty(key);
+
+        JSONObject json = toJsonFragment(locale);
+        Object value = json.opt(key);
+
+        if (!(value instanceof String string)) {
+            throw new IllegalStateException(
+                    "Expected a string value for fragment property '" + key + "'"
+            );
+        }
+
+        return string;
+    }
+
+    private FragmentProperty findProperty(String key) {
+        return settings.getProperties().stream()
+                .filter(property -> property.getKey().equals(key))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                "No fragment setting exists for property '" + key + "'"
+        ));
+    }
+
 }
