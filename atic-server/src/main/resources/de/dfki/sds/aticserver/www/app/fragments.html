@@ -137,16 +137,17 @@
                                 No properties defined. Click "Add Property" to create one.
                             </div>
 
-                            <div v-for="(prop, propIndex) in editForm.properties" :key="propIndex"
-                                 class="border rounded mb-3 p-3 bg-light"
-                                 draggable="true"
-                                 @dragstart="onDragStartProperty($event, propIndex)"
-                                 @dragend="onDragEndProperty($event)"
+                            <div v-for="(prop, propIndex) in editForm.properties" :key="'prop_' + propIndex"
+                                 class="border rounded mb-3 p-3 bg-light drag-card"
                                  @dragover="onDragOverProperty($event, propIndex)"
                                  @drop="onDropProperty($event, propIndex)">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <div class="d-flex align-items-center">
-                                        <span class="drag-handle me-2" title="Drag to reorder">
+                                        <span class="drag-handle me-2"
+                                              draggable="true"
+                                              title="Drag to reorder"
+                                              @dragstart="onDragStartProperty($event, propIndex)"
+                                              @dragend="onDragEndProperty($event)">
                                             <i class="fa fa-grip-vertical"></i>
                                         </span>
                                     <span class="fw-semibold">Fragment Property: {{ prop.key || '(no key)' }}</span>
@@ -168,8 +169,8 @@
 
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox"
-                                                   v-model="prop.languageAware" id="langAware_{{ propIndex }}">
-                                            <label class="form-check-label" for="langAware_{{ propIndex }}">
+                                                   v-model="prop.languageAware" :id="'langAware_' + propIndex">
+                                            <label class="form-check-label" :for="'langAware_' + propIndex">
                                                 Language Aware
                                             </label>
                                         </div>
@@ -185,21 +186,21 @@
                                             </button>
                                         </div>
                                         <div v-if="prop.properties && prop.properties.length > 0">
-                                            <div v-for="(uri, uriIdx) in prop.properties" :key="uriIdx"
-                                                 class="d-flex align-items-center gap-1 mb-1"
-                                                 draggable="true"
-                                                 @dragstart="onDragStartUri($event, propIndex, uriIdx)"
-                                                 @dragend="onDragEndUri($event)"
+                                            <div v-for="(uri, uriIdx) in prop.properties" :key="'uri_' + uriIdx"
+                                                 class="d-flex align-items-center gap-1 mb-1 uri-row"
                                                  @dragover="onDragOverUri($event, propIndex, uriIdx)"
                                                  @drop="onDropUri($event, propIndex, uriIdx)">
-                                                <span class="drag-handle me-1" title="Drag to reorder">
+                                                <span class="drag-handle me-1"
+                                                      draggable="true"
+                                                      title="Drag to reorder"
+                                                      @dragstart="onDragStartUri($event, propIndex, uriIdx)"
+                                                      @dragend="onDragEndUri($event)">
                                                     <i class="fa fa-grip-vertical" style="font-size: 12px;"></i>
                                                 </span>
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        v-model.trim="prop.properties[uriIdx]['@id']"
                                                        placeholder="http://example.org/property"
-                                                       draggable="false"
-                                                       @mousedown.stop>
+                                                       draggable="false">
                                                 <button type="button" class="btn btn-outline-danger btn-sm"
                                                         @click="removePropertyUri(propIndex, uriIdx)" title="Remove URI">
                                                     <i class="fa fa-times"></i>
@@ -264,6 +265,7 @@
             .drag-handle {
                 cursor: grab;
                 user-select: none;
+                -webkit-user-select: none;
                 color: #999;
                 font-size: 16px;
                 padding: 0 4px;
@@ -271,17 +273,20 @@
             .drag-handle:active {
                 cursor: grabbing;
             }
-            .drag-over {
-                border-top: 2px solid #0d6efd !important;
+            .dragging {
+                opacity: 0.4;
             }
-            .drag-over-bottom {
-                border-bottom: 2px solid #0d6efd !important;
+            .drag-card.drag-over {
+                border-top: 3px solid #0d6efd !important;
             }
-            [draggable="true"] {
-                cursor: grab;
+            .drag-card.drag-over-bottom {
+                border-bottom: 3px solid #0d6efd !important;
             }
-            [draggable="true"]:active {
-                cursor: grabbing;
+            .uri-row.drag-over {
+                border-top: 2px solid #0d6efd;
+            }
+            .uri-row.drag-over-bottom {
+                border-bottom: 2px solid #0d6efd;
             }
         </style>
 
@@ -378,105 +383,160 @@ createApp({
             this.editForm.properties[propIndex].properties.splice(uriIndex, 1);
         },
 
-        // ---- Drag and Drop ----
+        // ---- Drag and Drop Helpers ----
+        clearDragStyles() {
+            document.querySelectorAll(
+                '.drag-card.drag-over, ' +
+                '.drag-card.drag-over-bottom, ' +
+                '.uri-row.drag-over, ' +
+                '.uri-row.drag-over-bottom'
+            ).forEach(el => {
+                el.classList.remove('drag-over', 'drag-over-bottom');
+            });
+        },
+        clearDragState() {
+            this.dragSourceType = null;
+            this.dragSourceIndex = null;
+            this.clearDragStyles();
+        },
+
+        // ---- Property Drag and Drop ----
         onDragStartProperty(event, index) {
             this.dragSourceType = 'property';
             this.dragSourceIndex = index;
+
+            // Explicitly set drag data for browser compatibility.
+            event.dataTransfer.setData('text/plain', String(index));
             event.dataTransfer.effectAllowed = 'move';
-            event.target.style.opacity = '0.4';
+
+            // Style the entire card, rather than just the handle.
+            const card = event.currentTarget.closest('.drag-card');
+            if (card) {
+                card.classList.add('dragging');
+            }
         },
         onDragEndProperty(event) {
-            event.target.style.opacity = '1';
-            this.dragSourceType = null;
-            this.dragSourceIndex = null;
-            // Clear all drag-over classes
-            document.querySelectorAll('.drag-over, .drag-over-bottom').forEach(el => {
-                el.classList.remove('drag-over', 'drag-over-bottom');
-            });
+            const card = event.currentTarget.closest('.drag-card');
+            if (card) {
+                card.classList.remove('dragging');
+            }
+            this.clearDragState();
         },
         onDragOverProperty(event, targetIndex) {
             if (this.dragSourceType !== 'property') return;
+
             event.preventDefault();
             event.dataTransfer.dropEffect = 'move';
 
-            // Remove all drag-over classes first
-            document.querySelectorAll('.drag-over, .drag-over-bottom').forEach(el => {
-                el.classList.remove('drag-over', 'drag-over-bottom');
-            });
+            this.clearDragStyles();
 
-            // Find the row div even if event fired on a child element
-            const targetRow = event.target.closest('[draggable="true"]');
-            if (targetRow) {
-                if (targetIndex > this.dragSourceIndex) {
-                    targetRow.classList.add('drag-over-bottom');
-                } else {
-                    targetRow.classList.add('drag-over');
-                }
+            const targetCard = event.currentTarget;
+
+            if (targetIndex > this.dragSourceIndex) {
+                targetCard.classList.add('drag-over-bottom');
+            } else if (targetIndex < this.dragSourceIndex) {
+                targetCard.classList.add('drag-over');
             }
         },
         onDropProperty(event, targetIndex) {
             event.preventDefault();
+
             if (this.dragSourceType !== 'property') return;
 
             const sourceIndex = this.dragSourceIndex;
-            if (sourceIndex === targetIndex) return;
 
-            // Reorder the array
-            const item = this.editForm.properties.splice(sourceIndex, 1)[0];
+            if (
+                sourceIndex === null ||
+                sourceIndex === targetIndex ||
+                sourceIndex < 0 ||
+                sourceIndex >= this.editForm.properties.length
+            ) {
+                this.clearDragState();
+                return;
+            }
+
+            // Remove the item from its original position.
+            const [item] = this.editForm.properties.splice(sourceIndex, 1);
+
+            // Insert it at the target position.
             this.editForm.properties.splice(targetIndex, 0, item);
+
+            this.clearDragState();
         },
 
+        // ---- URI Drag and Drop ----
         onDragStartUri(event, propIndex, uriIndex) {
             this.dragSourceType = 'uri';
-            this.dragSourceIndex = {propIndex, uriIndex};
+            this.dragSourceIndex = { propIndex, uriIndex };
+
+            event.dataTransfer.setData(
+                'text/plain',
+                `${propIndex}:${uriIndex}`
+            );
             event.dataTransfer.effectAllowed = 'move';
-            event.target.style.opacity = '0.4';
+
+            const row = event.currentTarget.closest('.uri-row');
+            if (row) {
+                row.classList.add('dragging');
+            }
         },
         onDragEndUri(event) {
-            event.target.style.opacity = '1';
-            this.dragSourceType = null;
-            this.dragSourceIndex = null;
-            document.querySelectorAll('.drag-over, .drag-over-bottom').forEach(el => {
-                el.classList.remove('drag-over', 'drag-over-bottom');
-            });
+            const row = event.currentTarget.closest('.uri-row');
+            if (row) {
+                row.classList.remove('dragging');
+            }
+            this.clearDragState();
         },
         onDragOverUri(event, propIndex, targetUriIndex) {
             if (this.dragSourceType !== 'uri') return;
 
             const source = this.dragSourceIndex;
-            if (source.propIndex !== propIndex) return; // Only allow reordering within same property
+
+            // Only allow reordering within the same property.
+            if (!source || source.propIndex !== propIndex) return;
 
             event.preventDefault();
             event.dataTransfer.dropEffect = 'move';
 
-            // Remove all drag-over classes first
-            document.querySelectorAll('.drag-over, .drag-over-bottom').forEach(el => {
-                el.classList.remove('drag-over', 'drag-over-bottom');
-            });
+            this.clearDragStyles();
 
-            // Find the row div even if event fired on a child element
-            const targetRow = event.target.closest('[draggable="true"]');
-            if (targetRow) {
-                if (targetUriIndex > source.uriIndex) {
-                    targetRow.classList.add('drag-over-bottom');
-                } else {
-                    targetRow.classList.add('drag-over');
-                }
+            const targetRow = event.currentTarget;
+
+            if (targetUriIndex > source.uriIndex) {
+                targetRow.classList.add('drag-over-bottom');
+            } else if (targetUriIndex < source.uriIndex) {
+                targetRow.classList.add('drag-over');
             }
         },
         onDropUri(event, propIndex, targetUriIndex) {
             event.preventDefault();
+
             if (this.dragSourceType !== 'uri') return;
 
             const source = this.dragSourceIndex;
-            if (source.propIndex !== propIndex) return; // Only reorder within same property
+
+            if (!source || source.propIndex !== propIndex) {
+                this.clearDragState();
+                return;
+            }
 
             const sourceUriIndex = source.uriIndex;
-            if (sourceUriIndex === targetUriIndex) return;
 
-            const props = this.editForm.properties[propIndex].properties;
-            const item = props.splice(sourceUriIndex, 1)[0];
-            props.splice(targetUriIndex, 0, item);
+            const uriList = this.editForm.properties[propIndex].properties;
+
+            if (
+                sourceUriIndex === targetUriIndex ||
+                sourceUriIndex < 0 ||
+                sourceUriIndex >= uriList.length
+            ) {
+                this.clearDragState();
+                return;
+            }
+
+            const [item] = uriList.splice(sourceUriIndex, 1);
+            uriList.splice(targetUriIndex, 0, item);
+
+            this.clearDragState();
         },
 
         // ---- Save Entry ----
