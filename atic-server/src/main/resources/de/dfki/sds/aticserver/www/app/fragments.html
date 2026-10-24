@@ -150,7 +150,7 @@
                                               @dragend="onDragEndProperty($event)">
                                             <i class="fa fa-grip-vertical"></i>
                                         </span>
-                                    <span class="fw-semibold">Fragment Property: {{ prop.key || '(no key)' }}</span>
+                                        <span class="fw-semibold">Fragment Property: {{ prop.key || '(no key)' }}</span>
                                     </div>
                                     <button type="button" class="btn btn-sm btn-outline-danger"
                                             @click="removeProperty(propIndex)" title="Remove property">
@@ -164,7 +164,7 @@
                                         <div class="mb-3">
                                             <label class="form-label fw-normal">Key</label>
                                             <input type="text" class="form-control form-control-sm"
-                                                   v-model.trim="prop.key" placeholder="e.g. label, name, type">
+                                                   v-model.trim="prop.key" placeholder="e.g. label, name, type" list="keys">
                                         </div>
 
                                         <div class="form-check">
@@ -200,6 +200,7 @@
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        v-model.trim="prop.properties[uriIdx]['@id']"
                                                        placeholder="http://example.org/property"
+                                                       list="rdf-property-uri-suggestions"
                                                        draggable="false">
                                                 <button type="button" class="btn btn-outline-danger btn-sm"
                                                         @click="removePropertyUri(propIndex, uriIdx)" title="Remove URI">
@@ -260,6 +261,110 @@
             </div>
 
         </div>
+
+        <datalist id="keys">
+            <option>label</option>
+            <option>comment</option>
+            <option>icon</option>
+            <option>type</option>
+        </datalist>
+
+        <datalist id="rdf-property-uri-suggestions">
+            <option value="pimo:core#prefLabel"
+                    label="pimo:core#prefLabel"></option>
+            <option value="pimo:core#hiddenLabel"
+                    label="pimo:core#hiddenLabel"></option>
+
+            <!-- Comments / textual descriptions -->
+            <option value="pimo:thing#plainTextContent"
+                    label="pimo:thing#plainTextContent"></option>
+            <option value="pimo:thing#wikiText"
+                    label="pimo:thing#wikiText"></option>
+
+            <!-- Images / icons -->
+            <option value="pimo:thing#hasImage"
+                    label="pimo:thing#hasImage"></option>
+
+            <!-- RDF and RDFS -->
+            <option value="http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                    label="rdf:type"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#label"
+                    label="rdfs:label"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#comment"
+                    label="rdfs:comment"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#seeAlso"
+                    label="rdfs:seeAlso"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#isDefinedBy"
+                    label="rdfs:isDefinedBy"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#subClassOf"
+                    label="rdfs:subClassOf"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#subPropertyOf"
+                    label="rdfs:subPropertyOf"></option>
+
+            <!-- SKOS -->
+            <option value="http://www.w3.org/2004/02/skos/core#prefLabel"
+                    label="skos:prefLabel"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#altLabel"
+                    label="skos:altLabel"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#hiddenLabel"
+                    label="skos:hiddenLabel"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#definition"
+                    label="skos:definition"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#note"
+                    label="skos:note"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#broader"
+                    label="skos:broader"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#narrower"
+                    label="skos:narrower"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#related"
+                    label="skos:related"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#exactMatch"
+                    label="skos:exactMatch"></option>
+
+            <!-- Schema.org -->
+            <option value="https://schema.org/name"
+                    label="schema:name"></option>
+            <option value="https://schema.org/description"
+                    label="schema:description"></option>
+            <option value="https://schema.org/image"
+                    label="schema:image"></option>
+            <option value="https://schema.org/identifier"
+                    label="schema:identifier"></option>
+            <option value="https://schema.org/url"
+                    label="schema:url"></option>
+            <option value="https://schema.org/additionalType"
+                    label="schema:additionalType"></option>
+            <option value="https://schema.org/alternateName"
+                    label="schema:alternateName"></option>
+            <option value="https://schema.org/keywords"
+                    label="schema:keywords"></option>
+            <option value="https://schema.org/ sameAs"
+                    label="schema:sameAs"></option>
+
+            <!-- FOAF -->
+            <option value="http://xmlns.com/foaf/0.1/name"
+                    label="foaf:name"></option>
+            <option value="http://xmlns.com/foaf/0.1/depiction"
+                    label="foaf:depiction"></option>
+            <option value="http://xmlns.com/foaf/0.1/primaryTopic"
+                    label="foaf:primaryTopic"></option>
+            <option value="http://xmlns.com/foaf/0.1/homepage"
+                    label="foaf:homepage"></option>
+
+            <!-- Dublin Core Terms -->
+            <option value="http://purl.org/dc/terms/title"
+                    label="dcterms:title"></option>
+            <option value="http://purl.org/dc/terms/description"
+                    label="dcterms:description"></option>
+            <option value="http://purl.org/dc/terms/subject"
+                    label="dcterms:subject"></option>
+            <option value="http://purl.org/dc/terms/creator"
+                    label="dcterms:creator"></option>
+            <option value="http://purl.org/dc/terms/created"
+                    label="dcterms:created"></option>
+            <option value="http://purl.org/dc/terms/modified"
+                    label="dcterms:modified"></option>
+        </datalist>
 
         <style>
             .drag-handle {
@@ -377,7 +482,7 @@ createApp({
             this.editForm.properties.splice(index, 1);
         },
         addPropertyUri(propIndex) {
-            this.editForm.properties[propIndex].properties.push({ '@id': '' });
+            this.editForm.properties[propIndex].properties.push({'@id': ''});
         },
         removePropertyUri(propIndex, uriIndex) {
             this.editForm.properties[propIndex].properties.splice(uriIndex, 1);
@@ -386,11 +491,11 @@ createApp({
         // ---- Drag and Drop Helpers ----
         clearDragStyles() {
             document.querySelectorAll(
-                '.drag-card.drag-over, ' +
-                '.drag-card.drag-over-bottom, ' +
-                '.uri-row.drag-over, ' +
-                '.uri-row.drag-over-bottom'
-            ).forEach(el => {
+                    '.drag-card.drag-over, ' +
+                    '.drag-card.drag-over-bottom, ' +
+                    '.uri-row.drag-over, ' +
+                    '.uri-row.drag-over-bottom'
+                    ).forEach(el => {
                 el.classList.remove('drag-over', 'drag-over-bottom');
             });
         },
@@ -423,7 +528,8 @@ createApp({
             this.clearDragState();
         },
         onDragOverProperty(event, targetIndex) {
-            if (this.dragSourceType !== 'property') return;
+            if (this.dragSourceType !== 'property')
+                return;
 
             event.preventDefault();
             event.dataTransfer.dropEffect = 'move';
@@ -441,16 +547,17 @@ createApp({
         onDropProperty(event, targetIndex) {
             event.preventDefault();
 
-            if (this.dragSourceType !== 'property') return;
+            if (this.dragSourceType !== 'property')
+                return;
 
             const sourceIndex = this.dragSourceIndex;
 
             if (
-                sourceIndex === null ||
-                sourceIndex === targetIndex ||
-                sourceIndex < 0 ||
-                sourceIndex >= this.editForm.properties.length
-            ) {
+                    sourceIndex === null ||
+                    sourceIndex === targetIndex ||
+                    sourceIndex < 0 ||
+                    sourceIndex >= this.editForm.properties.length
+                    ) {
                 this.clearDragState();
                 return;
             }
@@ -467,12 +574,12 @@ createApp({
         // ---- URI Drag and Drop ----
         onDragStartUri(event, propIndex, uriIndex) {
             this.dragSourceType = 'uri';
-            this.dragSourceIndex = { propIndex, uriIndex };
+            this.dragSourceIndex = {propIndex, uriIndex};
 
             event.dataTransfer.setData(
-                'text/plain',
-                `${propIndex}:${uriIndex}`
-            );
+                    'text/plain',
+                    `${propIndex}:${uriIndex}`
+                    );
             event.dataTransfer.effectAllowed = 'move';
 
             const row = event.currentTarget.closest('.uri-row');
@@ -488,12 +595,14 @@ createApp({
             this.clearDragState();
         },
         onDragOverUri(event, propIndex, targetUriIndex) {
-            if (this.dragSourceType !== 'uri') return;
+            if (this.dragSourceType !== 'uri')
+                return;
 
             const source = this.dragSourceIndex;
 
             // Only allow reordering within the same property.
-            if (!source || source.propIndex !== propIndex) return;
+            if (!source || source.propIndex !== propIndex)
+                return;
 
             event.preventDefault();
             event.dataTransfer.dropEffect = 'move';
@@ -511,7 +620,8 @@ createApp({
         onDropUri(event, propIndex, targetUriIndex) {
             event.preventDefault();
 
-            if (this.dragSourceType !== 'uri') return;
+            if (this.dragSourceType !== 'uri')
+                return;
 
             const source = this.dragSourceIndex;
 
@@ -525,10 +635,10 @@ createApp({
             const uriList = this.editForm.properties[propIndex].properties;
 
             if (
-                sourceUriIndex === targetUriIndex ||
-                sourceUriIndex < 0 ||
-                sourceUriIndex >= uriList.length
-            ) {
+                    sourceUriIndex === targetUriIndex ||
+                    sourceUriIndex < 0 ||
+                    sourceUriIndex >= uriList.length
+                    ) {
                 this.clearDragState();
                 return;
             }
@@ -546,17 +656,17 @@ createApp({
                 const payload = {
                     settings: this.editForm
                 };
-                
+
                 //this should be user given not generated
                 /*
-                // Include contextUri/groupName for existing entries so the server knows which one to update
-                if (this.editingEntry) {
-                    payload.contextUri = this.editingEntry.contextUri;
-                    payload.groupName = this.editingEntry.groupname;
-                }
-                // For new entries, the server will auto-generate a UUID contextUri
-                */
-               
+                 // Include contextUri/groupName for existing entries so the server knows which one to update
+                 if (this.editingEntry) {
+                 payload.contextUri = this.editingEntry.contextUri;
+                 payload.groupName = this.editingEntry.groupname;
+                 }
+                 // For new entries, the server will auto-generate a UUID contextUri
+                 */
+
                 await axios.post('/fragment/settings', payload);
                 const modalEl = document.getElementById('editModal');
                 window.bootstrap.Modal.getInstance(modalEl).hide();
