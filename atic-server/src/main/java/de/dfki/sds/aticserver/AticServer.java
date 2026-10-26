@@ -60,6 +60,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.net.URLEncoder;
@@ -77,6 +78,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
@@ -89,6 +91,7 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.graph.Triple;
 import org.apache.jena.query.ARQ;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -118,6 +121,7 @@ import org.apache.jena.update.UpdateExecution;
 import org.apache.jena.update.UpdateExecutionFactory;
 import org.apache.jena.update.UpdateFactory;
 import org.apache.jena.update.UpdateRequest;
+import org.apache.jena.vocabulary.OWL;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
 import org.apache.jena.vocabulary.VOID;
@@ -688,6 +692,69 @@ public class AticServer {
         }
     }
 
+    //------------------------------------------
+    // graph helpers for sorted ontology output
+    private static int category(Triple t) {
+        Node predicate = t.getPredicate();
+        Node object = t.getObject();
+
+        // Check for rdf:type assertions
+        if (predicate.equals(RDF.type.asNode())) {
+
+            String objUri = object.getURI();
+
+            // Class declarations: owl:Class, rdfs:Class
+            if ("http://www.w3.org/2002/07/owl#Class"
+                    .equals(objUri)
+                || "http://www.w3.org/2000/01/rdf-schema#Class"
+                    .equals(objUri)) {
+                return 0; // classes first
+            }
+
+            // Property declarations
+            if ("http://www.w3.org/2002/07/owl#ObjectProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#DatatypeProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#FunctionalProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#InverseFunctionalProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#SymmetricProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#AsymmetricProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#TransitiveProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"
+                    .equals(objUri)) {
+                return 1; // properties second
+            }
+        }
+
+        return 2; // ABox assertions and everything else
+    }
+
+    private static String nodeKey(Node node) {
+        if (node.isURI()) {
+            return "U:" + node.getURI();
+        }
+
+        if (node.isBlank()) {
+            return "B:" + node.getBlankNodeLabel();
+        }
+
+        if (node.isLiteral()) {
+            return "L:" + node.getLiteralLexicalForm()
+                + "|lang=" + Objects.toString(
+                    node.getLiteralLanguage(), "")
+                + "|datatype=" + Objects.toString(
+                    node.getLiteralDatatypeURI(), "");
+        }
+
+        return node.toString();
+    }
+
     private void postDerivedOntology(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
 
@@ -704,9 +771,19 @@ public class AticServer {
         });
 
         ctx.contentType("text/turtle");
-        StringWriter sw = new StringWriter();
-        RDFDataMgr.write(sw, ModelFactory.createModelForGraph(ontology), Lang.TURTLE);
-        ctx.result(sw.toString());
+
+        // Use class-first comparator: owl:Class/rdfs:Class declarations,
+        // then owl:ObjectProperty/owl:DatatypeProperty/rdf:Property,
+        // then everything else.
+        Comparator<Triple> classFirst = Comparator
+            .comparing((Triple t) -> category(t))
+            .thenComparing(t -> nodeKey(t.getSubject()))
+            .thenComparing(t -> nodeKey(t.getPredicate()))
+            .thenComparing(t -> nodeKey(t.getObject()));
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        OrderedTurtleWriter.writeSorted(out, ontology, classFirst);
+        ctx.result(out.toString(StandardCharsets.UTF_8));
     }
 
     private void postDerivedBridgeTemplate(Context ctx) {

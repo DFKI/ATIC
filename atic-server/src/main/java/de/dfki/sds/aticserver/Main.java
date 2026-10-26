@@ -12,11 +12,15 @@ public class Main {
     public static void main(String[] args) throws Exception {
         System.out.println(ASCII_LOGO);
         System.out.println(Utils.getVersion());
-        
+
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error");
-        
+
+        // Register custom Turtle writer with sorted triples (classes before
+        // properties, URIs before blank nodes, then alphabetical by URI).
+        OrderedTurtleWriter.register();
+
         AticConfig appConfig = ConfigLoader.load(AticConfig.class, args);
-        
+
         AticServer server = new AticServer(appConfig);
         server.init();
     }
