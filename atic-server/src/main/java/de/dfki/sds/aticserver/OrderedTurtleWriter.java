@@ -164,7 +164,15 @@ public final class OrderedTurtleWriter {
                 out, RDFFormat.TURTLE_BLOCKS);
 
         writer.start();
+
         try {
+            graph.getPrefixMapping().getNsPrefixMap()
+            .entrySet()
+            .stream()
+            .sorted(Map.Entry.comparingByValue())
+            .forEach(entry ->
+                    writer.prefix(entry.getKey(), entry.getValue()));
+
             for (Triple triple : grouped) {
                 writer.triple(triple);
             }
