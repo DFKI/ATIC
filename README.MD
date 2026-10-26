@@ -20,6 +20,7 @@ Our [demo page](https://www.dfki.uni-kl.de/~mschroeder/demo/atic/) contains a li
 
 ## Release Notes
 
+* 1.10.0 fragments and fragment settings
 * 1.9.0 rdfs analyzer with definition constructor (from abox to ontology and bridge templates)
 * 1.8.0 rdf-json bridge
 * 1.7.0 invex interfaces
