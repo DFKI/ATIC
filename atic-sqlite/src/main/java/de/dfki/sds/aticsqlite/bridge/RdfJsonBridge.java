@@ -2,6 +2,7 @@ package de.dfki.sds.aticsqlite.bridge;
 
 import de.dfki.sds.atic.helper.JSONUtils;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
+import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.RDFChangesDistinctCollector;
 import java.net.URI;
@@ -49,29 +50,24 @@ import org.slf4j.LoggerFactory;
 
 public class RdfJsonBridge {
 
-    private static final Logger LOG
-            = LoggerFactory.getLogger(RdfJsonBridge.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RdfJsonBridge.class);
 
     private final SparqlQueryBuilder sparqlQueryBuilder;
     private final ResultSetJsonMapper resultSetJsonMapper;
+    
+    private FragmentSettings fragmentSettings = FragmentSettings.defaultSettings();
 
     public RdfJsonBridge() {
-        this(
-                new SparqlQueryBuilder(),
-                new ResultSetJsonMapper()
-        );
+        this.sparqlQueryBuilder = new SparqlQueryBuilder();
+        this.resultSetJsonMapper = new ResultSetJsonMapper(this);
     }
 
-    private RdfJsonBridge(
-            SparqlQueryBuilder sparqlQueryBuilder,
-            ResultSetJsonMapper resultSetJsonMapper
-    ) {
-        this.sparqlQueryBuilder = sparqlQueryBuilder;
-        this.resultSetJsonMapper = resultSetJsonMapper;
+    public FragmentSettings getFragmentSettings() {
+        return fragmentSettings;
     }
 
-    public List<ResultSetJsonMapper.FragmentProperty> getFragmentSetting() {
-        return resultSetJsonMapper.getFragmentSetting();
+    public void setFragmentSettings(FragmentSettings fragmentSettings) {
+        this.fragmentSettings = fragmentSettings;
     }
 
     //==========================================================

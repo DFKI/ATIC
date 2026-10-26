@@ -46,8 +46,6 @@ import org.junit.jupiter.api.Test;
  */
 public class MoleculeEndpointAticServerUnitTest {
     
-    //TODO since there is already RdfJsonBridgeUnitTest in atic-sqlite, this can be reduced or removed
-
     public MoleculeEndpointAticServerUnitTest() {
     }
 

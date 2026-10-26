@@ -143,7 +143,6 @@ public class AticServer {
 
     private SqliteAticDatasetGraph datasetGraph;
     private MoleculeEndpoint moleculeEndpoint;
-    private final RdfJsonBridge rdfJsonBridge;
 
     private RDFPatchWriter rdfPatchWriter;
 
@@ -172,8 +171,6 @@ public class AticServer {
         capBuilder.invexEnabled(config.isInvexEnabled());
 
         datasetGraph = new SqliteAticDatasetGraph(database, rdfPatchWriter, capBuilder.build());
-
-        rdfJsonBridge = new RdfJsonBridge();
     }
 
     private void initFolders() {
@@ -1693,6 +1690,14 @@ public class AticServer {
         }
 
         InvocationContext ictx = fromJavalinContext(ctx);
+        
+        //per call an instance
+        RdfJsonBridge rdfJsonBridge = new RdfJsonBridge();
+        
+        //invocation context decides fragment settings
+        datasetGraph.executeRead(() -> {
+            rdfJsonBridge.setFragmentSettings(this.datasetGraph.getFragmentStorage().suggestSettings(ictx));
+        });
 
         switch (method) {
 
@@ -2460,10 +2465,6 @@ public class AticServer {
 
     /*package*/ RDFPatchWriter getRdfPatchWriter() {
         return rdfPatchWriter;
-    }
-
-    public RdfJsonBridge getRdfJsonBridge() {
-        return rdfJsonBridge;
     }
 
 }

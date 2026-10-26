@@ -3,6 +3,7 @@ package de.dfki.sds.aticsqlite;
 import de.dfki.sds.atic.ac.Group;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.helper.JSONUtils;
+import de.dfki.sds.atic.jenatic.AticDatasetGraph;
 import de.dfki.sds.atic.jenatic.Fragment;
 import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.FragmentSettings.FragmentProperty;
@@ -74,6 +75,11 @@ public class FragmentStorage {
     }
 
     private Fragment buildFragment(Node node, FragmentSettings settings, InvocationContext ctx, Set<Node> visited) {
+        return buildFragment(parent, node, settings, ctx, visited);
+    }
+    
+    //FragmentStorage independent implementation, used by ResultSetJsonMapper
+    public static Fragment buildFragment(AticDatasetGraph datasetGraph, Node node, FragmentSettings settings, InvocationContext ctx, Set<Node> visited) {
         Fragment.Builder builder = Fragment.builder(node).settings(settings);
 
         // Prevent cycles in the current traversal.
@@ -87,7 +93,7 @@ public class FragmentStorage {
             }
             if (property.hasPropertyRanking()) {
                 for (Node predicate : property.getPropertyRanking()) {
-                    ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) parent.find(
+                    ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) datasetGraph.find(
                             Node.ANY,
                             node,
                             predicate,
@@ -101,7 +107,7 @@ public class FragmentStorage {
                             Node object = q.getObject();
 
                             if (object.isURI()) {
-                                Fragment nested = buildFragment(object, settings, ctx, visited);
+                                Fragment nested = buildFragment(datasetGraph, object, settings, ctx, visited);
                                 builder.add(q.getPredicate(), nested);
                             } else {
                                 builder.add(q.getPredicate(), object);
