@@ -2130,14 +2130,21 @@ public class AticServer {
         InvocationContext ictx = fromJavalinContext(ctx);
         Locale locale = Locale.ENGLISH;
 
-        // Optional locale from query param
-        //TODO use Accepted-Language later
-        String localeParam = ctx.queryParam("locale");
-        if (localeParam != null && !localeParam.isEmpty()) {
+        // Parse Accept-Language header, fall back to English if absent
+        // Accept-Language can contain multiple comma-separated values with
+        // quality weights, e.g. "de-DE;q=0.9, en;q=0.8, ja;q=0.7".
+        // We take the first (highest priority) and strip any quality weight.
+        String acceptLang = ctx.header("Accept-Language");
+        if (acceptLang != null && !acceptLang.isBlank()) {
             try {
-                locale = Locale.forLanguageTag(localeParam);
-            } catch (Exception ignored) {
-                // fall back to English
+                List<Locale.LanguageRange> ranges
+                        = Locale.LanguageRange.parse(acceptLang);
+
+                if (!ranges.isEmpty() && !ranges.get(0).getRange().equals("*")) {
+                    locale = Locale.forLanguageTag(ranges.get(0).getRange());
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Fall back to English
             }
         }
 
@@ -2151,15 +2158,15 @@ public class AticServer {
             });
 
             Fragment fragment = fragments.get(0);
-            
+
             //a bit harsh: an empty fragment could mean that the resource does not have fragment properties
             //TODO change later to contains check?
-            if(fragment.getSubgraph().isEmpty()) {
+            if (fragment.getSubgraph().isEmpty()) {
                 ctx.status(HttpStatus.NOT_FOUND);
                 ctx.json(Map.of("error", "No fragment found for URI: " + uri));
                 return;
             }
-            
+
             JSONObject json = fragment.toJsonFragment(locale);
 
             ctx.json(json.toString());

@@ -134,6 +134,23 @@
                                        placeholder="https://example.org/resource"
                                        @keyup.enter="fetchFragment">
                             </div>
+                            <div class="mb-3">
+                                <label for="testerLang" class="form-label small">Language</label>
+                                <input class="form-control form-control-sm"
+                                       list="langOptions"
+                                       id="testerLang"
+                                       v-model="testerLang"
+                                       placeholder="en"
+                                       @keyup.enter="fetchFragment">
+                                <datalist id="langOptions">
+                                    <option value="en">
+                                    <option value="de">
+                                    <option value="ja">
+                                    <option value="es">
+                                    <option value="fr">
+                                </datalist>
+                                <small class="text-muted">Accept-Language header sent with request</small>
+                            </div>
                             <button type="button" class="btn btn-sm btn-primary w-100 mb-2"
                                     :disabled="!testerUri || testerLoading"
                                     @click="fetchFragment">
@@ -459,6 +476,7 @@ createApp({
 
             // Fragment Tester
             testerUri: '',
+            testerLang: 'en',
             testerLoading: false,
             testerResult: null,
             testerError: null
@@ -814,9 +832,15 @@ createApp({
             this.testerError = null;
             this.testerResult = null;
             try {
+                // Build Accept-Language header
+                let acceptLang = null;
+                if (this.testerLang && this.testerLang.trim()) {
+                    acceptLang = this.testerLang.trim();
+                }
+                const headers = acceptLang ? { 'Accept-Language': acceptLang } : {};
                 const response = await axios.get(
                         '/fragment/' + encodeURIComponent(this.testerUri),
-                        {skipErrorModal: true}
+                        { ...{ skipErrorModal: true }, headers }
                 );
                 this.testerResult = JSON.stringify(response.data, null, 2);
             } catch (error) {
