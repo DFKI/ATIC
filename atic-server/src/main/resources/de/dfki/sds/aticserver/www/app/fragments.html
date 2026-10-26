@@ -126,6 +126,7 @@
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">{{ editingEntry ? 'Edit Fragment Settings' : 'New Fragment Settings' }}</h5>
+                            <button @click="loadDefault" class="ms-2 btn btn-sm btn-outline-secondary">Load Default</button>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
@@ -486,6 +487,47 @@ createApp({
         },
         removePropertyUri(propIndex, uriIndex) {
             this.editForm.properties[propIndex].properties.splice(uriIndex, 1);
+        },
+
+        loadDefault() {
+            this.editForm.properties = [
+                {
+                    key: 'type',
+                    languageAware: false,
+                    properties: [
+                        {
+                            "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                        }
+                    ]
+                },
+                {
+                    key: 'label',
+                    languageAware: true,
+                    properties: [
+                        {
+                            "@id": "http://www.w3.org/2000/01/rdf-schema#label"
+                        }
+                    ]
+                },
+                {
+                    key: 'comment',
+                    languageAware: true,
+                    properties: [
+                        {
+                            "@id": "http://www.w3.org/2000/01/rdf-schema#comment"
+                        }
+                    ]
+                },
+                {
+                    key: 'icon',
+                    languageAware: false,
+                    properties: [
+                        {
+                            "@id": "https://schema.org/image"
+                        }
+                    ]
+                }
+            ];
         },
 
         // ---- Drag and Drop Helpers ----
