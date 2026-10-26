@@ -22,6 +22,11 @@
                 <div class="col d-flex align-items-center m-2">
                     <h3 class="mb-0 d-flex align-items-center me-2">
                         Fragment Settings
+
+                        <!-- New Entry button -->
+                        <button type="button" class="btn btn-primary ms-2" @click="openNewEntry">
+                            <i class="fa fa-plus me-1"></i> New Entry
+                        </button>
                     </h3>
                     <div v-if="loading" class="spinner-border text-primary" role="status" style="width: 1.5rem; height: 1.5rem;"
                          @click="loading = false">
@@ -38,7 +43,8 @@
             </div>
 
             <div class="row">
-                <div class="col">
+                <!-- Main content: Settings list -->
+                <div class="col-md-6">
 
                     <!-- Error alerts -->
                     <div v-if="saveError" class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -49,11 +55,6 @@
                         {{ deleteError }}
                         <button type="button" class="btn-close" @click="deleteError = null"></button>
                     </div>
-
-                    <!-- New Entry button -->
-                    <button type="button" class="btn btn-primary mb-4" @click="openNewEntry">
-                        <i class="fa fa-plus me-1"></i> New Entry
-                    </button>
 
                     <!-- Entries list -->
                     <div v-if="entries.length === 0" class="text-muted text-center py-5 border rounded">
@@ -116,6 +117,40 @@
                         </div>
                     </div>
 
+                </div>
+
+                <!-- Fragment Tester sidebar -->
+                <div class="col-md-6">
+                    <div class="card sticky-top" style="top: 1rem;">
+                        <div class="card-header">
+                            <strong><i class="fa fa-vial me-1"></i> Fragment Tester</strong>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="testerUri" class="form-label small">Resource URI</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       id="testerUri"
+                                       v-model.trim="testerUri"
+                                       placeholder="https://example.org/resource"
+                                       @keyup.enter="fetchFragment">
+                            </div>
+                            <button type="button" class="btn btn-sm btn-primary w-100 mb-2"
+                                    :disabled="!testerUri || testerLoading"
+                                    @click="fetchFragment">
+                                <i class="fa fa-play me-1" v-if="!testerLoading"></i>
+                                <span class="spinner-border spinner-border-sm me-1" v-if="testerLoading"></span>
+                                Fetch Fragment
+                            </button>
+
+                            <div v-if="testerError" class="alert alert-danger py-2 small" role="alert">
+                                {{ testerError }}
+                            </div>
+
+                            <div v-if="testerResult" class="border rounded bg-light" style="max-height: 50vh; overflow: auto;">
+                                <pre class="mb-0 p-2 small" style="white-space: pre-wrap; word-break: break-word;">{{ testerResult }}</pre>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -420,15 +455,23 @@ createApp({
 
             // Drag and drop state
             dragSourceType: null, // 'property' or 'uri'
-            dragSourceIndex: null
+            dragSourceIndex: null,
+
+            // Fragment Tester
+            testerUri: '',
+            testerLoading: false,
+            testerResult: null,
+            testerError: null
         };
     },
     created() {
         axios.interceptors.response.use(
                 response => response,
                 error => {
-                    const errorMsg = error.response?.data || error.message || "Unknown error";
-                    this.open_error_modal(errorMsg);
+                    if (!error.config?.skipErrorModal) {
+                        const errorMsg = error.response?.data || error.message || "Unknown error";
+                        this.open_error_modal(errorMsg);
+                    }
                     return Promise.reject(error);
                 }
         );
@@ -760,6 +803,26 @@ createApp({
                 return d.toLocaleString();
             } catch (e) {
                 return isoString;
+            }
+        },
+
+        // ---- Fragment Tester ----
+        async fetchFragment() {
+            if (!this.testerUri)
+                return;
+            this.testerLoading = true;
+            this.testerError = null;
+            this.testerResult = null;
+            try {
+                const response = await axios.get(
+                        '/fragment/' + encodeURIComponent(this.testerUri),
+                        {skipErrorModal: true}
+                );
+                this.testerResult = JSON.stringify(response.data, null, 2);
+            } catch (error) {
+                this.testerError = error.response?.data?.error || error.message || 'Failed to fetch fragment';
+            } finally {
+                this.testerLoading = false;
             }
         },
 

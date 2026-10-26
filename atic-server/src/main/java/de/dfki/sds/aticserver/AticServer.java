@@ -22,6 +22,7 @@ import de.dfki.sds.atic.invex.QueryResults;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
+import de.dfki.sds.atic.jenatic.Fragment;
 import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.AticGraphUtils;
@@ -29,6 +30,7 @@ import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
 import de.dfki.sds.aticsqlite.DatabaseOptions;
+import de.dfki.sds.aticsqlite.FragmentStorage;
 import de.dfki.sds.aticsqlite.FragmentStorage.FragmentSettingsEntry;
 import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
 import de.dfki.sds.aticsqlite.RDFPatchListener;
@@ -395,6 +397,9 @@ public class AticServer {
         routes.get("/fragment/settings", this::getFragmentSettings);
         routes.get("/fragment/settings/all", this::getFragmentSettingsAll);
         routes.delete("/fragment/settings", this::deleteFragmentSettings);
+
+        // Fragment by URI (builds fragment using current settings)
+        routes.get("/fragment/{uri}", this::getFragment);
 
         routes.get("/vkg/{uri}/**", this::handleVirtualGraphRequest);
 
@@ -2118,6 +2123,53 @@ public class AticServer {
         });
 
         ctx.json(Map.of("success", true));
+    }
+
+    private void getFragment(Context ctx) {
+        String uri = ctx.pathParam("uri");
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Locale locale = Locale.ENGLISH;
+
+        // Optional locale from query param
+        //TODO use Accepted-Language later
+        String localeParam = ctx.queryParam("locale");
+        if (localeParam != null && !localeParam.isEmpty()) {
+            try {
+                locale = Locale.forLanguageTag(localeParam);
+            } catch (Exception ignored) {
+                // fall back to English
+            }
+        }
+
+        try {
+            Node node = NodeFactory.createURI(uri);
+
+            List<Fragment> fragments = datasetGraph.calculateRead(() -> {
+                FragmentStorage storage = datasetGraph.getFragmentStorage();
+                storage.suggestSettings(ictx); // validates settings exist
+                return storage.buildFragments(List.of(node), ictx);
+            });
+
+            Fragment fragment = fragments.get(0);
+            
+            //a bit harsh: an empty fragment could mean that the resource does not have fragment properties
+            //TODO change later to contains check?
+            if(fragment.getSubgraph().isEmpty()) {
+                ctx.status(HttpStatus.NOT_FOUND);
+                ctx.json(Map.of("error", "No fragment found for URI: " + uri));
+                return;
+            }
+            
+            JSONObject json = fragment.toJsonFragment(locale);
+
+            ctx.json(json.toString());
+        } catch (IllegalArgumentException e) {
+            ctx.status(HttpStatus.BAD_REQUEST);
+            ctx.json(Map.of("error", "Invalid URI: " + uri));
+        } catch (Exception e) {
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR);
+            ctx.json(Map.of("error", "Failed to build fragment: " + e.getMessage()));
+        }
     }
 
     //---------------------------------------
