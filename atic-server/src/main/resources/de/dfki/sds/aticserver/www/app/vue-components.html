@@ -173,8 +173,8 @@
                                     </div>
                                 </div>
                                 <div class="card-body">
-                                    <!-- Name and Path fields (read-only when editing, editable when new) -->
-                                    <div class="row mb-3">
+                                    <!-- Name and Path fields -->
+                                    <div class="row mb-2">
                                         <div class="col-md-6 mb-2">
                                             <label class="form-label fw-normal">Name</label>
                                             <input type="text" class="form-control form-control-sm"
@@ -190,50 +190,54 @@
                                         </div>
                                     </div>
 
-                                    <!-- Bridges -->
-                                    <div class="mb-3">
-                                        <label class="form-label fw-normal">
-                                            <i class="fa fa-plug me-1"></i>Bridges
-                                            <small class="text-muted">(JSON array of bridge configurations)</small>
-                                        </label>
-                                        <textarea class="form-control editor" rows="4"
-                                                  v-model="editingComponent.bridgesText"
-                                                  spellcheck="false"
-                                                  @input="handleBridgesInput"></textarea>
-                                    </div>
-
-                                    <!-- Script -->
-                                    <div class="mb-3">
-                                        <label class="form-label fw-normal">
-                                            <i class="fa fa-file-code me-1"></i>Script
-                                            <small class="text-muted">(Options API)</small>
-                                        </label>
-                                        <textarea class="form-control editor" rows="8"
-                                                  v-model="editingComponent.scriptText"
-                                                  spellcheck="false"
-                                                  @input="handleScriptInput"></textarea>
-                                    </div>
-
-                                    <!-- Template -->
-                                    <div class="mb-3">
-                                        <label class="form-label fw-normal">
-                                            <i class="fa fa-window-maximize me-1"></i>Template
-                                        </label>
-                                        <textarea class="form-control editor" rows="6"
-                                                  v-model="editingComponent.templateText"
-                                                  spellcheck="false"
-                                                  @input="handleTemplateInput"></textarea>
-                                    </div>
-
-                                    <!-- Style -->
-                                    <div class="mb-3">
-                                        <label class="form-label fw-normal">
-                                            <i class="fa fa-paint-brush me-1"></i>Style
-                                        </label>
-                                        <textarea class="form-control editor" rows="4"
-                                                  v-model="editingComponent.styleText"
-                                                  spellcheck="false"
-                                                  @input="handleStyleInput"></textarea>
+                                    <!-- Tabs for Bridges, Script, Template, Style -->
+                                    <ul class="nav nav-tabs mb-0">
+                                        <li class="nav-item">
+                                            <a class="nav-link" :class="{active: activeTab === 'bridges'}" href="#" @click.prevent="activeTab='bridges'">
+                                                <i class="fa fa-plug me-1"></i>Bridges
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" :class="{active: activeTab === 'script'}" href="#" @click.prevent="activeTab='script'">
+                                                <i class="fa fa-file-code me-1"></i>Script
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" :class="{active: activeTab === 'template'}" href="#" @click.prevent="activeTab='template'">
+                                                <i class="fa fa-window-maximize me-1"></i>Template
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" :class="{active: activeTab === 'style'}" href="#" @click.prevent="activeTab='style'">
+                                                <i class="fa fa-paint-brush me-1"></i>Style
+                                            </a>
+                                        </li>
+                                    </ul>
+                                    <div class="tab-content">
+                                        <div class="tab-pane fade" :class="{show: activeTab === 'bridges', 'active': activeTab === 'bridges'}">
+                                            <textarea class="form-control editor" rows="35"
+                                                      v-model="editingComponent.bridgesText"
+                                                      spellcheck="false"
+                                                      @input="handleBridgesInput"></textarea>
+                                        </div>
+                                        <div class="tab-pane fade" :class="{show: activeTab === 'script', 'active': activeTab === 'script'}">
+                                            <textarea class="form-control editor" rows="35"
+                                                      v-model="editingComponent.scriptText"
+                                                      spellcheck="false"
+                                                      @input="handleScriptInput"></textarea>
+                                        </div>
+                                        <div class="tab-pane fade" :class="{show: activeTab === 'template', 'active': activeTab === 'template'}">
+                                            <textarea class="form-control editor" rows="35"
+                                                      v-model="editingComponent.templateText"
+                                                      spellcheck="false"
+                                                      @input="handleTemplateInput"></textarea>
+                                        </div>
+                                        <div class="tab-pane fade" :class="{show: activeTab === 'style', 'active': activeTab === 'style'}">
+                                            <textarea class="form-control editor" rows="35"
+                                                      v-model="editingComponent.styleText"
+                                                      spellcheck="false"
+                                                      @input="handleStyleInput"></textarea>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -266,6 +270,7 @@ createApp({
             deleteError: null,
             saving: false,
             isNewComponent: false,
+            activeTab: 'bridges',
             // Auto-save state
             autoSaveTimer: null,
             autoSaveState: {text: '', icon: 'fa fa-clock', class: 'text-muted'},
@@ -349,6 +354,7 @@ createApp({
 
             this.originalBridges = JSON.parse(defaultBridges);
             this.isNewComponent = true;
+            //this.activeTab = 'bridges';
             this.clearAutoSaveIndicator();
         },
 
@@ -383,6 +389,7 @@ createApp({
                 };
                 this.originalBridges = bridgesArray;
                 this.isNewComponent = false;
+                //this.activeTab = 'bridges';
                 this.clearAutoSaveIndicator();
             } catch (error) {
                 console.error('Failed to load component for editing:', error);
