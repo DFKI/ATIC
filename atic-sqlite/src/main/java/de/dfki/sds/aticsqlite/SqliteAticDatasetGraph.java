@@ -153,6 +153,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     private InvexEmbedded invexEmbedded;
     
     private FragmentStorage fragmentStorage;
+    
+    private VueComponentStorage vueComponentStorage;
 
     public SqliteAticDatasetGraph(Database db) {
         this(db, null);
@@ -178,6 +180,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             this.rdfPatchEmitter.addListener(mainListener);
         }
         this.fragmentStorage = new FragmentStorage(this);
+        this.vueComponentStorage = new VueComponentStorage(this);
         bootstrap();
     }
 
@@ -234,6 +237,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 fragmentStorage.bootstrap();
             } catch (SQLException ex) {
                 throw new RuntimeException("Failed to bootstrap fragment storage", ex);
+            }
+        });
+        
+        this.executeWrite(() -> {
+            try {
+                vueComponentStorage.bootstrap();
+            } catch (SQLException ex) {
+                throw new RuntimeException("Failed to bootstrap vue component storage", ex);
             }
         });
         
@@ -4370,6 +4381,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
     public FragmentStorage getFragmentStorage() {
         return fragmentStorage;
+    }
+
+    public VueComponentStorage getVueComponentStorage() {
+        return vueComponentStorage;
     }
     
     //==========================================================
