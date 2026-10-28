@@ -1,8 +1,8 @@
-
-
 package de.dfki.sds.aticsqlite;
 
+import de.dfki.sds.atic.helper.JSONUtils;
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 /**
  *
@@ -11,9 +11,9 @@ public class VueComponent {
 
     private String path;
     private String name;
-    
+
     private JSONArray bridges = new JSONArray();
-    
+
     private String script;
     private String template;
     private String style;
@@ -21,6 +21,33 @@ public class VueComponent {
     public VueComponent(String path, String name) {
         this.path = path;
         this.name = name;
+    }
+
+    public JSONObject toJson() {
+        JSONObject json = JSONUtils.createJSONObject();
+        json.put("path", path);
+        json.put("name", name);
+        json.put("bridges", bridges);
+        json.put("script", script == null ? JSONObject.NULL : script);
+        json.put("template", template == null ? JSONObject.NULL : template);
+        json.put("style", style == null ? JSONObject.NULL : style);
+        return json;
+    }
+
+    public static VueComponent fromJson(JSONObject json) {
+        VueComponent component = new VueComponent(
+                json.getString("path"),
+                json.getString("name")
+        );
+
+        component.setBridges(json.optJSONArray("bridges") != null
+                ? json.getJSONArray("bridges")
+                : new JSONArray());
+        component.setScript(json.isNull("script") ? null : json.optString("script", null));
+        component.setTemplate(json.isNull("template") ? null : json.optString("template", null));
+        component.setStyle(json.isNull("style") ? null : json.optString("style", null));
+
+        return component;
     }
 
     public String getPath() {
@@ -70,7 +97,5 @@ public class VueComponent {
     public void setStyle(String style) {
         this.style = style;
     }
-    
-    
-    
+
 }

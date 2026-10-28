@@ -37,16 +37,19 @@ import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph.OntologyFormat;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
+import de.dfki.sds.aticsqlite.VueComponent;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import de.dfki.sds.rdfpatchsqlite.Converter;
 import io.javalin.Javalin;
 import io.javalin.config.JavalinConfig;
 import io.javalin.config.RoutesConfig;
+import io.javalin.http.BadRequestResponse;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import io.javalin.http.Cookie;
 import io.javalin.http.HandlerType;
 import io.javalin.http.HttpStatus;
+import io.javalin.http.NotFoundResponse;
 import io.javalin.http.UnauthorizedResponse;
 import io.javalin.http.UploadedFile;
 import io.javalin.http.sse.SseClient;
@@ -60,7 +63,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.net.URLEncoder;
@@ -76,9 +78,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
@@ -104,7 +106,6 @@ import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.TxnType;
 import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.rdfpatch.changes.RDFChangesBase;
@@ -121,7 +122,6 @@ import org.apache.jena.update.UpdateExecution;
 import org.apache.jena.update.UpdateExecutionFactory;
 import org.apache.jena.update.UpdateFactory;
 import org.apache.jena.update.UpdateRequest;
-import org.apache.jena.vocabulary.OWL;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
 import org.apache.jena.vocabulary.VOID;
@@ -398,6 +398,10 @@ public class AticServer {
         routes.get("/fragment/settings", this::getFragmentSettings);
         routes.get("/fragment/settings/all", this::getFragmentSettingsAll);
         routes.delete("/fragment/settings", this::deleteFragmentSettings);
+
+        routes.post("/vue-components", this::postVueComponent);
+        routes.get("/vue-components", this::getVueComponents);
+        routes.delete("/vue-components", this::deleteVueComponent);
 
         // Fragment by URI (builds fragment using current settings)
         routes.get("/fragment/{uri}", this::getFragment);
@@ -706,28 +710,28 @@ public class AticServer {
             // Class declarations: owl:Class, rdfs:Class
             if ("http://www.w3.org/2002/07/owl#Class"
                     .equals(objUri)
-                || "http://www.w3.org/2000/01/rdf-schema#Class"
-                    .equals(objUri)) {
+                    || "http://www.w3.org/2000/01/rdf-schema#Class"
+                            .equals(objUri)) {
                 return 0; // classes first
             }
 
             // Property declarations
             if ("http://www.w3.org/2002/07/owl#ObjectProperty"
                     .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#DatatypeProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#FunctionalProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#InverseFunctionalProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#SymmetricProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#AsymmetricProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#TransitiveProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"
-                    .equals(objUri)) {
+                    || "http://www.w3.org/2002/07/owl#DatatypeProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/2002/07/owl#FunctionalProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/2002/07/owl#InverseFunctionalProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/2002/07/owl#SymmetricProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/2002/07/owl#AsymmetricProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/2002/07/owl#TransitiveProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"
+                            .equals(objUri)) {
                 return 1; // properties second
             }
         }
@@ -746,10 +750,10 @@ public class AticServer {
 
         if (node.isLiteral()) {
             return "L:" + node.getLiteralLexicalForm()
-                + "|lang=" + Objects.toString(
-                    node.getLiteralLanguage(), "")
-                + "|datatype=" + Objects.toString(
-                    node.getLiteralDatatypeURI(), "");
+                    + "|lang=" + Objects.toString(
+                            node.getLiteralLanguage(), "")
+                    + "|datatype=" + Objects.toString(
+                            node.getLiteralDatatypeURI(), "");
         }
 
         return node.toString();
@@ -776,10 +780,10 @@ public class AticServer {
         // then owl:ObjectProperty/owl:DatatypeProperty/rdf:Property,
         // then everything else.
         Comparator<Triple> classFirst = Comparator
-            .comparing((Triple t) -> category(t))
-            .thenComparing(t -> nodeKey(t.getSubject()))
-            .thenComparing(t -> nodeKey(t.getPredicate()))
-            .thenComparing(t -> nodeKey(t.getObject()));
+                .comparing((Triple t) -> category(t))
+                .thenComparing(t -> nodeKey(t.getSubject()))
+                .thenComparing(t -> nodeKey(t.getPredicate()))
+                .thenComparing(t -> nodeKey(t.getObject()));
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         OrderedTurtleWriter.writeSorted(out, ontology, classFirst);
@@ -1767,10 +1771,10 @@ public class AticServer {
         }
 
         InvocationContext ictx = fromJavalinContext(ctx);
-        
+
         //per call an instance
         RdfJsonBridge rdfJsonBridge = new RdfJsonBridge();
-        
+
         //invocation context decides fragment settings
         datasetGraph.executeRead(() -> {
             rdfJsonBridge.setFragmentSettings(this.datasetGraph.getFragmentStorage().suggestSettings(ictx));
@@ -2259,6 +2263,90 @@ public class AticServer {
             ctx.status(HttpStatus.INTERNAL_SERVER_ERROR);
             ctx.json(Map.of("error", "Failed to build fragment: " + e.getMessage()));
         }
+    }
+
+    //--------------------------------------
+    //Vue Components CRUD
+    
+    private void postVueComponent(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        JSONObject json;
+        try {
+            json = new JSONObject(ctx.body());
+        } catch (Exception ex) {
+            throw new BadRequestResponse("Invalid JSON request body");
+        }
+
+        VueComponent component;
+        try {
+            component = VueComponent.fromJson(json);
+            if (component.getPath().isBlank() || component.getName().isBlank()) {
+                throw new BadRequestResponse("'path' and 'name' are required");
+            }
+            if (!(json.opt("bridges") instanceof JSONArray)) {
+                throw new BadRequestResponse("'bridges' must be a JSON array");
+            }
+        } catch (BadRequestResponse ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BadRequestResponse("Invalid Vue component JSON");
+        }
+
+        datasetGraph.executeWrite(() -> datasetGraph.getVueComponentStorage().save(component, ictx));
+        ctx.status(201).json(component.toJson().toString(4));
+    }
+
+    private void getVueComponents(Context ctx) {
+        String path = ctx.queryParam("path");
+        String name = ctx.queryParam("name");
+
+        if (name != null && path == null) {
+            throw new BadRequestResponse("'path' is required when 'name' is provided");
+        }
+        if (path != null && path.isBlank()) {
+            throw new BadRequestResponse("'path' must not be blank");
+        }
+        if (name != null && name.isBlank()) {
+            throw new BadRequestResponse("'name' must not be blank");
+        }
+
+        if (path != null && name != null) {
+            VueComponent component = datasetGraph.calculateRead(() -> datasetGraph.getVueComponentStorage().load(path, name));
+            if (component == null) {
+                throw new NotFoundResponse("Vue component not found");
+            }
+            ctx.json(component.toJson().toString(4));
+        } else if (path != null) {
+            List<VueComponent> components = datasetGraph.calculateRead(() -> datasetGraph.getVueComponentStorage().loadByPath(path));
+            JSONArray result = new JSONArray();
+            for (VueComponent component : components) {
+                result.put(component.toJson());
+            }
+            ctx.json(result.toString(4));
+        } else {
+            List<VueComponent> components = datasetGraph.calculateRead(() -> datasetGraph.getVueComponentStorage().loadAll());
+            JSONArray result = new JSONArray();
+            for (VueComponent component : components) {
+                result.put(component.toJson());
+            }
+            ctx.json(result.toString(4));
+        }
+    }
+
+    private void deleteVueComponent(Context ctx) {
+        String path = ctx.queryParam("path");
+        String name = ctx.queryParam("name");
+        if (path == null || path.isBlank() || name == null || name.isBlank()) {
+            throw new BadRequestResponse("Query parameters 'path' and 'name' are required");
+        }
+
+        VueComponent existing = datasetGraph.calculateRead(() -> datasetGraph.getVueComponentStorage().load(path, name));
+        if (existing == null) {
+            throw new NotFoundResponse("Vue component not found");
+        }
+
+        datasetGraph.executeWrite(() -> datasetGraph.getVueComponentStorage().delete(path, name));
+        ctx.status(204);
     }
 
     //---------------------------------------
