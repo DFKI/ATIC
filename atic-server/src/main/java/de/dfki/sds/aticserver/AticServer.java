@@ -402,6 +402,7 @@ public class AticServer {
         routes.post("/vue-components", this::postVueComponent);
         routes.get("/vue-components", this::getVueComponents);
         routes.delete("/vue-components", this::deleteVueComponent);
+        routes.get("/vue-sandbox/*", this::getVueSandbox);
 
         // Fragment by URI (builds fragment using current settings)
         routes.get("/fragment/{uri}", this::getFragment);
@@ -2267,7 +2268,6 @@ public class AticServer {
 
     //--------------------------------------
     //Vue Components CRUD
-    
     private void postVueComponent(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
         JSONObject json;
@@ -2347,6 +2347,38 @@ public class AticServer {
 
         datasetGraph.executeWrite(() -> datasetGraph.getVueComponentStorage().delete(path, name));
         ctx.status(204);
+    }
+
+    private void getVueSandbox(Context ctx) {
+        String prefix = "/vue-sandbox/";
+        String requestPath = ctx.path();
+
+        if (!requestPath.startsWith(prefix) || !requestPath.endsWith(".html")) {
+            ctx.status(404);
+            return;
+        }
+
+        String relativePath = requestPath.substring(prefix.length());
+        relativePath = relativePath.substring(0, relativePath.length() - ".html".length());
+
+        int lastSlash = relativePath.lastIndexOf('/');
+        String path = lastSlash >= 0 ? relativePath.substring(0, lastSlash) : "";
+        String name = lastSlash >= 0 ? relativePath.substring(lastSlash + 1) : relativePath;
+
+        if (name.isBlank()) {
+            ctx.status(404);
+            return;
+        }
+
+        String finalPath = path.isBlank() ? "/" : "/" + path;
+
+        String html = datasetGraph.calculateRead(()
+                -> datasetGraph.getVueComponentStorage().loadAs(
+                        finalPath, name, "/app/", "/vue-sandbox/", "html"
+                )
+        );
+
+        ctx.contentType("text/html; charset=utf-8").result(html);
     }
 
     //---------------------------------------

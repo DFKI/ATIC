@@ -4,6 +4,7 @@ import de.dfki.sds.atic.jenatic.InvocationContext;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.commons.text.StringEscapeUtils;
 import org.json.JSONArray;
 
 /**
@@ -157,5 +158,92 @@ public class VueComponentStorage {
             throw new RuntimeException(ex);
         }
     }
-    
+
+    //---------------------------
+    public String loadAs(String path, String name, String assetsPath, String componentsPath, String format) {
+        if (!"html".equalsIgnoreCase(format)) {
+            throw new IllegalArgumentException("Unsupported format: " + format);
+        }
+
+        if (!path.endsWith("/")) {
+            path += "/";
+        }
+
+        VueComponent component = load(path, name);
+        if (component == null) {
+            throw new IllegalArgumentException("Component not found: " + path + "/" + name);
+        }
+
+        String template = component.getTemplate() == null ? "" : component.getTemplate();
+        String script = component.getScript() == null ? "" : component.getScript();
+        String style = component.getStyle() == null ? "" : component.getStyle();
+
+        StringBuilder componentScripts = new StringBuilder();
+
+        for (VueComponent other : loadAll()) {
+            if (other.getPath().equals(path) && other.getName().equals(name)) {
+                continue;
+            }
+
+            String compPath = other.getPath();
+            if (!compPath.endsWith("/")) {
+                compPath += "/";
+            }
+
+            componentScripts.append("    <script src=\"")
+                    .append(componentsPath)
+                    .append(compPath)
+                    .append(other.getName())
+                    .append(".js\"></script>\n");
+        }
+
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+
+            <link href="%scss/bootstrap.min.css" rel="stylesheet">
+            <link href="%scss/all.min.css" rel="stylesheet">
+
+            <script src="%sjs/bootstrap.bundle.min.js"></script>
+            <script src="%sjs/vue.global.prod.js"></script>
+            <script src="%sjs/axios.min.js"></script>
+        %s
+            <link rel="shortcut icon" href="%sfavicon.ico">
+            <title>%s Demo</title>
+            <style>
+        %s
+            </style>
+        </head>
+        <body>
+            <div class="container-fluid py-4" id="app">
+        %s
+            </div>
+
+            <script>
+                const { createApp } = Vue;
+
+                createApp(
+        %s
+                ).mount('#app');
+            </script>
+        </body>
+        </html>
+        """.formatted(
+                assetsPath,
+                assetsPath,
+                assetsPath,
+                assetsPath,
+                assetsPath,
+                componentScripts,
+                assetsPath,
+                StringEscapeUtils.escapeHtml4(name),
+                style,
+                template,
+                script
+        );
+    }
+
 }

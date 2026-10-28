@@ -229,6 +229,7 @@ public class DefinitionConstructor {
      */
     private JSONObject buildSuggestedTemplate(Resource type, RdfsAnalyzer analyzer) {
         String typeLocalName = AticGraphUtils.getLocalName(type.getURI());
+        String templateName = typeLocalName;
         if (typeLocalName == null || typeLocalName.isBlank()) {
             typeLocalName = "resource";
         }
@@ -274,6 +275,7 @@ public class DefinitionConstructor {
 
         // --- $map ---
         JSONObject template = JSONUtils.createJSONObject();
+        template.put("$name", templateName);
         template.put("$type", "array");
 
         JSONObject map = JSONUtils.createJSONObject();

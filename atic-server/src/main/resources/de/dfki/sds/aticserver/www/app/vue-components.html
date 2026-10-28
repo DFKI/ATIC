@@ -94,7 +94,7 @@
 
             <div class="row">
                 <!-- Left column: Component list -->
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="list-col">
                         <!-- Empty state -->
                         <!--div v-if="components.length === 0" class="text-muted text-center py-5 border rounded">
@@ -120,12 +120,12 @@
 
                                     <div class="d-flex gap-1 flex-shrink-0 ms-2">
                                         <!-- Edit button -->
-                                        <button type="button"
+                                        <!-- button type="button"
                                                 class="btn btn-sm btn-outline-primary"
                                                 title="Edit"
                                                 @click="editComponent(comp)">
                                             <i class="fa fa-edit"></i>
-                                        </button>
+                                        </button -->
 
                                         <!-- Delete button -->
                                         <button type="button"
@@ -142,7 +142,7 @@
                 </div>
 
                 <!-- Right column: Edit area -->
-                <div class="col-md-8">
+                <div class="col-md-9">
                     <div class="edit-col">
                         <!-- No component selected -->
                         <div v-if="!editingComponent" class="text-muted">
@@ -318,13 +318,13 @@ createApp({
                 "  data() {",
                 "    return {",
                 "",
-                "    };",
+                "    }",
                 "  },",
                 "",
                 "  methods: {",
                 "",
                 "  }",
-                "};"
+                "}"
             ].join("\n");
 
             const defaultTemplate = [
@@ -352,29 +352,47 @@ createApp({
             this.clearAutoSaveIndicator();
         },
 
-        // ---- Edit a component from the list ----
-        editComponent(comp) {
-            // Build editable copy
-            const bridgesArray = Array.isArray(comp.bridges) ? comp.bridges : [];
-            const bridgesJson = bridgesArray.length > 0
-                    ? JSON.stringify(bridgesArray, null, 4)
-                    : '[]';
+        // ---- Edit a component from the list (fetch latest data from server) ----
+        async editComponent(comp) {
+            await this.loadComponent(comp.path, comp.name);
+        },
 
-            this.editingComponent = {
-                path: comp.path || '',
-                name: comp.name || '',
-                bridges: bridgesJson,
-                bridgesText: bridgesJson,
-                script: comp.script || '',
-                scriptText: comp.script || '',
-                template: comp.template || '',
-                templateText: comp.template || '',
-                style: comp.style || '',
-                styleText: comp.style || ''
-            };
-            this.originalBridges = bridgesArray;
-            this.isNewComponent = false;
-            this.clearAutoSaveIndicator();
+        // ---- Load a single component from server and open it for editing ----
+        async loadComponent(path, name) {
+            try {
+                const response = await axios.get('/vue-components', {
+                    params: {path: path, name: name}
+                });
+                const comp = response.data;
+                const bridgesArray = Array.isArray(comp.bridges) ? comp.bridges : [];
+                const bridgesJson = bridgesArray.length > 0
+                        ? JSON.stringify(bridgesArray, null, 4)
+                        : '[]';
+
+                this.editingComponent = {
+                    path: comp.path || '',
+                    name: comp.name || '',
+                    bridges: bridgesJson,
+                    bridgesText: bridgesJson,
+                    script: comp.script || '',
+                    scriptText: comp.script || '',
+                    template: comp.template || '',
+                    templateText: comp.template || '',
+                    style: comp.style || '',
+                    styleText: comp.style || ''
+                };
+                this.originalBridges = bridgesArray;
+                this.isNewComponent = false;
+                this.clearAutoSaveIndicator();
+            } catch (error) {
+                console.error('Failed to load component for editing:', error);
+                this.saveError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+            }
         },
 
         // ---- Delete a component (native confirm dialog) ----
