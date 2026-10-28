@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Vue Components | Atic</title>
+
+        <style>
+            .list-col {
+                max-height: calc(100vh - 150px);
+                overflow-y: auto;
+            }
+            .edit-col {
+                max-height: calc(100vh - 150px);
+                overflow-y: auto;
+            }
+            .component-list-item {
+                cursor: pointer;
+                transition: background-color 0.15s ease;
+            }
+            .component-list-item:hover {
+                background-color: #f8f9fa;
+            }
+            .component-list-item.active {
+                background-color: #e7f1ff;
+                border-left: 3px solid #0d6efd;
+            }
+            textarea.editor {
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 13px;
+                resize: vertical;
+                min-height: 150px;
+                width: 100%;
+            }
+            .auto-save-indicator {
+                font-size: 12px;
+                transition: opacity 0.3s ease;
+            }
+            .sidebar-sticky {
+                position: sticky;
+                top: 1rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container-fluid mt-4" id="app">
+
+            <!-- Header bar -->
+            <div class="row align-items-center">
+                <div class="col d-flex align-items-center m-2">
+                    <h3 class="mb-0 d-flex align-items-center me-2">
+                        Vue Components
+                        <button type="button" class="btn btn-primary ms-2" @click="openNewComponent">
+                            <i class="fa fa-plus me-1"></i> New Component
+                        </button>
+                    </h3>
+                    <div v-if="loading" class="spinner-border text-primary" role="status" style="width: 1.5rem; height: 1.5rem;"
+                         @click="loading = false">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="col-auto ms-auto me-2" v-if="user">
+                    <span class="me-2" :title="user.username">
+                        <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                    </span>
+                    <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <!-- Error alerts -->
+            <div class="row mb-3">
+                <div class="col">
+                    <div v-if="saveError" class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ saveError }}
+                        <button type="button" class="btn-close" @click="saveError = null"></button>
+                    </div>
+                    <div v-if="deleteError" class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ deleteError }}
+                        <button type="button" class="btn-close" @click="deleteError = null"></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Left column: Component list -->
+                <div class="col-md-4">
+                    <div class="list-col">
+                        <!-- Empty state -->
+                        <!--div v-if="components.length === 0" class="text-muted text-center py-5 border rounded">
+                            No Vue components found. Click "New Component" to create one.
+                        </div-->
+
+                        <!-- Component entries -->
+                        <div v-for="(comp, index) in components" :key="index"
+                             class="card mb-2 component-list-item"
+                             :class="{
+                             'active': editingComponent && editingComponent.name === comp.name && editingComponent.path === comp.path
+                             }">
+                            <div class="card-body p-2" style="cursor: pointer;">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1" @click="editComponent(comp)">
+                                        <div class="fw-bold text-truncate" :title="comp.name">
+                                            {{ comp.name }}
+                                        </div>
+                                        <div class="small text-muted text-truncate" :title="comp.path">
+                                            {{ comp.path }}
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex gap-1 flex-shrink-0 ms-2">
+                                        <!-- Edit button -->
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-primary"
+                                                title="Edit"
+                                                @click="editComponent(comp)">
+                                            <i class="fa fa-edit"></i>
+                                        </button>
+
+                                        <!-- Delete button -->
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-danger"
+                                                title="Delete"
+                                                @click="deleteComponent(comp)">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right column: Edit area -->
+                <div class="col-md-8">
+                    <div class="edit-col">
+                        <!-- No component selected -->
+                        <div v-if="!editingComponent" class="text-muted">
+                        </div>
+
+                        <!-- Edit mode -->
+                        <div v-else class="sidebar-sticky">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ editingComponent.name }}</strong>
+                                        <small class="text-muted ms-2">({{ editingComponent.path }})</small>
+                                    </div>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <!-- Auto-save indicator -->
+                                        <span class="auto-save-indicator" :class="autoSaveState.class" v-if="autoSaveState.text">
+                                            <i :class="autoSaveState.icon"></i>
+                                            {{ autoSaveState.text }}
+                                        </span>
+
+                                        <!-- Save button -->
+                                        <button type="button" class="btn btn-sm btn-primary" @click="saveCurrent"
+                                                :disabled="saving">
+                                            <i class="fa fa-save me-1"></i>
+                                            <span v-if="saving" class="spinner-border spinner-border-sm"></span>
+                                            <span v-else>Save</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Name and Path fields (read-only when editing, editable when new) -->
+                                    <div class="row mb-3">
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-normal">Name</label>
+                                            <input type="text" class="form-control form-control-sm"
+                                                   v-model.trim="editingComponent.name"
+                                                   placeholder="e.g. MyComponent" />
+                                            <small class="form-text">Use PascalCase and do not include a <code>.vue</code> extension.</small>
+                                        </div>
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-normal">Path</label>
+                                            <input type="text" class="form-control form-control-sm"
+                                                   v-model.trim="editingComponent.path"
+                                                   placeholder="e.g. /components/widgets" />
+                                        </div>
+                                    </div>
+
+                                    <!-- Bridges -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-normal">
+                                            <i class="fa fa-plug me-1"></i>Bridges
+                                            <small class="text-muted">(JSON array of bridge configurations)</small>
+                                        </label>
+                                        <textarea class="form-control editor" rows="4"
+                                                  v-model="editingComponent.bridgesText"
+                                                  spellcheck="false"
+                                                  @input="handleBridgesInput"></textarea>
+                                    </div>
+
+                                    <!-- Script -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-normal">
+                                            <i class="fa fa-file-code me-1"></i>Script
+                                            <small class="text-muted">(Options API)</small>
+                                        </label>
+                                        <textarea class="form-control editor" rows="8"
+                                                  v-model="editingComponent.scriptText"
+                                                  spellcheck="false"
+                                                  @input="handleScriptInput"></textarea>
+                                    </div>
+
+                                    <!-- Template -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-normal">
+                                            <i class="fa fa-window-maximize me-1"></i>Template
+                                        </label>
+                                        <textarea class="form-control editor" rows="6"
+                                                  v-model="editingComponent.templateText"
+                                                  spellcheck="false"
+                                                  @input="handleTemplateInput"></textarea>
+                                    </div>
+
+                                    <!-- Style -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-normal">
+                                            <i class="fa fa-paint-brush me-1"></i>Style
+                                        </label>
+                                        <textarea class="form-control editor" rows="4"
+                                                  v-model="editingComponent.styleText"
+                                                  spellcheck="false"
+                                                  @input="handleStyleInput"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                    &nbsp;
+                    &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+                </div>
+            </div>
+
+        </div>
+
+        <script>
+const {createApp} = Vue;
+createApp({
+
+    data() {
+        return {
+            loading: false,
+            error: null,
+            user: null,
+            components: [],
+            editingComponent: null,
+            saveError: null,
+            deleteError: null,
+            saving: false,
+            isNewComponent: false,
+            // Auto-save state
+            autoSaveTimer: null,
+            autoSaveState: {text: '', icon: 'fa fa-clock', class: 'text-muted'},
+            // Track original bridges JSON for re-parsing
+            originalBridges: null
+        };
+    },
+    created() {
+        axios.interceptors.response.use(
+                response => response,
+                error => {
+                    if (!error.config?.skipErrorModal) {
+                        const errorMsg = error.response?.data || error.message || "Unknown error";
+                        this.open_error_modal(errorMsg);
+                    }
+                    return Promise.reject(error);
+                }
+        );
+        this.getAuthMe();
+        this.loadComponents();
+    },
+    methods: {
+
+        // ---- Load all components ----
+        async loadComponents() {
+            this.loading = true;
+            try {
+                const response = await axios.get('/vue-components');
+                this.components = response.data || [];
+                // If we were editing, ensure the component is still in the list
+                if (this.editingComponent && !this.isNewComponent) {
+                    const found = this.components.find(c => c.name === this.editingComponent.name && c.path === this.editingComponent.path);
+                    if (!found) {
+                        this.editingComponent = null;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load Vue components:', error);
+                this.components = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+        // ---- Open new component form ----
+        openNewComponent() {
+            const defaultBridges = JSON.stringify([], null, 4);
+            const defaultScript = [
+                "{",
+                "",
+                "  data() {",
+                "    return {",
+                "",
+                "    };",
+                "  },",
+                "",
+                "  methods: {",
+                "",
+                "  }",
+                "};"
+            ].join("\n");
+
+            const defaultTemplate = [
+                "<div>",
+                "</div>"
+            ].join("\n");
+            
+            const defaultStyle = "";
+
+            this.editingComponent = {
+                path: '/',
+                name: 'NewComponent',
+                bridges: defaultBridges,
+                bridgesText: defaultBridges,
+                script: defaultScript,
+                scriptText: defaultScript,
+                template: defaultTemplate,
+                templateText: defaultTemplate,
+                style: defaultStyle,
+                styleText: defaultStyle
+            };
+
+            this.originalBridges = JSON.parse(defaultBridges);
+            this.isNewComponent = true;
+            this.clearAutoSaveIndicator();
+        },
+
+        // ---- Edit a component from the list ----
+        editComponent(comp) {
+            // Build editable copy
+            const bridgesArray = Array.isArray(comp.bridges) ? comp.bridges : [];
+            const bridgesJson = bridgesArray.length > 0
+                    ? JSON.stringify(bridgesArray, null, 4)
+                    : '[]';
+
+            this.editingComponent = {
+                path: comp.path || '',
+                name: comp.name || '',
+                bridges: bridgesJson,
+                bridgesText: bridgesJson,
+                script: comp.script || '',
+                scriptText: comp.script || '',
+                template: comp.template || '',
+                templateText: comp.template || '',
+                style: comp.style || '',
+                styleText: comp.style || ''
+            };
+            this.originalBridges = bridgesArray;
+            this.isNewComponent = false;
+            this.clearAutoSaveIndicator();
+        },
+
+        // ---- Delete a component (native confirm dialog) ----
+        async deleteComponent(comp) {
+            if (!confirm(`Delete component "${comp.name}" at "${comp.path}"?`)) {
+                return;
+            }
+            try {
+                await axios.delete('/vue-components', {
+                    params: {
+                        path: comp.path,
+                        name: comp.name
+                    }
+                });
+                // If we were editing this component, clear it
+                if (this.editingComponent &&
+                        this.editingComponent.name === comp.name &&
+                        this.editingComponent.path === comp.path) {
+                    this.editingComponent = null;
+                    this.isNewComponent = false;
+                }
+                await this.loadComponents();
+            } catch (error) {
+                console.error('Failed to delete Vue component:', error);
+                this.deleteError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+            }
+        },
+
+        // ---- Auto-save handler triggered on input ----
+        onAutoSaveInput() {
+            this.clearAutoSaveIndicator();
+            this.autoSaveState = {text: 'Saving...', icon: 'fa fa-spinner fa-spin', class: 'text-primary'};
+
+            // Debounce: save after user stops typing for 1 second
+            clearTimeout(this.autoSaveTimer);
+            this.autoSaveTimer = setTimeout(() => {
+                this.performAutoSave();
+            }, 1000);
+        },
+
+        // ---- Perform the actual save ----
+        async performAutoSave() {
+            try {
+                const component = this.buildComponentPayload();
+                await axios.post('/vue-components', component);
+                this.autoSaveState = {text: 'Saved', icon: 'fa fa-check-circle', class: 'text-success'};
+                // Clear the indicator after 2 seconds
+                setTimeout(() => {
+                    this.clearAutoSaveIndicator();
+                }, 2000);
+            } catch (error) {
+                console.error('Auto-save failed:', error);
+                this.autoSaveState = {text: 'Save failed', icon: 'fa fa-exclamation-circle', class: 'text-danger'};
+                this.saveError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+            }
+        },
+
+        // ---- Build component payload from current editing state ----
+        buildComponentPayload() {
+            const comp = this.editingComponent;
+            // Parse bridges JSON
+            let bridgesArray = [];
+            try {
+                bridgesArray = JSON.parse(comp.bridges || '[]');
+            } catch (e) {
+                bridgesArray = [];
+            }
+
+            return {
+                path: comp.path || '',
+                name: comp.name || '',
+                bridges: bridgesArray,
+                script: comp.script || '',
+                template: comp.template || '',
+                style: comp.style || ''
+            };
+        },
+
+        // ---- Manual save ----
+        async saveCurrent() {
+            if (!this.editingComponent)
+                return;
+            this.saving = true;
+            this.saveError = null;
+            try {
+                const component = this.buildComponentPayload();
+                await axios.post('/vue-components', component);
+                this.clearAutoSaveIndicator();
+                await this.loadComponents();
+            } catch (error) {
+                console.error('Failed to save Vue component:', error);
+                this.saveError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        // ---- Clear auto-save indicator ----
+        clearAutoSaveIndicator() {
+            clearTimeout(this.autoSaveTimer);
+            this.autoSaveState = {text: '', icon: '', class: ''};
+        },
+
+        // ---- Bind auto-save to text area inputs ----
+        handleBridgesInput() {
+            this.editingComponent.bridges = this.editingComponent.bridgesText;
+            this.onAutoSaveInput();
+        },
+        handleScriptInput() {
+            this.editingComponent.script = this.editingComponent.scriptText;
+            this.onAutoSaveInput();
+        },
+        handleTemplateInput() {
+            this.editingComponent.template = this.editingComponent.templateText;
+            this.onAutoSaveInput();
+        },
+        handleStyleInput() {
+            this.editingComponent.style = this.editingComponent.styleText;
+            this.onAutoSaveInput();
+        },
+
+        // ---- Auth ----
+        getAuthMe() {
+            axios.get('/auth/me').then(response => {
+                this.user = response.data;
+            }).catch(error => {
+                if (error.response && error.response.status === 401) {
+                    window.location.href = '/app/unauthorized.html';
+                }
+            });
+        },
+        postLogout() {
+            axios.post('/auth/logout').then(response => {
+                window.location.href = response.data.redirect;
+            });
+        },
+        open_error_modal(msg) {
+            this.error = msg;
+            this.loading = false;
+            const modalInstance = new window.bootstrap.Modal(document.getElementById('errorModal'));
+            modalInstance.show();
+        }
+    }
+}).mount("#app");
+        </script>
+    </body>
+</html>
