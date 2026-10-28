@@ -140,7 +140,7 @@
                                        list="langOptions"
                                        id="testerLang"
                                        v-model="testerLang"
-                                       placeholder="en"
+                                       placeholder="Browser language"
                                        @keyup.enter="fetchFragment">
                                 <datalist id="langOptions">
                                     <option value="en">
@@ -553,15 +553,6 @@ createApp({
         loadDefault() {
             this.editForm.properties = [
                 {
-                    key: 'type',
-                    languageAware: false,
-                    properties: [
-                        {
-                            "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
-                        }
-                    ]
-                },
-                {
                     key: 'label',
                     languageAware: true,
                     properties: [
@@ -576,6 +567,15 @@ createApp({
                     properties: [
                         {
                             "@id": "http://www.w3.org/2000/01/rdf-schema#comment"
+                        }
+                    ]
+                },
+                {
+                    key: 'type',
+                    languageAware: false,
+                    properties: [
+                        {
+                            "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
                         }
                     ]
                 },
