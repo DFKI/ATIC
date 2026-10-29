@@ -2353,13 +2353,26 @@ public class AticServer {
         String prefix = "/vue-sandbox/";
         String requestPath = ctx.path();
 
-        if (!requestPath.startsWith(prefix) || !requestPath.endsWith(".html")) {
+        if (!requestPath.startsWith(prefix)) {
             ctx.status(404);
             return;
         }
 
         String relativePath = requestPath.substring(prefix.length());
-        relativePath = relativePath.substring(0, relativePath.length() - ".html".length());
+        int lastDot = relativePath.lastIndexOf('.');
+
+        if (lastDot < 0) {
+            ctx.status(404);
+            return;
+        }
+
+        String format = relativePath.substring(lastDot + 1);
+        if (!format.equals("html") && !format.equals("js")) {
+            ctx.status(404);
+            return;
+        }
+
+        relativePath = relativePath.substring(0, lastDot);
 
         int lastSlash = relativePath.lastIndexOf('/');
         String path = lastSlash >= 0 ? relativePath.substring(0, lastSlash) : "";
@@ -2372,13 +2385,19 @@ public class AticServer {
 
         String finalPath = path.isBlank() ? "/" : "/" + path;
 
-        String html = datasetGraph.calculateRead(()
+        String content = datasetGraph.calculateRead(()
                 -> datasetGraph.getVueComponentStorage().loadAs(
-                        finalPath, name, "/app/", "/vue-sandbox/", "html"
+                        finalPath, name, "/app/", "/vue-sandbox/", format
                 )
         );
 
-        ctx.contentType("text/html; charset=utf-8").result(html);
+        if ("html".equals(format)) {
+            ctx.contentType("text/html; charset=utf-8");
+        } else {
+            ctx.contentType("application/javascript; charset=utf-8");
+        }
+
+        ctx.result(content);
     }
 
     //---------------------------------------

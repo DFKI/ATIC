@@ -3,7 +3,10 @@ package de.dfki.sds.aticsqlite;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import org.apache.commons.text.StringEscapeUtils;
 import org.json.JSONArray;
 
@@ -25,6 +28,7 @@ public class VueComponentStorage {
     }
 
     public VueComponent load(String path, String name) {
+        path = normalizePath(path);
         try {
             return db.read(
                     "SELECT path, name, bridges, script, template, style "
@@ -88,6 +92,8 @@ public class VueComponentStorage {
     }
 
     public List<VueComponent> loadByPath(String path) {
+        path = normalizePath(path);
+        
         try {
             return db.read(
                     "SELECT path, name, bridges, script, template, style "
@@ -122,7 +128,6 @@ public class VueComponentStorage {
 
     public void save(VueComponent component, InvocationContext ctx) {
         int creator = ctx.getUserId();
-
         try {
             db.write(
                     "INSERT INTO vue_components (path, name, bridges, script, template, style, creator) "
@@ -134,7 +139,7 @@ public class VueComponentStorage {
                     + "style = excluded.style, "
                     + "creator = excluded.creator, "
                     + "created_at = unixepoch()",
-                    component.getPath(),
+                    normalizePath(component.getPath()),
                     component.getName(),
                     component.getBridges().toString(),
                     component.getScript(),
@@ -148,6 +153,8 @@ public class VueComponentStorage {
     }
 
     public void delete(String path, String name) {
+        path = normalizePath(path);
+        
         try {
             db.write(
                     "DELETE FROM vue_components WHERE path = ? AND name = ?",
@@ -161,40 +168,66 @@ public class VueComponentStorage {
 
     //---------------------------
     public String loadAs(String path, String name, String assetsPath, String componentsPath, String format) {
-        if (!"html".equalsIgnoreCase(format)) {
+        if (!"html".equalsIgnoreCase(format) && !"js".equalsIgnoreCase(format)) {
             throw new IllegalArgumentException("Unsupported format: " + format);
         }
 
-        if (!path.endsWith("/")) {
-            path += "/";
-        }
+        path = normalizePath(path);
 
         VueComponent component = load(path, name);
         if (component == null) {
             throw new IllegalArgumentException("Component not found: " + path + "/" + name);
         }
 
+        if ("html".equalsIgnoreCase(format)) {
+            return asHtml(component, componentsPath, assetsPath);
+        } else if ("js".equalsIgnoreCase(format)) {
+            return asJs(component, componentsPath, assetsPath);
+        }
+
+        throw new RuntimeException("Not implemented: " + format);
+    }
+
+    private String asJs(VueComponent component, String componentsPath, String assetsPath) {
+
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("const ").append(component.getName()).append(" = ");
+        sb.append(component.getScript());
+        sb.append(";");
+
+        //html as js block string
+        int b = sb.indexOf("{");
+        sb.insert(b + 1, "\n\ntemplate: `\n" + component.getTemplate() + "\n`,\n\n");
+
+        //TODO do style later, there is no style: property in options API
+        return sb.toString();
+    }
+
+    private String asHtml(VueComponent component, String componentsPath, String assetsPath) {
         String template = component.getTemplate() == null ? "" : component.getTemplate();
         String script = component.getScript() == null ? "" : component.getScript();
         String style = component.getStyle() == null ? "" : component.getStyle();
 
         StringBuilder componentScripts = new StringBuilder();
+        StringBuilder componentRegistrations = new StringBuilder();
 
         for (VueComponent other : loadAll()) {
-            if (other.getPath().equals(path) && other.getName().equals(name)) {
+            if (other.equals(component)) {
                 continue;
             }
 
-            String compPath = other.getPath();
-            if (!compPath.endsWith("/")) {
-                compPath += "/";
-            }
+            String fullpath = buildPath(componentsPath, other.getPath(), other.getName());
 
             componentScripts.append("    <script src=\"")
-                    .append(componentsPath)
-                    .append(compPath)
-                    .append(other.getName())
+                    .append(fullpath)
                     .append(".js\"></script>\n");
+
+            componentRegistrations.append("        app.component('")
+                    .append(other.getName())
+                    .append("', ")
+                    .append(other.getName())
+                    .append(");\n");
         }
 
         return """
@@ -224,10 +257,12 @@ public class VueComponentStorage {
 
             <script>
                 const { createApp } = Vue;
-
-                createApp(
+                const app = createApp(
         %s
-                ).mount('#app');
+                );
+
+        %s
+                app.mount('#app');
             </script>
         </body>
         </html>
@@ -239,11 +274,28 @@ public class VueComponentStorage {
                 assetsPath,
                 componentScripts,
                 assetsPath,
-                StringEscapeUtils.escapeHtml4(name),
+                StringEscapeUtils.escapeHtml4(component.getName()),
                 style,
                 template,
-                script
+                script,
+                componentRegistrations
         );
+    }
+
+    private String buildPath(String... parts) {
+        return Arrays.stream(parts)
+                .filter(Objects::nonNull)
+                .flatMap(part -> Arrays.stream(part.split("/")))
+                .filter(part -> !part.isBlank())
+                .collect(Collectors.joining("/", "/", ""));
+    }
+    
+    private String normalizePath(String path) {
+        String npath = path == null ? "" : path.replaceAll("/+$", "");
+        if(npath.isBlank()) {
+            npath = "/";
+        }
+        return npath;
     }
 
 }

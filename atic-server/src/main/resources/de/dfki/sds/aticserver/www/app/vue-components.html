@@ -155,6 +155,8 @@
                                     <div>
                                         <strong>{{ editingComponent.name }}</strong>
                                         <small class="text-muted ms-2">({{ editingComponent.path }})</small>
+                                        <a class="ms-2" :href=" '/vue-sandbox' + editingComponent.path + '/' + editingComponent.name + '.html' " target="_blank">HTML</a>
+                                        <a class="ms-2" :href=" '/vue-sandbox' + editingComponent.path + '/' + editingComponent.name + '.js' " target="_blank">JS</a>
                                     </div>
                                     <div class="d-flex gap-2 align-items-center">
                                         <!-- Auto-save indicator -->
