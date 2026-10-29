@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import org.apache.commons.text.StringEscapeUtils;
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 /**
  *
@@ -17,6 +18,8 @@ public class VueComponentStorage {
 
     private SqliteAticDatasetGraph parent;
     private Database db;
+
+    private static final String BRIDGE_ENDPOINT = "/bridge";
 
     public VueComponentStorage(SqliteAticDatasetGraph parent) {
         this.parent = parent;
@@ -93,7 +96,7 @@ public class VueComponentStorage {
 
     public List<VueComponent> loadByPath(String path) {
         path = normalizePath(path);
-        
+
         try {
             return db.read(
                     "SELECT path, name, bridges, script, template, style "
@@ -154,7 +157,7 @@ public class VueComponentStorage {
 
     public void delete(String path, String name) {
         path = normalizePath(path);
-        
+
         try {
             db.write(
                     "DELETE FROM vue_components WHERE path = ? AND name = ?",
@@ -193,7 +196,7 @@ public class VueComponentStorage {
         StringBuilder sb = new StringBuilder();
 
         sb.append("const ").append(component.getName()).append(" = ");
-        sb.append(component.getScript());
+        sb.append(includeBridges(component.getScript(), BRIDGE_ENDPOINT, component.getBridges()));
         sb.append(";");
 
         //html as js block string
@@ -277,7 +280,7 @@ public class VueComponentStorage {
                 StringEscapeUtils.escapeHtml4(component.getName()),
                 style,
                 template,
-                script,
+                includeBridges(script, BRIDGE_ENDPOINT, component.getBridges()),
                 componentRegistrations
         );
     }
@@ -289,13 +292,246 @@ public class VueComponentStorage {
                 .filter(part -> !part.isBlank())
                 .collect(Collectors.joining("/", "/", ""));
     }
-    
+
     private String normalizePath(String path) {
         String npath = path == null ? "" : path.replaceAll("/+$", "");
-        if(npath.isBlank()) {
+        if (npath.isBlank()) {
             npath = "/";
         }
         return npath;
+    }
+
+    //------------------------------
+    //include bridges
+    private String includeBridges(String script, String baseUrl, JSONArray bridges) {
+        script = includeBridgeTemplates(script, bridges);
+        script = includeBridgeFunctions(script, baseUrl, bridges);
+        return script;
+    }
+
+    private String includeBridgeTemplates(String script, JSONArray bridges) {
+
+        if (bridges.isEmpty()) {
+            return script;
+        }
+
+        int dataIndex = script.indexOf("data()");
+        if (dataIndex < 0) {
+            throw new IllegalArgumentException("Component script does not contain data()");
+        }
+
+        int returnIndex = script.indexOf("return", dataIndex);
+        if (returnIndex < 0) {
+            throw new IllegalArgumentException("Could not locate return in data()");
+        }
+
+        int braceIndex = script.indexOf('{', returnIndex + "return".length());
+        if (braceIndex < 0) {
+            throw new IllegalArgumentException("Could not locate data return object");
+        }
+
+        StringBuilder entries = new StringBuilder();
+
+        for (int i = 0; i < bridges.length(); i++) {
+            JSONObject bridgeEntry = bridges.getJSONObject(i);
+            String name = bridgeEntry.optString("$name", "");
+
+            if (name.isBlank()) {
+                continue;
+            }
+
+            entries.append("        template")
+                    .append(name)
+                    .append(": ")
+                    .append(bridgeEntry.toString(4))
+                    .append(",\n");
+
+            for (String method : List.of("query", "post", "put", "patch", "delete")) {
+                entries.append("        ")
+                        .append(method)
+                        .append("State")
+                        .append(name)
+                        .append(": { loading: false, success: false, error: null, result: null },\n");
+            }
+        }
+
+        int next = braceIndex + 1;
+        while (next < script.length()) {
+            char c = script.charAt(next);
+            if (c == '}') {
+                break;
+            }
+            if (!Character.isWhitespace(c)) {
+                break;
+            }
+            next++;
+        }
+
+        String separator = next < script.length() && script.charAt(next) == '}' ? "\n" : ",\n";
+
+        return script.substring(0, braceIndex + 1)
+                + "\n"
+                + entries.toString().replaceAll(",\\s*$", "")
+                + separator
+                + script.substring(braceIndex + 1);
+    }
+
+    private String includeBridgeFunctions(String script, String baseUrl, JSONArray bridges) {
+        int methodsIndex = script.indexOf("methods:");
+        if (methodsIndex < 0) {
+            throw new IllegalArgumentException("Component script does not contain methods:");
+        }
+
+        int braceIndex = script.indexOf('{', methodsIndex);
+        if (braceIndex < 0) {
+            throw new IllegalArgumentException("Could not locate methods block");
+        }
+
+        int next = braceIndex + 1;
+        while (next < script.length()) {
+            char c = script.charAt(next);
+            if (c == '}') {
+                break;
+            }
+            if (!Character.isWhitespace(c)) {
+                break;
+            }
+            next++;
+        }
+
+        String separator = next < script.length() && script.charAt(next) == '}' ? "\n" : ",\n";
+
+        StringBuilder entries = new StringBuilder();
+        for (int i = 0; i < bridges.length(); i++) {
+            JSONObject bridgeEntry = bridges.getJSONObject(i);
+            String name = bridgeEntry.optString("$name", "");
+
+            if (name.isBlank()) {
+                continue;
+            }
+
+            entries.append(getQueryFunctionTemplate(name)).append(",\n");
+            entries.append(getMutationFunctionTemplate("post", name)).append(",\n");
+            entries.append(getMutationFunctionTemplate("put", name)).append(",\n");
+            entries.append(getMutationFunctionTemplate("patch", name)).append(",\n");
+            entries.append(getMutationFunctionTemplate("delete", name)).append(",\n");
+        }
+        entries.append("\n");
+
+        String bridgeMethods = entries.toString() + """
+        async query(template, params = {}) {
+            const response = await this.request('QUERY', template, params);
+            return response.data;
+        },
+
+        async post(template, data = null, params = {}, dryRun = false) {
+            return this.mutate('POST', template, data, params, dryRun);
+        },
+
+        async put(template, data = null, params = {}, dryRun = false) {
+            return this.mutate('PUT', template, data, params, dryRun);
+        },
+
+        async patch(template, data = null, params = {}, dryRun = false) {
+            return this.mutate('PATCH', template, data, params, dryRun);
+        },
+
+        async delete(template, data = null, params = {}, dryRun = false) {
+            return this.mutate('DELETE', template, data, params, dryRun);
+        },
+
+        async mutate(method, template, data, params, dryRun = false) {
+            const response = await this.request(
+                method,
+                { template, data },
+                params,
+                dryRun
+            );
+            return response.data;
+        },
+
+        async request(method, data, params = {}, dryRun = false) {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+
+            if (dryRun) {
+                headers['Atic-Dry-Run'] = 'true';
+            }
+
+            try {
+                return await axios.request({
+                    method,
+                    url: "$baseUrl",
+                    params,
+                    data,
+                    withCredentials: true,
+                    headers,
+                    responseType: method === 'QUERY' ? 'json' : 'text'
+                });
+            } catch (error) {
+                if (error.response) {
+                    throw new BridgeError(
+                        error.response.data || error.message,
+                        error.response.status,
+                        error.response
+                    );
+                }
+                throw new BridgeError(error.message);
+            }
+        }
+        """.replace("$baseUrl", baseUrl);
+
+        return script.substring(0, braceIndex + 1)
+                + "\n"
+                + bridgeMethods
+                + separator
+                + script.substring(braceIndex + 1);
+    }
+
+    private String getQueryFunctionTemplate(String templateName) {
+        return """
+            async query$templateName(params = {}) {
+                this.queryState$templateName.loading = true;
+                this.queryState$templateName.success = false;
+                this.queryState$templateName.error = null;
+
+                try {
+                    this.queryState$templateName.result = await this.query(this.template$templateName, params);
+                    this.queryState$templateName.success = true;
+                    return this.queryState$templateName.result;
+                } catch (error) {
+                    this.queryState$templateName.error = error.message || String(error);
+                    return null;
+                } finally {
+                    this.queryState$templateName.loading = false;
+                }
+            }
+            """
+                .replace("$templateName", templateName);
+    }
+
+    private String getMutationFunctionTemplate(String method, String templateName) {
+        return """
+            async $method$templateName(data = null, params = {}) {
+                this.$methodState$templateName.loading = true;
+                this.$methodState$templateName.success = false;
+                this.$methodState$templateName.error = null;
+
+                try {
+                    this.$methodState$templateName.result = await this.$method(this.template$templateName, data, params);
+                    this.$methodState$templateName.success = true;
+                    return this.$methodState$templateName.result;
+                } catch (error) {
+                    this.$methodState$templateName.error = error.message || String(error);
+                    return null;
+                } finally {
+                    this.$methodState$templateName.loading = false;
+                }
+            }
+            """
+                .replace("$method", method)
+                .replace("$templateName", templateName);
     }
 
 }
