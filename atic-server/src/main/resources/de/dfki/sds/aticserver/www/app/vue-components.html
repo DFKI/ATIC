@@ -155,8 +155,13 @@
                                     <div>
                                         <strong>{{ editingComponent.name }}</strong>
                                         <small class="text-muted ms-2">({{ editingComponent.path }})</small>
-                                        <a class="ms-2" :href=" '/vue-sandbox' + editingComponent.path + '/' + editingComponent.name + '.html' " target="_blank">HTML</a>
-                                        <a class="ms-2" :href=" '/vue-sandbox' + editingComponent.path + '/' + editingComponent.name + '.js' " target="_blank">JS</a>
+                                        <a class="ms-2"
+                                           :href="'/vue-sandbox' + (editingComponent.path === '/' ? '' : editingComponent.path) + '/' + editingComponent.name + '.html'"
+                                           target="_blank">HTML</a>
+
+                                        <a class="ms-2"
+                                           :href="'/vue-sandbox' + (editingComponent.path === '/' ? '' : editingComponent.path) + '/' + editingComponent.name + '.js'"
+                                           target="_blank">JS</a>
                                     </div>
                                     <div class="d-flex gap-2 align-items-center">
                                         <!-- Auto-save indicator -->
@@ -322,23 +327,80 @@ createApp({
             const defaultScript = [
                 "{",
                 "",
-                "  data() {",
-                "    return {",
-                "",
+                "  // Input properties from parent components",
+                "  props: {",
+                "    uri: {",
+                "      type: String,",
+                "      required: false,",
+                "      default: ''",
                 "    }",
                 "  },",
                 "",
+                "  // Events this component can emit",
+                "  emits: ['todo'],",
+                "",
+                "  // Reactive local state",
+                "  data() {",
+                "    return {",
+                "",
+                "    };",
+                "  },",
+                "",
+                "  // Computed reactive properties",
+                "  computed: {",
+                "",
+                "  },",
+                "",
+                "  // Methods",
                 "  methods: {",
+                "     ",
+                "  },",
+                "",
+                "  // Watch reactive properties",
+                "  watch: {",
+                "",
+                "  },",
+                "",
+                "  // Lifecycle hooks",
+                "  created() {",
+                "",
+                "  },",
+                "  mounted() {",
+                "",
                 "",
                 "  }",
+                "",
+                "",
                 "}"
             ].join("\n");
 
             const defaultTemplate = [
-                "<div>",
-                "</div>"
+                '<div class="container">',
+                '  <div class="row">',
+                '    <div class="col-12">',
+                '      <div class="card">',
+                '        <div class="card-header">',
+                '          <h5 class="card-title mb-0">',
+                '              New Component',
+                '          </h5>',
+                '        </div>',
+                '',
+                '        <div class="card-body">',
+                '          <h6 class="card-subtitle mb-3 text-muted">Content Heading</h6>',
+                '          <p class="card-text">',
+                '              Add your component content here.',
+                '          </p>',
+                '        </div>',
+                '',
+                '        <div class="card-footer text-muted">',
+                '          Footer content',
+                '        </div>',
+                '      </div>',
+                '    </div>',
+                '  </div>',
+                '</div>'
             ].join("\n");
-            
+
             const defaultStyle = "";
 
             this.editingComponent = {
