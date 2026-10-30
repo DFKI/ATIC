@@ -1,7 +1,9 @@
 package de.dfki.sds.aticsqlite.bridge;
 
+import de.dfki.sds.atic.jenatic.InvocationContext;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.apache.jena.datatypes.xsd.XSDDatatype;
@@ -19,7 +21,8 @@ public class SparqlQueryBuilder {
             JSONObject template,
             JSONObject root,
             Map<Var, List<Node>> binding,
-            boolean asCountQuery
+            boolean asCountQuery,
+            InvocationContext ctx
     ) {
         JSONObject context = root.optJSONObject("@context");
 
@@ -67,7 +70,8 @@ public class SparqlQueryBuilder {
 
         appendWhere(
                 sparql,
-                template
+                template,
+                ctx
         );
 
         appendFilters(
@@ -271,11 +275,13 @@ public class SparqlQueryBuilder {
 
     private void appendWhere(
             StringBuilder sparql,
-            JSONObject template
+            JSONObject template,
+            InvocationContext ctx
     ) {
 
-        JSONArray where
-                = template.optJSONArray("$where");
+        Locale locale = ctx.getLocale();
+
+        JSONArray where = template.optJSONArray("$where");
 
         if (where == null) {
             return;
@@ -294,6 +300,18 @@ public class SparqlQueryBuilder {
             }
 
             sparql.append("\n");
+
+            String[] components = pattern.split("\\s+", 3);
+
+            if (components.length == 3 && components[2].startsWith("?")) {
+
+                String variable = components[2];
+
+                sparql.append(
+                        "  FILTER(!isLiteral(%s) || LANG(%s) = \"\" || LANGMATCHES(LANG(%s), \"%s\")) .\n"
+                            .formatted(variable, variable, variable, locale.getLanguage())
+                );
+            }
         }
     }
 

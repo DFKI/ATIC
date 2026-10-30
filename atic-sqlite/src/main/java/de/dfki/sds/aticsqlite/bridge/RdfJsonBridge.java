@@ -192,7 +192,8 @@ public class RdfJsonBridge {
                         template,
                         root,
                         binding,
-                        false
+                        false,
+                        ctx
                 );
 
         LOG.debug("SPARQL:\n{}", sparql);
@@ -314,7 +315,8 @@ public class RdfJsonBridge {
                 template,
                 root,
                 binding,
-                true
+                true,
+                ctx
         );
 
         LOG.debug("Pagination COUNT SPARQL:\n{}", countSparql);
