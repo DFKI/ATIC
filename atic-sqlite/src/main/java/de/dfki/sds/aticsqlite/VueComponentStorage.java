@@ -259,10 +259,19 @@ public class VueComponentStorage {
             </div>
 
             <script>
+                const props = Object.fromEntries(
+                    [...new URLSearchParams(window.location.search)].map(([key, value]) => {
+                        if (/^-?\\d+$/.test(value)) return [key, parseInt(value, 10)];
+                        if (/^-?(?:\\d+\\.\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?$/.test(value)) return [key, parseFloat(value)];
+                        if (value === "true" || value === "false") return [key, value === "true"];
+                        return [key, value];
+                    })
+                );
+               
                 const { createApp } = Vue;
                 const app = createApp(
         %s
-                );
+                , props);
 
         %s
                 app.mount('#app');
