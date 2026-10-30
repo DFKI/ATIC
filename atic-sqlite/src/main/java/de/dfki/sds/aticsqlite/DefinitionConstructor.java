@@ -275,7 +275,7 @@ public class DefinitionConstructor {
 
         // --- $map ---
         JSONObject template = JSONUtils.createJSONObject();
-        template.put("$name", templateName);
+        template.put("$name", templateName + (templateName.endsWith("s") ? "es" : "s"));
         template.put("$type", "array");
 
         JSONObject map = JSONUtils.createJSONObject();
@@ -342,7 +342,21 @@ public class DefinitionConstructor {
         template.put("$where", new JSONArray(wherePatterns));
 
         // --- $limit ---
-        template.put("$limit", 10);
+        //template.put("$limit", 10);
+        
+        // --- pagination ---
+        template.put("$pagination", 
+                JSONUtils.createJSONObject()
+                        .put("offset", "?offset" + templateName)
+                        .put("limit", "?limit" + templateName)
+        );
+        template.put("$offset", "?offset" + templateName);
+        template.put("$limit", "?limit" + templateName);
+        template.put("$default", 
+                JSONUtils.createJSONObject()
+                        .put("offset" + templateName, 0)
+                        .put("limit" + templateName, 10)
+        );
 
         // --- @context ---
         template.put("@context", new JSONObject(prefixMap));
@@ -360,7 +374,7 @@ public class DefinitionConstructor {
 
         // Keep it simple: just the @id for the nested query
         // The user can add more properties
-        nested.put("$map", JSONUtils.createJSONObject().put("@id", "?" + relVar));
+        nested.put("$map", JSONUtils.createJSONObject().put("$fragment", "?" + relVar));
 
         // Connect parent subject to nested subject via the relationship property
         // (no trailing '.')
