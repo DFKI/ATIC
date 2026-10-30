@@ -9,8 +9,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.query.QuerySolution;
@@ -33,12 +36,25 @@ public class ResultSetJsonMapper {
     private final Map<String, NodeModifier> modifiers = new HashMap<>();
 
     private final Model model = ModelFactory.createDefaultModel();
-    
+
     private final RdfJsonBridge parent;
+
+    public enum Merging {
+        // Keep results as returned by SPARQL.
+        NONE,
+        // Skip duplicate instances.
+        DISTINCT,
+        // Merge instances and collect distinct property values in JSON arrays.
+        MERGE,
+        // Merge instances and collect all property values in JSON arrays, including duplicates.
+        COLLECT,
+        // Merge instances and keep only the first occurrence of each property value.
+        FIRST
+    }
 
     public ResultSetJsonMapper(RdfJsonBridge parent) {
         this.parent = parent;
-        
+
         registerModifier(
                 "date",
                 new DateModifier()
@@ -87,12 +103,20 @@ public class ResultSetJsonMapper {
             InvocationContext ctx,
             Map<Var, List<Node>> binding,
             PrefixMapping prefixes,
+            Merging merging,
             RdfJsonBridge.TemplateExecutor executor
     ) {
 
         Object map = queryNode.get("$map");
 
         JSONArray array = new JSONArray();
+        Map<String, JSONObject> mergedObjects = new LinkedHashMap<>();
+        Set<Resource> visitedResources = new HashSet<>();
+
+        String idVar = null;
+        if (map instanceof JSONObject obj && obj.has("@id")) {
+            idVar = obj.getString("@id");
+        }
 
         while (rs.hasNext()) {
 
@@ -102,11 +126,23 @@ public class ResultSetJsonMapper {
 
             if (map instanceof JSONObject obj) {
 
-                //we make a copy so we do not change the upper binding
-                //so for each query solution binding is fresh
+                Resource resource = null;
+                String resourceId = null;
+
+                if (idVar != null && idVar.startsWith("?")) {
+                    resource = qs.getResource(idVar.substring(1));
+                    resourceId = resource == null ? null : resource.toString();
+
+                    if (merging == Merging.DISTINCT) {
+                        if (resource != null && !visitedResources.add(resource)) {
+                            continue;
+                        }
+                    }
+                }
+
                 Map<Var, List<Node>> bindingCopy = new HashMap<>(binding);
                 fillBinding(qs, bindingCopy);
-                
+
                 value = instantiate(
                         obj,
                         qs,
@@ -116,6 +152,23 @@ public class ResultSetJsonMapper {
                         ctx,
                         prefixes
                 );
+
+                if (value instanceof JSONObject valueObj && resourceId != null) {
+
+                    if (merging == Merging.MERGE
+                            || merging == Merging.COLLECT
+                            || merging == Merging.FIRST) {
+
+                        JSONObject existing = mergedObjects.get(resourceId);
+
+                        if (existing != null) {
+                            merge(existing, valueObj, merging);
+                            continue;
+                        }
+
+                        mergedObjects.put(resourceId, valueObj);
+                    }
+                }
 
             } else {
 
@@ -140,21 +193,9 @@ public class ResultSetJsonMapper {
         }
 
         if ("object".equals(type)) {
-
-            if (array.isEmpty()) {
-                return JSONObject.NULL;
-            }
-
-            return array.get(0);
+            return array.isEmpty() ? JSONObject.NULL : array.get(0);
         }
 
-        /*
-         * automatic behavior:
-         *
-         * 0 -> null
-         * 1 -> value
-         * n -> array
-         */
         if (array.isEmpty()) {
             return JSONObject.NULL;
         }
@@ -164,6 +205,76 @@ public class ResultSetJsonMapper {
         }
 
         return array;
+    }
+
+    private void merge(JSONObject target, JSONObject source, Merging merging) {
+
+        for (String key : source.keySet()) {
+
+            Object sourceValue = source.get(key);
+
+            if (!target.has(key) || target.isNull(key)) {
+                if (merging != Merging.FIRST) {
+                    target.put(key, sourceValue);
+                }
+                continue;
+            }
+
+            if (merging == Merging.FIRST) {
+                continue;
+            }
+
+            Object targetValue = target.get(key);
+
+            JSONArray values;
+
+            if (targetValue instanceof JSONArray array) {
+                values = array;
+            } else {
+                values = new JSONArray().put(targetValue);
+                target.put(key, values);
+            }
+
+            if (merging == Merging.MERGE) {
+                boolean exists = false;
+
+                for (int i = 0; i < values.length(); i++) {
+                    if (valuesEqual(values.get(i), sourceValue)) {
+                        exists = true;
+                        break;
+                    }
+                }
+
+                if (!exists) {
+                    values.put(sourceValue);
+                }
+
+            } else if (merging == Merging.COLLECT) {
+                values.put(sourceValue);
+            }
+        }
+
+        // Collapse single-element arrays into scalar values.
+        for (String key : target.keySet()) {
+            Object value = target.get(key);
+
+            if (value instanceof JSONArray array && array.length() == 1) {
+                target.put(key, array.get(0));
+            }
+        }
+    }
+
+    private boolean valuesEqual(Object a, Object b) {
+        if (a == b) {
+            return true;
+        }
+        if (a instanceof JSONObject obj && b instanceof JSONObject other) {
+            return obj.similar(other);
+        }
+        if (a instanceof JSONArray arr && b instanceof JSONArray other) {
+            return arr.similar(other);
+        }
+        return Objects.equals(a, b);
     }
 
     private Object instantiate(
@@ -291,10 +402,9 @@ public class ResultSetJsonMapper {
 
         return json;
     }
-    
+
     //===========================================
     //fragment
-
     private void resolveFragment(
             JSONObject json,
             String value,
@@ -314,15 +424,15 @@ public class ResultSetJsonMapper {
             if (subjects == null || subjects.isEmpty()) {
                 return;
             }
-            
+
             subject = subjects.get(0);
         }
 
         Fragment fragment = FragmentStorage.buildFragment(datasetGraph, subject, parent.getFragmentSettings(), ctx, new HashSet<>());
-        
+
         //we use recursiveContext to be able to fully turn it back to RDF
         JSONObject fragmentObj = fragment.toJsonFragment(ctx.getLocale(), true);
-        
+
         //copy into json
         fragmentObj.keys().forEachRemaining(k -> {
             json.put(k, fragmentObj.get(k));
@@ -330,7 +440,6 @@ public class ResultSetJsonMapper {
     }
 
     //==========================
-    
     //this is called to resolve a value
     private Object resolveValue(
             String key,
@@ -456,7 +565,7 @@ public class ResultSetJsonMapper {
 
         return toJson(model.asRDFNode(current));
     }
-    
+
     private void fillBinding(
             QuerySolution qs,
             Map<Var, List<Node>> binding

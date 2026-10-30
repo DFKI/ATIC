@@ -182,6 +182,8 @@ public class RdfJsonBridge {
             Map<Var, List<Node>> binding,
             PrefixMapping prefixes
     ) {
+        String mergeValue = template.optString("$merge", "merge");
+        ResultSetJsonMapper.Merging merging = ResultSetJsonMapper.Merging.valueOf(mergeValue.toUpperCase());
 
         Map<Var, List<Node>> bindingCopy = new HashMap<>(binding);
 
@@ -226,6 +228,7 @@ public class RdfJsonBridge {
                     ctx,
                     binding,
                     prefixes,
+                    merging,
                     (JSONObject childTemplate, Map<Var, List<Node>> childBinding) -> executeQuery(
                             inherit(template, childTemplate),
                             root,
