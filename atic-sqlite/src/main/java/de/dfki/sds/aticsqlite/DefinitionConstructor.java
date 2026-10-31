@@ -3,7 +3,6 @@ package de.dfki.sds.aticsqlite;
 import de.dfki.sds.atic.helper.JSONUtils;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -210,15 +209,16 @@ public class DefinitionConstructor {
      * Builds a suggested starting template for each type (class) found in the analyzed ABox. The returned map key is the type resource, and the value is a JSON
      * object with a valid bridge template structure that a user can adjust later.
      */
-    public Map<Resource, JSONObject> buildSuggestedTemplates(RdfsAnalyzer analyzer) {
-        Map<Resource, JSONObject> templates = new HashMap<>();
+    public List<JSONObject> buildSuggestedTemplates(RdfsAnalyzer analyzer) {
+        List<JSONObject> templates = new ArrayList<>();
 
         Set<Resource> allTypes = new HashSet<>();
         allTypes.addAll(analyzer.getTypes());
         //allTypes.addAll(analyzer.getGeneratedTypes());
 
         for (Resource type : allTypes) {
-            templates.put(type, buildSuggestedTemplate(type, analyzer));
+            templates.add(buildSuggestedTemplate(type, analyzer));
+            templates.add(buildIncomingSuggestedTemplate(type, analyzer));
         }
 
         return templates;
@@ -276,6 +276,7 @@ public class DefinitionConstructor {
         // --- $map ---
         JSONObject template = JSONUtils.createJSONObject();
         template.put("$name", templateName + (templateName.endsWith("s") ? "es" : "s"));
+        template.put("$wasDerivedFrom", type.getURI());
         template.put("$type", "array");
 
         JSONObject map = JSONUtils.createJSONObject();
@@ -287,18 +288,18 @@ public class DefinitionConstructor {
         wherePatterns.add(subjectVar + " a " + typeCuri);
 
         List<Property> orderedProps = props.stream()
-        .sorted(Comparator
-                .comparingInt((Property prop) ->
-                        analyzer.getResourceProperties().contains(prop)
-                                && analyzer.getDomainCardinality().get(prop) == RdfsAnalyzer.Cardinality.MULTI
-                                && analyzer.getPropertyRanges().containsKey(prop)
-                                && !analyzer.getPropertyRanges().get(prop).isEmpty()
-                                        ? 1 : 0)
-                .thenComparing(
-                        prop -> AticGraphUtils.getLocalName(prop.getURI()),
-                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
-        .toList();
-        
+                .sorted(Comparator
+                        .comparingInt((Property prop)
+                                -> analyzer.getResourceProperties().contains(prop)
+                        && analyzer.getDomainCardinality().get(prop) == RdfsAnalyzer.Cardinality.MULTI
+                        && analyzer.getPropertyRanges().containsKey(prop)
+                        && !analyzer.getPropertyRanges().get(prop).isEmpty()
+                        ? 1 : 0)
+                        .thenComparing(
+                                prop -> AticGraphUtils.getLocalName(prop.getURI()),
+                                Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                .toList();
+
         for (Property prop : orderedProps) {
             String propLocalName = AticGraphUtils.getLocalName(prop.getURI());
             if (propLocalName == null || propLocalName.isBlank()) {
@@ -343,16 +344,117 @@ public class DefinitionConstructor {
 
         // --- $limit ---
         //template.put("$limit", 10);
-        
         // --- pagination ---
-        template.put("$pagination", 
+        template.put("$pagination",
                 JSONUtils.createJSONObject()
                         .put("offset", "?offset" + templateName)
                         .put("limit", "?limit" + templateName)
         );
         template.put("$offset", "?offset" + templateName);
         template.put("$limit", "?limit" + templateName);
-        template.put("$default", 
+        template.put("$default",
+                JSONUtils.createJSONObject()
+                        .put("offset" + templateName, 0)
+                        .put("limit" + templateName, 10)
+        );
+
+        // --- @context ---
+        template.put("@context", new JSONObject(prefixMap));
+
+        return template;
+    }
+
+    private JSONObject buildIncomingSuggestedTemplate(Resource type, RdfsAnalyzer analyzer) {
+        String typeLocalName = AticGraphUtils.getLocalName(type.getURI());
+        String templateName = typeLocalName;
+
+        if (typeLocalName == null || typeLocalName.isBlank()) {
+            typeLocalName = "resource";
+            templateName = typeLocalName;
+        }
+
+        typeLocalName = typeLocalName.toLowerCase();
+
+        // --- Collect prefixes ---
+        Map<String, String> prefixMap = buildPrefixMap(analyzer);
+
+        // The resource we want to return as a fragment
+        String instanceVar = "?instance";
+
+        // Variable representing the instance of the requested type
+        String typeVar = "?" + typeLocalName;
+        if (typeVar.equals(instanceVar)) {
+            typeVar = "?resource";
+        }
+
+        // --- Template ---
+        JSONObject template = JSONUtils.createJSONObject();
+        template.put(
+                "$name",
+                "Has" + templateName + (templateName.endsWith("s") ? "es" : "s")
+        );
+        template.put("$wasDerivedFrom", type.getURI());
+        template.put("$type", "array");
+
+        // --- $map ---
+        // Only expose the incoming instance as a fragment
+        JSONObject map = JSONUtils.createJSONObject();
+        map.put("$fragment", typeVar);
+
+        // --- $where ---
+        List<String> wherePatterns = new ArrayList<>();
+
+        // ?person a :Person
+        String typeCuri = uriToCuri(type.getURI(), prefixMap);
+        wherePatterns.add(typeVar + " a " + typeCuri);
+
+        // Find properties whose range contains the supplied type.
+        Map<Property, Set<Resource>> propertyRanges = analyzer.getPropertyRanges();
+
+        List<Property> incomingProperties = propertyRanges.entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() != null
+                && entry.getValue().contains(type))
+                .map(Map.Entry::getKey)
+                .filter(prop -> !prop.equals(RDF.type))
+                .sorted(Comparator.comparing(
+                        prop -> AticGraphUtils.getLocalName(prop.getURI()),
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                .toList();
+
+        /*
+     * Add all potential incoming edges directly.
+     *
+     * Example:
+     * ?instance :author ?person
+     * ?instance :owner ?person
+     *
+     * The user can decide which properties to use/remove.
+         */
+        for (Property prop : incomingProperties) {
+            String propCuri = uriToCuri(prop.getURI(), prefixMap);
+
+            wherePatterns.add(
+                    instanceVar + " " + propCuri + " " + typeVar
+            );
+        }
+
+        template.put("$map", map);
+        template.put("$where", new JSONArray(wherePatterns));
+
+        // --- Pagination ---
+        template.put(
+                "$pagination",
+                JSONUtils.createJSONObject()
+                        .put("offset", "?offset" + templateName)
+                        .put("limit", "?limit" + templateName)
+        );
+
+        template.put("$offset", "?offset" + templateName);
+        template.put("$limit", "?limit" + templateName);
+
+        template.put(
+                "$default",
                 JSONUtils.createJSONObject()
                         .put("offset" + templateName, 0)
                         .put("limit" + templateName, 10)

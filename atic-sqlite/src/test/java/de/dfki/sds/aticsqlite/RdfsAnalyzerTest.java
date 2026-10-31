@@ -353,14 +353,14 @@ public class RdfsAnalyzerTest {
         });
 
         DefinitionConstructor dc = new DefinitionConstructor();
-        Map<Resource, JSONObject> templates = dc.buildSuggestedTemplates(analyzer);
+        List<JSONObject> templates = dc.buildSuggestedTemplates(analyzer);
 
         // Find the template for foaf:Person by URI (Jena Resource identity differs across model instances)
         String personUri = "http://xmlns.com/foaf/0.1/Person";
         JSONObject actual = null;
-        for (Map.Entry<Resource, JSONObject> e : templates.entrySet()) {
-            if (personUri.equals(e.getKey().getURI())) {
-                actual = e.getValue();
+        for (JSONObject e : templates) {
+            if (personUri.equals(e.getString("$wasDerivedFrom"))) {
+                actual = e;
                 break;
             }
         }
@@ -450,13 +450,14 @@ public class RdfsAnalyzerTest {
         assertEquals(Cardinality.MULTI, analyzer.getRangeCardinality().get(FOAF.knows));
 
         DefinitionConstructor dc = new DefinitionConstructor();
-        Map<Resource, JSONObject> templates = dc.buildSuggestedTemplates(analyzer);
+        List<JSONObject> templates = dc.buildSuggestedTemplates(analyzer);
 
+        // Find the template for foaf:Person by URI (Jena Resource identity differs across model instances)
         String personUri = "http://xmlns.com/foaf/0.1/Person";
         JSONObject actual = null;
-        for (Map.Entry<Resource, JSONObject> e : templates.entrySet()) {
-            if (personUri.equals(e.getKey().getURI())) {
-                actual = e.getValue();
+        for (JSONObject e : templates) {
+            if (personUri.equals(e.getString("$wasDerivedFrom"))) {
+                actual = e;
                 break;
             }
         }

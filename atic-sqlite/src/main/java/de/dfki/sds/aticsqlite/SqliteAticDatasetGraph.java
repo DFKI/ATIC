@@ -4603,7 +4603,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return ontology.getGraph();
     }
 
-    public Map<Node, JSONObject> deriveBridgeTemplatesFromABox(AticGraph graph, InvocationContext ictx) {
+    public List<JSONObject> deriveBridgeTemplatesFromABox(AticGraph graph, InvocationContext ictx) {
 
         //System.out.println("copy");
         //copy in memory: faster with rdfs analyzer
@@ -4622,15 +4622,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         //System.out.println("construct");
         DefinitionConstructor constructor = new DefinitionConstructor();
 
-        Map<Node, JSONObject> map = constructor.buildSuggestedTemplates(analyzer)
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(
-                        entry -> entry.getKey().asNode(),
-                        Map.Entry::getValue
-                ));
-
-        return map;
+        List<JSONObject> templates = constructor.buildSuggestedTemplates(analyzer);
+        
+        return templates;
     }
 
     public enum OntologyFormat {

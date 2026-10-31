@@ -25,7 +25,6 @@ import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
 import de.dfki.sds.atic.jenatic.Fragment;
 import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.InvocationContext;
-import de.dfki.sds.aticsqlite.AticGraphUtils;
 import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
@@ -797,20 +796,20 @@ public class AticServer {
         JSONObject jsonConf = new JSONObject(ctx.body());
         String uri = jsonConf.getString("uri");
 
-        Map<Node, JSONObject> map = datasetGraph.calculateRead(() -> {
+        List<JSONObject> templates = datasetGraph.calculateRead(() -> {
             AticGraph graph = datasetGraph.getGraph(NodeFactory.createURI(uri), ictx);
             return datasetGraph.deriveBridgeTemplatesFromABox(graph, ictx);
         });
 
         JSONArray result = new JSONArray();
 
-        map.entrySet().stream()
-                .sorted(Comparator.comparing(entry -> entry.getKey().getURI()))
+        templates.stream()
+                .sorted(Comparator.comparing(entry -> entry.getString("$wasDerivedFrom")))
                 .forEach(entry -> {
                     JSONObject item = new JSONObject();
-                    item.put("uri", entry.getKey().getURI());
-                    item.put("name", AticGraphUtils.getLocalName(entry.getKey().getURI()));
-                    item.put("template", entry.getValue());
+                    item.put("uri", entry.getString("$wasDerivedFrom"));
+                    item.put("name", entry.getString("$name"));
+                    item.put("template", entry);
                     result.put(item);
                 });
 
