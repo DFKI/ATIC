@@ -286,7 +286,9 @@ createApp({
             // True while the auto-save spinner (Saving...) is visible
             isSaving: false,
             // True while a setValue() call is in flight (e.g. component switch)
-            $suppressEditorChange: false
+            $suppressEditorChange: false,
+            // True while loadComponent is running — prevents auto-save during component switch
+            _suppressAutoSave: false
         };
     },
     computed: {
@@ -485,6 +487,7 @@ createApp({
 
         // ---- Load a single component from server and open it for editing ----
         async loadComponent(path, name) {
+            this._suppressAutoSave = true;
             try {
                 const response = await axios.get('/vue-components', {
                     params: {path: path, name: name}
@@ -509,7 +512,9 @@ createApp({
                 };
                 this.originalBridges = bridgesArray;
                 this.isNewComponent = false;
-                //this.activeTab = 'bridges';
+                this.$nextTick(() => {
+                    this._suppressAutoSave = false;
+                });
                 this.clearAutoSaveIndicator();
             } catch (error) {
                 console.error('Failed to load component for editing:', error);
@@ -572,6 +577,7 @@ createApp({
             try {
                 const component = this.buildComponentPayload();
                 await axios.post('/vue-components', component);
+                this.isSaving = false;
                 this.autoSaveState = {text: 'Saved', icon: 'fa fa-check-circle', class: 'text-success'};
                 // Clear the indicator after 2 seconds
                 setTimeout(() => {
@@ -596,7 +602,7 @@ createApp({
             // Parse bridges JSON
             let bridgesArray = [];
             try {
-                bridgesArray = JSON.parse(comp.bridges || '[]');
+                bridgesArray = JSON.parse(comp.bridgesText || '[]');
             } catch (e) {
                 bridgesArray = [];
             }
@@ -605,9 +611,9 @@ createApp({
                 path: comp.path || '',
                 name: comp.name || '',
                 bridges: bridgesArray,
-                script: comp.script || '',
-                template: comp.template || '',
-                style: comp.style || ''
+                script: comp.scriptText || '',
+                template: comp.templateText || '',
+                style: comp.styleText || ''
             };
         },
 
@@ -687,8 +693,7 @@ createApp({
             });
 
             editor.session.on('change', () => {
-                // Ignore programmatic changes (setValue during component switch)
-                if (this.$suppressEditorChange) return;
+                if (this._suppressAutoSave) return;
                 const content = editor.getValue();
                 this.editingComponent[textMap[name]] = content;
                 this.onAutoSaveInput();
