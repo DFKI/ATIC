@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+
+    <title>Vue CodeMirror Test</title>
+
+    <style>
+        .editor {
+            height: 500px;
+            border: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="app" class="container py-4">
+
+    <h3 class="mb-4">Vue CodeMirror Test</h3>
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button
+                class="nav-link"
+                :class="{ active: activeTab === 'bridges' }"
+                @click="activeTab = 'bridges'"
+            >
+                Bridges
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button
+                class="nav-link"
+                :class="{ active: activeTab === 'script' }"
+                @click="activeTab = 'script'"
+            >
+                Script
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button
+                class="nav-link"
+                :class="{ active: activeTab === 'template' }"
+                @click="activeTab = 'template'"
+            >
+                Template
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button
+                class="nav-link"
+                :class="{ active: activeTab === 'style' }"
+                @click="activeTab = 'style'"
+            >
+                Style
+            </button>
+        </li>
+    </ul>
+
+    <codemirror
+        v-model="values[activeTab]"
+        :extensions="extensions[activeTab]"
+        class="editor"
+    ></codemirror>
+
+</div>
+
+<script type="module">
+
+import {
+    createApp
+} from 'https://esm.sh/vue@3';
+
+import {
+    Codemirror
+} from 'https://esm.sh/vue-codemirror@6.1.1';
+
+import {
+    javascript
+} from 'https://esm.sh/@codemirror/lang-javascript';
+
+import {
+    json
+} from 'https://esm.sh/@codemirror/lang-json';
+
+import {
+    html
+} from 'https://esm.sh/@codemirror/lang-html';
+
+import {
+    css
+} from 'https://esm.sh/@codemirror/lang-css';
+
+
+createApp({
+
+    components: {
+        Codemirror
+    },
+
+    data() {
+        return {
+            activeTab: 'bridges',
+
+            values: {
+
+                bridges: `[
+    {
+        "$name": "Test"
+    }
+]`,
+
+                script: `{
+    data() {
+        return {
+            message: "Hello"
+        };
+    },
+
+    methods: {
+        test() {
+            console.log(this.message);
+        }
+    }
+}`,
+
+                template: `<div>
+    <h1>Hello</h1>
+</div>`,
+
+                style: `h1 {
+    font-size: 2rem;
+}`
+            },
+
+            extensions: {
+                bridges: [json()],
+                script: [javascript()],
+                template: [html()],
+                style: [css()]
+            }
+        };
+    }
+
+}).mount('#app');
+
+</script>
+
+</body>
+</html>

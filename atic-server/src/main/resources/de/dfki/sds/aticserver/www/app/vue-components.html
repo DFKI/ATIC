@@ -8,6 +8,18 @@
         <link href="css/loader.css" rel="stylesheet" />
         <link href="css/link.css" rel="stylesheet" />
 
+        <link href="css/codemirror/codemirror.css" rel="stylesheet" />
+        <script src="js/codemirror/codemirror.js"></script>
+        <script src="js/codemirror/addon/edit/closebrackets.js"></script>
+        <script src="js/codemirror/addon/edit/matchbrackets.js"></script>
+        <script src="js/codemirror/addon/edit/matchtags.js"></script>
+        <script src="js/codemirror/addon/edit/closetag.js"></script>
+        <script src="js/codemirror/mode-xml.js"></script>
+        <script src="js/codemirror/mode-clike.js"></script>
+        <script src="js/codemirror/mode-javascript.js"></script>
+        <script src="js/codemirror/mode-css.js"></script>
+        <script src="js/codemirror/mode-htmlmixed.js"></script>
+        <script src="js/codemirror/mode-meta.js"></script>
         <script src="js/bootstrap.bundle.min.js" ></script>
         <script src="js/vue.global.prod.js" ></script>
         <script src="js/axios.min.js"></script>
@@ -34,13 +46,6 @@
             .component-list-item.active {
                 background-color: #e7f1ff;
                 border-left: 3px solid #0d6efd;
-            }
-            textarea.editor {
-                font-family: 'Courier New', Courier, monospace;
-                font-size: 13px;
-                resize: vertical;
-                min-height: 150px;
-                width: 100%;
             }
             .auto-save-indicator {
                 font-size: 12px;
@@ -200,50 +205,38 @@
                                     <!-- Tabs for Bridges, Script, Template, Style -->
                                     <ul class="nav nav-tabs mb-0">
                                         <li class="nav-item">
-                                            <a class="nav-link" :class="{active: activeTab === 'bridges'}" href="#" @click.prevent="activeTab='bridges'">
+                                            <a class="nav-link" :class="{active: activeTab === 'bridges'}" href="#" @click.prevent="switchTab('bridges')">
                                                 <i class="fa fa-plug me-1"></i>Bridges
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link" :class="{active: activeTab === 'script'}" href="#" @click.prevent="activeTab='script'">
+                                            <a class="nav-link" :class="{active: activeTab === 'script'}" href="#" @click.prevent="switchTab('script')">
                                                 <i class="fa fa-file-code me-1"></i>Script
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link" :class="{active: activeTab === 'template'}" href="#" @click.prevent="activeTab='template'">
+                                            <a class="nav-link" :class="{active: activeTab === 'template'}" href="#" @click.prevent="switchTab('template')">
                                                 <i class="fa fa-window-maximize me-1"></i>Template
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link" :class="{active: activeTab === 'style'}" href="#" @click.prevent="activeTab='style'">
+                                            <a class="nav-link" :class="{active: activeTab === 'style'}" href="#" @click.prevent="switchTab('style')">
                                                 <i class="fa fa-paint-brush me-1"></i>Style
                                             </a>
                                         </li>
                                     </ul>
                                     <div class="tab-content">
-                                        <div class="tab-pane fade" :class="{show: activeTab === 'bridges', 'active': activeTab === 'bridges'}">
-                                            <textarea class="form-control editor" rows="35"
-                                                      v-model="editingComponent.bridgesText"
-                                                      spellcheck="false"
-                                                      @input="handleBridgesInput"></textarea>
+                                        <div class="tab-pane" :class="{active: activeTab === 'bridges'}" :style="{ display: activeTab === 'bridges' ? 'block' : 'none' }">
+                                            <div id="cm-bridges" class="editor-container"></div>
                                         </div>
-                                        <div class="tab-pane fade" :class="{show: activeTab === 'script', 'active': activeTab === 'script'}">
-                                            <textarea class="form-control editor" rows="35"
-                                                      v-model="editingComponent.scriptText"
-                                                      spellcheck="false"
-                                                      @input="handleScriptInput"></textarea>
+                                        <div class="tab-pane" :class="{active: activeTab === 'script'}" :style="{ display: activeTab === 'script' ? 'block' : 'none' }">
+                                            <div id="cm-script" class="editor-container"></div>
                                         </div>
-                                        <div class="tab-pane fade" :class="{show: activeTab === 'template', 'active': activeTab === 'template'}">
-                                            <textarea class="form-control editor" rows="35"
-                                                      v-model="editingComponent.templateText"
-                                                      spellcheck="false"
-                                                      @input="handleTemplateInput"></textarea>
+                                        <div class="tab-pane" :class="{active: activeTab === 'template'}" :style="{ display: activeTab === 'template' ? 'block' : 'none' }">
+                                            <div id="cm-template" class="editor-container"></div>
                                         </div>
-                                        <div class="tab-pane fade" :class="{show: activeTab === 'style', 'active': activeTab === 'style'}">
-                                            <textarea class="form-control editor" rows="35"
-                                                      v-model="editingComponent.styleText"
-                                                      spellcheck="false"
-                                                      @input="handleStyleInput"></textarea>
+                                        <div class="tab-pane" :class="{active: activeTab === 'style'}" :style="{ display: activeTab === 'style' ? 'block' : 'none' }">
+                                            <div id="cm-style" class="editor-container"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -282,8 +275,30 @@ createApp({
             autoSaveTimer: null,
             autoSaveState: {text: '', icon: 'fa fa-clock', class: 'text-muted'},
             // Track original bridges JSON for re-parsing
-            originalBridges: null
+            originalBridges: null,
+            // CodeMirror editor instances
+            cmEditors: {},
+            updatingEditors: false
         };
+    },
+    watch: {
+        activeTab(newTab) {
+            this.$nextTick(() => {
+                requestAnimationFrame(() => {
+                    const editor = this.cmEditors[newTab];
+                    if (editor) {
+                        // Update value if it doesn't match the current component
+                        const expected = this.editingComponent?.[newTab] || '';
+                        if (editor.getValue() !== expected) {
+                            editor.setValue(expected);
+                        }
+                        editor.refresh();
+                    } else {
+                        this.initEditor(newTab);
+                    }
+                });
+            });
+        }
     },
     created() {
         axios.interceptors.response.use(
@@ -418,13 +433,14 @@ createApp({
 
             this.originalBridges = JSON.parse(defaultBridges);
             this.isNewComponent = true;
-            //this.activeTab = 'bridges';
             this.clearAutoSaveIndicator();
+            this.$nextTick(() => this.updateEditors());
         },
 
         // ---- Edit a component from the list (fetch latest data from server) ----
         async editComponent(comp) {
             await this.loadComponent(comp.path, comp.name);
+            this.$nextTick(() => this.updateEditors());
         },
 
         // ---- Load a single component from server and open it for editing ----
@@ -495,6 +511,89 @@ createApp({
                                 : JSON.stringify(error.response.data))
                         : error.message || 'An unexpected error occurred.';
             }
+        },
+
+        // ---- Switch tab: watcher handles creation/refresh ----
+        switchTab(newTab) {
+            this.activeTab = newTab;
+        },
+        // ---- Create a single CodeMirror editor for the given tab ----
+        initEditor(tab) {
+            if (this.cmEditors[tab] || !this.editingComponent) return;
+
+            const el = document.getElementById('cm-' + tab);
+            if (!el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
+
+            const modeMap = {
+                bridges: 'javascript',
+                script: 'javascript',
+                template: 'htmlmixed',
+                style: 'css'
+            };
+
+            const field = tab + 'Text';
+
+            this.cmEditors[tab] = CodeMirror(el, {
+                value: this.editingComponent[field] || '',
+                mode: modeMap[tab],
+                lineNumbers: true,
+                lineWrapping: true,
+                matchBrackets: true,
+                autoCloseBrackets: true,
+                autoCloseTags: true,
+                indentUnit: 4,
+                tabSize: 4,
+                indentWithTabs: false
+            });
+
+            console.log('[CM] Created:', tab, {
+                version: CodeMirror.version,
+                lineCount: this.cmEditors[tab].lineCount(),
+                lineWrapping: this.cmEditors[tab].getOption('lineWrapping'),
+                element: el,
+                offsetWidth: el.offsetWidth,
+                offsetHeight: el.offsetHeight
+            });
+
+            // Sync CodeMirror changes back to Vue data and trigger auto-save
+            this.cmEditors[tab].on('change', (editor) => {
+                if (this.updatingEditors) return;
+
+                const value = editor.getValue();
+
+                this.editingComponent[field] = value;
+                this.editingComponent[tab] = value;
+
+                this.onAutoSaveInput();
+            });
+
+            // Refresh dimensions after creation
+            this.$nextTick(() => this.cmEditors[tab].refresh());
+        },
+
+        // ---- Update all editor values when switching components ----
+        updateEditors() {
+            if (!this.editingComponent) return;
+
+            this.updatingEditors = true;
+
+            // Only setValue on the active tab's editor.
+            // Calling setValue() on hidden editors triggers layout/measure
+            // in zero-height containers, which causes the prepareMeasureForLine crash.
+            const editor = this.cmEditors[this.activeTab];
+            const value = this.editingComponent[this.activeTab] || '';
+
+            if (editor && editor.getValue() !== value) {
+                editor.setValue(value);
+            }
+
+            this.updatingEditors = false;
+
+            this.$nextTick(() => {
+                const activeEditor = this.cmEditors[this.activeTab];
+                if (activeEditor) activeEditor.refresh();
+                else this.initEditor(this.activeTab);
+            });
         },
 
         // ---- Auto-save handler triggered on input ----

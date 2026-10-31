@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+
+    <script src="js/vue.global.prod.js"></script>
+    <script src="js/bootstrap.bundle.min.js"></script>
+
+    <link href="css/codemirror/codemirror.css" rel="stylesheet" />
+    <script src="js/codemirror/codemirror.js"></script>
+    <script src="js/codemirror/addon/edit/closebrackets.js"></script>
+    <script src="js/codemirror/addon/edit/matchbrackets.js"></script>
+    <script src="js/codemirror/addon/edit/matchtags.js"></script>
+    <script src="js/codemirror/addon/edit/closetag.js"></script>
+    <script src="js/codemirror/mode-xml.js"></script>
+    <script src="js/codemirror/mode-clike.js"></script>
+    <script src="js/codemirror/mode-javascript.js"></script>
+    <script src="js/codemirror/mode-css.js"></script>
+    <script src="js/codemirror/mode-htmlmixed.js"></script>
+    <script src="js/codemirror/mode-meta.js"></script>
+    <script src="js/bootstrap.bundle.min.js" ></script>
+    <script src="js/vue.global.prod.js" ></script>
+    <script src="js/axios.min.js"></script>
+
+    <style>
+        .editor-container {
+            height: 400px;
+        }
+
+        .CodeMirror {
+            height: 100%;
+            border: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="app" class="container py-4">
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button class="nav-link"
+                    :class="{ active: activeTab === 'bridges' }"
+                    @click="selectTab('bridges')">
+                Bridges
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link"
+                    :class="{ active: activeTab === 'script' }"
+                    @click="selectTab('script')">
+                Script
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link"
+                    :class="{ active: activeTab === 'template' }"
+                    @click="selectTab('template')">
+                Template
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link"
+                    :class="{ active: activeTab === 'style' }"
+                    @click="selectTab('style')">
+                Style
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+        <div class="tab-pane"
+             :class="{ active: activeTab === 'bridges' }"
+             :style="{ display: activeTab === 'bridges' ? 'block' : 'none' }">
+            <div id="cm-bridges" class="editor-container"></div>
+        </div>
+
+        <div class="tab-pane"
+             :class="{ active: activeTab === 'script' }"
+             :style="{ display: activeTab === 'script' ? 'block' : 'none' }">
+            <div id="cm-script" class="editor-container"></div>
+        </div>
+
+        <div class="tab-pane"
+             :class="{ active: activeTab === 'template' }"
+             :style="{ display: activeTab === 'template' ? 'block' : 'none' }">
+            <div id="cm-template" class="editor-container"></div>
+        </div>
+
+        <div class="tab-pane"
+             :class="{ active: activeTab === 'style' }"
+             :style="{ display: activeTab === 'style' ? 'block' : 'none' }">
+            <div id="cm-style" class="editor-container"></div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+
+    data() {
+        return {
+            activeTab: 'bridges',
+
+            editors: {},
+
+            values: {
+                bridges: '[\n  {\n    "$name": "Test"\n  }\n]',
+                script: 'const test = "Hello";',
+                template: '<div>Hello World</div>',
+                style: '.example {\n    padding: 1rem;\n}'
+            }
+        };
+    },
+
+    mounted() {
+        this.$nextTick(() => {
+            this.initEditor(this.activeTab);
+        });
+    },
+
+    methods: {
+
+        selectTab(tab) {
+            this.activeTab = tab;
+
+            this.$nextTick(() => {
+                requestAnimationFrame(() => {
+
+                    if (!this.editors[tab]) {
+                        this.initEditor(tab);
+                    } else {
+                        this.editors[tab].refresh();
+                    }
+
+                });
+            });
+        },
+
+        initEditor(tab) {
+            if (this.editors[tab]) {
+                return;
+            }
+
+            const element = document.getElementById('cm-' + tab);
+
+            if (!element) {
+                return;
+            }
+
+            const modes = {
+                bridges: 'javascript',
+                script: 'javascript',
+                template: 'htmlmixed',
+                style: 'css'
+            };
+
+            const editor = CodeMirror(element, {
+                value: this.values[tab],
+                mode: modes[tab],
+                lineNumbers: true,
+                lineWrapping: true
+            });
+
+            editor.on('change', () => {
+                this.values[tab] = editor.getValue();
+            });
+
+            this.editors[tab] = editor;
+
+            requestAnimationFrame(() => {
+                editor.refresh();
+            });
+        }
+
+    }
+
+}).mount('#app');
+</script>
+
+</body>
+</html>

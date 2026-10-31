@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>CodeMirror Single Editor Test</title>
+    <link href="css/codemirror/codemirror.css" rel="stylesheet" />
+    <script src="js/codemirror/codemirror.js"></script>
+    <script src="js/codemirror/addon/edit/closebrackets.js"></script>
+    <script src="js/codemirror/addon/edit/matchbrackets.js"></script>
+    <script src="js/codemirror/addon/edit/closetag.js"></script>
+    <script src="js/codemirror/mode-javascript.js"></script>
+    <style>
+        body { padding: 20px; font-family: sans-serif; }
+        #test-editor { height: 300px; border: 1px solid #ccc; }
+        .log { margin-top: 16px; white-space: pre-wrap; font-size: 12px; max-height: 200px; overflow: auto; }
+        .test-section { margin: 20px 0; padding: 16px; border: 1px solid #eee; border-radius: 4px; }
+        .test-section h3 { margin-top: 0; }
+    </style>
+</head>
+<body>
+    <h1>CodeMirror 5 Single Editor Test</h1>
+
+    <div class="test-section">
+        <h3>Test 1: Basic editor creation</h3>
+        <p>Click into the editor below and type. If no errors appear in the console, the editor is working.</p>
+        <div id="test-editor"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 2: Hidden container (reproduces original crash)</h3>
+        <p>This editor is inside a hidden div. Clicking the button shows it and creates the editor.</p>
+        <div id="hidden-editor" style="display:none; height: 200px; border: 1px dashed #999;"></div>
+        <button onclick="showAndCreate()">Show &amp; Create Editor</button>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 3: lineWrapping diagnostic</h3>
+        <p>Create two editors side by side to compare behavior with and without line wrapping.</p>
+        <div id="test-editor-nr" style="height: 150px; border: 1px solid #ccc; float: left; margin-right: 10px;"></div>
+        <div id="test-editor-rr" style="height: 150px; border: 1px solid #ccc; float: left;"></div>
+        <div style="clear: both;"></div>
+        <button onclick="createBoth()">Create Both Editors</button>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <script>
+    const logEl = document.getElementById('log');
+    function log(msg) {
+        const ts = new Date().toLocaleTimeString();
+        logEl.textContent += `[${ts}] ${msg}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+    window.onerror = (msg, url, line) => {
+        log(`ERROR: ${msg} at line ${line}`);
+        return false;
+    };
+
+    // === Test 1 ===
+    log('CodeMirror.version = ' + CodeMirror.version);
+
+    const editor1 = CodeMirror(document.getElementById('test-editor'), {
+        value: 'const test = "Hello";\nconsole.log(test);\n\n// Try typing here',
+        mode: 'javascript',
+        lineNumbers: true,
+        lineWrapping: true,
+        matchBrackets: true,
+        autoCloseBrackets: true,
+        autoCloseTags: true
+    });
+    log('Test 1: Editor created. Lines: ' + editor1.lineCount());
+
+    editor1.on('change', () => {
+        log('Test 1: Content changed, length: ' + editor1.getValue().length);
+    });
+
+    // === Test 2 ===
+    function showAndCreate() {
+        const el = document.getElementById('hidden-editor');
+        el.style.display = 'block';
+        log('Test 2: Made visible. offsetWidth=' + el.offsetWidth + ' offsetHeight=' + el.offsetHeight);
+
+        const editor2 = CodeMirror(el, {
+            value: 'var x = 42;',
+            mode: 'javascript',
+            lineNumbers: true,
+            lineWrapping: true,
+            matchBrackets: true
+        });
+        log('Test 2: Editor created. Lines: ' + editor2.lineCount());
+    }
+
+    // === Test 3 ===
+    function createBoth() {
+        log('Test 3: Creating no-wrap editor...');
+        const editorNr = CodeMirror(document.getElementById('test-editor-nr'), {
+            value: 'This is a very long line that will wrap if lineWrapping is enabled. ' +
+                   'Without lineWrapping, horizontal scrolling will occur instead. '.repeat(5),
+            mode: 'javascript',
+            lineNumbers: true,
+            lineWrapping: false,
+            matchBrackets: true
+        });
+        log('Test 3: No-wrap editor created. Lines: ' + editorNr.lineCount());
+
+        log('Test 3: Creating wrap editor...');
+        const editorRr = CodeMirror(document.getElementById('test-editor-rr'), {
+            value: 'This is a very long line that will wrap if lineWrapping is enabled. ' +
+                   'Without lineWrapping, horizontal scrolling will occur instead. '.repeat(5),
+            mode: 'javascript',
+            lineNumbers: true,
+            lineWrapping: true,
+            matchBrackets: true
+        });
+        log('Test 3: Wrap editor created. Lines: ' + editorRr.lineCount());
+    }
+    </script>
+</body>
+</html>
