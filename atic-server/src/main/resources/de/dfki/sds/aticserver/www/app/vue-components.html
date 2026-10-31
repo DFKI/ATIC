@@ -12,6 +12,12 @@
         <script src="js/vue.global.prod.js" ></script>
         <script src="js/axios.min.js"></script>
 
+        <!-- Ace Editor -->
+        <script src="js/ace.js"></script>
+        <script>
+            ace.config.set("basePath", "js");
+        </script>
+
         <link rel="shortcut icon" href="favicon.ico">
         <title>Vue Components | Atic</title>
 
@@ -35,13 +41,6 @@
                 background-color: #e7f1ff;
                 border-left: 3px solid #0d6efd;
             }
-            textarea.editor {
-                font-family: 'Courier New', Courier, monospace;
-                font-size: 13px;
-                resize: vertical;
-                min-height: 150px;
-                width: 100%;
-            }
             .auto-save-indicator {
                 font-size: 12px;
                 transition: opacity 0.3s ease;
@@ -49,6 +48,12 @@
             .sidebar-sticky {
                 position: sticky;
                 top: 1rem;
+            }
+            .ace-editor-container {
+                width: 100%;
+                height: calc(100vh - 385px);
+                border: 1px solid #dee2e6;
+                border-radius: 0 0 4px 4px;
             }
         </style>
     </head>
@@ -60,7 +65,9 @@
                 <div class="col d-flex align-items-center m-2">
                     <h3 class="mb-0 d-flex align-items-center me-2">
                         Vue Components
-                        <button type="button" class="btn btn-primary ms-2" @click="openNewComponent">
+                        <button type="button" class="btn btn-primary ms-2"
+                                :disabled="!canEdit"
+                                @click="openNewComponent">
                             <i class="fa fa-plus me-1"></i> New Component
                         </button>
                     </h3>
@@ -107,9 +114,9 @@
                              :class="{
                              'active': editingComponent && editingComponent.name === comp.name && editingComponent.path === comp.path
                              }">
-                            <div class="card-body p-2" style="cursor: pointer;">
+                            <div class="card-body p-2" :style="{cursor: canEdit ? 'pointer' : 'default', 'pointer-events': canEdit ? 'auto' : 'none'}">
                                 <div class="d-flex justify-content-between align-items-start">
-                                    <div class="flex-grow-1" @click="editComponent(comp)">
+                                    <div class="flex-grow-1" :style="{cursor: canEdit ? 'pointer' : 'default'}" @click="canEdit ? editComponent(comp) : null">
                                         <div class="fw-bold text-truncate" :title="comp.name">
                                             {{ comp.name }}
                                         </div>
@@ -131,6 +138,7 @@
                                         <button type="button"
                                                 class="btn btn-sm btn-outline-danger"
                                                 title="Delete"
+                                                :disabled="!canEdit"
                                                 @click="deleteComponent(comp)">
                                             <i class="fa fa-trash"></i>
                                         </button>
@@ -222,28 +230,16 @@
                                     </ul>
                                     <div class="tab-content">
                                         <div class="tab-pane fade" :class="{show: activeTab === 'bridges', 'active': activeTab === 'bridges'}">
-                                            <textarea class="form-control editor" rows="35"
-                                                      v-model="editingComponent.bridgesText"
-                                                      spellcheck="false"
-                                                      @input="handleBridgesInput"></textarea>
+                                            <div id="editor-bridges" class="ace-editor-container"></div>
                                         </div>
                                         <div class="tab-pane fade" :class="{show: activeTab === 'script', 'active': activeTab === 'script'}">
-                                            <textarea class="form-control editor" rows="35"
-                                                      v-model="editingComponent.scriptText"
-                                                      spellcheck="false"
-                                                      @input="handleScriptInput"></textarea>
+                                            <div id="editor-script" class="ace-editor-container"></div>
                                         </div>
                                         <div class="tab-pane fade" :class="{show: activeTab === 'template', 'active': activeTab === 'template'}">
-                                            <textarea class="form-control editor" rows="35"
-                                                      v-model="editingComponent.templateText"
-                                                      spellcheck="false"
-                                                      @input="handleTemplateInput"></textarea>
+                                            <div id="editor-template" class="ace-editor-container"></div>
                                         </div>
                                         <div class="tab-pane fade" :class="{show: activeTab === 'style', 'active': activeTab === 'style'}">
-                                            <textarea class="form-control editor" rows="35"
-                                                      v-model="editingComponent.styleText"
-                                                      spellcheck="false"
-                                                      @input="handleStyleInput"></textarea>
+                                            <div id="editor-style" class="ace-editor-container"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -278,12 +274,25 @@ createApp({
             saving: false,
             isNewComponent: false,
             activeTab: 'bridges',
+            // Ace editors
+            aceEditors: {},
+            // Track which tabs have been shown (lazy init)
+            aceEditorInitialized: {bridges: false, script: false, template: false, style: false},
             // Auto-save state
             autoSaveTimer: null,
             autoSaveState: {text: '', icon: 'fa fa-clock', class: 'text-muted'},
             // Track original bridges JSON for re-parsing
-            originalBridges: null
+            originalBridges: null,
+            // True while the auto-save spinner (Saving...) is visible
+            isSaving: false,
+            // True while a setValue() call is in flight (e.g. component switch)
+            $suppressEditorChange: false
         };
+    },
+    computed: {
+        canEdit() {
+            return !this.saving && !this.isSaving;
+        }
     },
     created() {
         axios.interceptors.response.use(
@@ -298,6 +307,47 @@ createApp({
         );
         this.getAuthMe();
         this.loadComponents();
+    },
+    updated() {
+        // Initialize the editor for the currently active tab
+        if (this.editingComponent) {
+            this.showTab(this.activeTab);
+        }
+    },
+    watch: {
+        // Resize all editors when the active tab changes
+        activeTab() {
+            // The currently active tab will be initialized by updated() if needed
+            this.resizeAllEditors();
+        },
+        // Push new component content into editors when component switches
+        editingComponent(newVal) {
+            if (!newVal) return;
+            Object.keys(this.aceEditors).forEach(name => {
+                const textMap = {
+                    bridges:  'bridgesText',
+                    script:   'scriptText',
+                    template: 'templateText',
+                    style:    'styleText'
+                };
+                const editor = this.aceEditors[name];
+                if (editor && newVal[textMap[name]] !== undefined) {
+                    // Suppress change events during setValue — this prevents
+                    // the auto-save timer from starting when switching components.
+                    this.$suppressEditorChange = true;
+                    editor.setValue(newVal[textMap[name]], -1);
+                    this.$nextTick(() => {
+                        this.$suppressEditorChange = false;
+                    });
+                }
+            });
+        }
+    },
+    beforeUnmount() {
+        Object.values(this.aceEditors).forEach(editor => {
+            editor.destroy();
+        });
+        this.aceEditors = {};
     },
     methods: {
 
@@ -323,6 +373,12 @@ createApp({
         },
         // ---- Open new component form ----
         openNewComponent() {
+            if (!this.canEdit) return;
+            this.openNewComponentInternal();
+        },
+
+        // ---- Open new component form (internal) ----
+        openNewComponentInternal() {
             const defaultBridges = JSON.stringify([], null, 4);
             const defaultScript = [
                 "{",
@@ -468,6 +524,7 @@ createApp({
 
         // ---- Delete a component (native confirm dialog) ----
         async deleteComponent(comp) {
+            if (!this.canEdit) return;
             if (!confirm(`Delete component "${comp.name}" at "${comp.path}"?`)) {
                 return;
             }
@@ -500,6 +557,7 @@ createApp({
         // ---- Auto-save handler triggered on input ----
         onAutoSaveInput() {
             this.clearAutoSaveIndicator();
+            this.isSaving = true;
             this.autoSaveState = {text: 'Saving...', icon: 'fa fa-spinner fa-spin', class: 'text-primary'};
 
             // Debounce: save after user stops typing for 1 second
@@ -528,6 +586,7 @@ createApp({
                                 ? error.response.data
                                 : JSON.stringify(error.response.data))
                         : error.message || 'An unexpected error occurred.';
+                this.isSaving = false;
             }
         },
 
@@ -579,25 +638,78 @@ createApp({
         // ---- Clear auto-save indicator ----
         clearAutoSaveIndicator() {
             clearTimeout(this.autoSaveTimer);
+            this.isSaving = false;
             this.autoSaveState = {text: '', icon: '', class: ''};
         },
 
-        // ---- Bind auto-save to text area inputs ----
-        handleBridgesInput() {
-            this.editingComponent.bridges = this.editingComponent.bridgesText;
-            this.onAutoSaveInput();
+        // ---- Initialize a single Ace editor (lazy, only when tab is shown) ----
+        initAceEditor(name) {
+            if (this.aceEditorInitialized[name]) {
+                // Already initialized, just resize
+                if (this.aceEditors[name]) {
+                    this.aceEditors[name].resize(true);
+                }
+                return;
+            }
+
+            if (!this.editingComponent) return;
+
+            const modeMap = {
+                bridges:  'ace/mode/json',
+                script:   'ace/mode/javascript',
+                template: 'ace/mode/html',
+                style:    'ace/mode/css'
+            };
+            const textMap = {
+                bridges:  'bridgesText',
+                script:   'scriptText',
+                template: 'templateText',
+                style:    'styleText'
+            };
+
+            const containerId = 'editor-' + name;
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const editor = ace.edit(containerId);
+            editor.setValue(this.editingComponent[textMap[name]], -1);
+            editor.setTheme('ace/theme/github');
+            editor.session.setMode(modeMap[name]);
+            editor.setOptions({
+                useWorker: false,
+                fontSize: '13px',
+                tabSize: 2,
+                useSoftTabs: true,
+                showPrintMargin: false,
+                wrap: true,
+                highlightActiveLine: true,
+                behavioursEnabled: true
+            });
+
+            editor.session.on('change', () => {
+                // Ignore programmatic changes (setValue during component switch)
+                if (this.$suppressEditorChange) return;
+                const content = editor.getValue();
+                this.editingComponent[textMap[name]] = content;
+                this.onAutoSaveInput();
+            });
+
+            this.aceEditors[name] = editor;
+            this.aceEditorInitialized[name] = true;
         },
-        handleScriptInput() {
-            this.editingComponent.script = this.editingComponent.scriptText;
-            this.onAutoSaveInput();
+
+        // ---- Show a tab: initialize its editor if needed ----
+        showTab(tabName) {
+            if (!this.aceEditorInitialized[tabName]) {
+                this.initAceEditor(tabName);
+            }
         },
-        handleTemplateInput() {
-            this.editingComponent.template = this.editingComponent.templateText;
-            this.onAutoSaveInput();
-        },
-        handleStyleInput() {
-            this.editingComponent.style = this.editingComponent.styleText;
-            this.onAutoSaveInput();
+
+        // ---- Resize all initialized editors (called on tab switch) ----
+        resizeAllEditors() {
+            Object.values(this.aceEditors).forEach(editor => {
+                editor.resize(true);
+            });
         },
 
         // ---- Auth ----
