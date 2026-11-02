@@ -379,12 +379,13 @@ public class DefinitionConstructor {
         Map<String, String> prefixMap = buildPrefixMap(analyzer);
 
         // The resource we want to return as a fragment
-        String instanceVar = "?instance";
+        String instanceVarName = "instance";
+        String instanceVar = "?" + instanceVarName;
 
         // Variable representing the instance of the requested type
         String typeVar = "?" + typeLocalName;
         if (typeVar.equals(instanceVar)) {
-            typeVar = "?resource";
+            throw new RuntimeException("InstanceVar has name name as typeVar: " + instanceVar);
         }
 
         // --- Template ---
@@ -453,11 +454,17 @@ public class DefinitionConstructor {
         template.put("$offset", "?offset" + templateName);
         template.put("$limit", "?limit" + templateName);
 
+        /*
+        "$default": {
+            "instance": { "@id": "" }
+        },
+        */
         template.put(
                 "$default",
                 JSONUtils.createJSONObject()
                         .put("offset" + templateName, 0)
                         .put("limit" + templateName, 10)
+                        .put(instanceVarName, new JSONObject().put("@id", ""))
         );
 
         // --- @context ---
