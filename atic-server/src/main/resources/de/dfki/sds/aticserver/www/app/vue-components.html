@@ -574,6 +574,7 @@ createApp({
 
         // ---- Perform the actual save ----
         async performAutoSave() {
+            this.saveError = null;
             try {
                 const component = this.buildComponentPayload();
                 await axios.post('/vue-components', component);
@@ -602,9 +603,10 @@ createApp({
             // Parse bridges JSON
             let bridgesArray = [];
             try {
-                bridgesArray = JSON.parse(comp.bridgesText || '[]');
+                bridgesArray = JSON.parse(comp.bridgesText);
             } catch (e) {
-                bridgesArray = [];
+                //console.log(e);
+                throw e;
             }
 
             return {

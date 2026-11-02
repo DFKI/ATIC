@@ -467,26 +467,26 @@ public class VueComponentStorage {
             if (dryRun) {
                 headers['Atic-Dry-Run'] = 'true';
             }
-
+                                                    
+            const serializedParams = Object.fromEntries(
+                Object.entries(params).map(([key, value]) => [
+                    key,
+                    JSON.stringify(value)
+                ])
+            );
+            
             try {
                 return await axios.request({
                     method,
                     url: "$baseUrl",
-                    params,
+                    params: serializedParams,
                     data,
                     withCredentials: true,
                     headers,
                     responseType: method === 'QUERY' ? 'json' : 'text'
                 });
             } catch (error) {
-                if (error.response) {
-                    throw new BridgeError(
-                        error.response.data || error.message,
-                        error.response.status,
-                        error.response
-                    );
-                }
-                throw new BridgeError(error.message);
+                throw error;
             }
         }
         """.replace("$baseUrl", baseUrl);
