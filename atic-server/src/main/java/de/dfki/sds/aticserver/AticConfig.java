@@ -93,6 +93,9 @@ PREFIX ex: <http://example.org/>
     
     @Config(value = "property-type-aware", description = "Enable property type aware support")
     boolean propertyTypeAware = false;
+    
+    @Config(value = "invex", description = "Enable invex support")
+    boolean invex = true;
 
     @Config(value = "cors.allowhost", description = "Use this to set a URL that is allowed to access ATIC server")
     String corsAllowHost = null;
@@ -186,6 +189,10 @@ PREFIX ex: <http://example.org/>
 
     public boolean isPropertyTypeAware() {
         return propertyTypeAware;
+    }
+
+    public boolean isInvexEnabled() {
+        return invex;
     }
     
 }

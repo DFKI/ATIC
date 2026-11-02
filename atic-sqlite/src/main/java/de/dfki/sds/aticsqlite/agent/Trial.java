@@ -12,10 +12,12 @@ import java.nio.file.Path;
  */
 public class Trial {
 
+    /*
     public static void main(String[] args) throws Exception {
         //agentJobWorkerTest();
     }
-
+    */
+    
     private static void chatModelTest() throws IOException {
         Path tokenFile = Path.of(
                 System.getProperty("user.home"),

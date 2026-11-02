@@ -36,7 +36,9 @@ public class BootstrapUnitTest {
                 "property",
                 "spog",
                 "splg",
-                "prefixmap"
+                "prefixmap",
+                "fragment_settings",
+                "fragment_cache"
         );
 
         dataset.begin(TxnType.READ);

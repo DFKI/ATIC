@@ -954,8 +954,26 @@ public class AticGraphUtils {
                 },
                 params
         );
-        
+
         return resources;
     }
 
+    public static String getLocalName(String uri) {
+        int a = uri.lastIndexOf("/");
+        int b = uri.lastIndexOf("#");
+        int m = Math.max(a, b);
+        if (m == -1) {
+            //schema:name
+            if (uri.contains(":")) {
+                String[] split = uri.split("\\:");
+                if (split.length == 2) {
+                    return split[1];
+                }
+            }
+
+            return null;
+        }
+
+        return uri.substring(m + 1, uri.length());
+    }
 }

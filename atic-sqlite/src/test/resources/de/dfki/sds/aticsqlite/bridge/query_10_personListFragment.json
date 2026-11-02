@@ -17,57 +17,150 @@
     "expected": [
         {
             "@id": "https://example.org/id/alice-smith",
-            "@type": {
+            "type": {
                 "@id": "https://schema.org/Person",
-                "icon": "https://example.org/icon/person",
-                "comment": {
-                    "@value": "A person",
-                    "@language": "en"
+                "type": {
+                    "@id": "http://www.w3.org/2000/01/rdf-schema#Class"
                 },
-                "label": "Person"
+                "icon": "https://example.org/icon/person",
+                "label": "Person",
+                "comment": "A person",
+                "@context": {
+                    "type": {
+                        "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                    },
+                    "icon": {
+                        "@id": "https://schema.org/icon",
+                        "@type": "http://www.w3.org/2001/XMLSchema#string"
+                    },
+                    "label": {
+                        "@id": "http://xmlns.com/foaf/0.1/name",
+                        "@type": "http://www.w3.org/2001/XMLSchema#string"
+                    },
+                    "comment": {
+                        "@id": "https://schema.org/description",
+                        "@language": "en"
+                    }
+                }
             },
             "icon": "https://example.org/icon/alice",
-            "comment": {
-                "@value": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects.",
-                "@language": "en"
-            },
-            "label": "Alice Smith"
+            "label": "Alice Smith",
+            "comment": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects.",
+            "@context": {
+                "type": {
+                    "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                },
+                "icon": {
+                    "@id": "https://schema.org/icon",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                },
+                "label": {
+                    "@id": "http://xmlns.com/foaf/0.1/name",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                },
+                "comment": {
+                    "@id": "https://schema.org/description",
+                    "@language": "en"
+                }
+            }
         },
         {
             "@id": "https://example.org/id/bob-johnson",
-            "@type": {
+            "type": {
                 "@id": "https://schema.org/Person",
-                "icon": "https://example.org/icon/person",
-                "comment": {
-                    "@value": "A person",
-                    "@language": "en"
+                "type": {
+                    "@id": "http://www.w3.org/2000/01/rdf-schema#Class"
                 },
-                "label": "Person"
+                "icon": "https://example.org/icon/person",
+                "label": "Person",
+                "comment": "A person",
+                "@context": {
+                    "type": {
+                        "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                    },
+                    "icon": {
+                        "@id": "https://schema.org/icon",
+                        "@type": "http://www.w3.org/2001/XMLSchema#string"
+                    },
+                    "label": {
+                        "@id": "http://xmlns.com/foaf/0.1/name",
+                        "@type": "http://www.w3.org/2001/XMLSchema#string"
+                    },
+                    "comment": {
+                        "@id": "https://schema.org/description",
+                        "@language": "en"
+                    }
+                }
             },
             "icon": "https://example.org/icon/bob",
-            "comment": {
-                "@value": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software.",
-                "@language": "en"
-            },
-            "label": "Bob Johnson"
+            "label": "Bob Johnson",
+            "comment": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software.",
+            "@context": {
+                "type": {
+                    "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                },
+                "icon": {
+                    "@id": "https://schema.org/icon",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                },
+                "label": {
+                    "@id": "http://xmlns.com/foaf/0.1/name",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                },
+                "comment": {
+                    "@id": "https://schema.org/description",
+                    "@language": "en"
+                }
+            }
         },
         {
             "@id": "https://example.org/id/carol-miller",
-            "@type": {
+            "type": {
                 "@id": "https://schema.org/Person",
-                "icon": "https://example.org/icon/person",
-                "comment": {
-                    "@value": "A person",
-                    "@language": "en"
+                "type": {
+                    "@id": "http://www.w3.org/2000/01/rdf-schema#Class"
                 },
-                "label": "Person"
+                "icon": "https://example.org/icon/person",
+                "label": "Person",
+                "comment": "A person",
+                "@context": {
+                    "type": {
+                        "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                    },
+                    "icon": {
+                        "@id": "https://schema.org/icon",
+                        "@type": "http://www.w3.org/2001/XMLSchema#string"
+                    },
+                    "label": {
+                        "@id": "http://xmlns.com/foaf/0.1/name",
+                        "@type": "http://www.w3.org/2001/XMLSchema#string"
+                    },
+                    "comment": {
+                        "@id": "https://schema.org/description",
+                        "@language": "en"
+                    }
+                }
             },
             "icon": "https://example.org/icon/carol",
-            "comment": {
-                "@value": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning.",
-                "@language": "en"
-            },
-            "label": "Carol Miller"
+            "label": "Carol Miller",
+            "comment": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning.",
+            "@context": {
+                "type": {
+                    "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                },
+                "icon": {
+                    "@id": "https://schema.org/icon",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                },
+                "label": {
+                    "@id": "http://xmlns.com/foaf/0.1/name",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                },
+                "comment": {
+                    "@id": "https://schema.org/description",
+                    "@language": "en"
+                }
+            }
         }
     ],
     "data": "data_01_bridge_persons.ttl",
@@ -75,23 +168,31 @@
     "fragmentSettings": {
         "properties": [
             {
-                "key": "@type",
-                "property": { "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" },
+                "key": "type",
+                "properties": [{
+                        "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                    }],
                 "languageAware": false
             },
             {
                 "key": "icon",
-                "property": { "@id": "https://schema.org/icon" },
+                "properties": [{
+                        "@id": "https://schema.org/icon"
+                    }],
                 "languageAware": false
             },
             {
-                "key": "label", 
-                "property": { "@id": "http://xmlns.com/foaf/0.1/name" },
+                "key": "label",
+                "properties": [{
+                        "@id": "http://xmlns.com/foaf/0.1/name"
+                    }],
                 "languageAware": true
             },
             {
-                "key": "comment", 
-                "property": { "@id": "https://schema.org/description" },
+                "key": "comment",
+                "properties": [{
+                        "@id": "https://schema.org/description"
+                    }],
                 "languageAware": true
             }
         ]

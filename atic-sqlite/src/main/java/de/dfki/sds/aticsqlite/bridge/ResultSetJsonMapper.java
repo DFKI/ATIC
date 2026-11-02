@@ -2,10 +2,12 @@ package de.dfki.sds.aticsqlite.bridge;
 
 import de.dfki.sds.atic.helper.JSONUtils;
 import de.dfki.sds.atic.jenatic.AticDatasetGraph;
+import de.dfki.sds.atic.jenatic.Fragment;
 import de.dfki.sds.atic.jenatic.InvocationContext;
-import de.dfki.sds.aticsqlite.bridge.FragmentSettings.FragmentProperty;
+import de.dfki.sds.aticsqlite.FragmentStorage;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -34,10 +36,10 @@ public class ResultSetJsonMapper {
 
     private final Model model = ModelFactory.createDefaultModel();
     
-    private FragmentSettings fragmentSettings;
+    private final RdfJsonBridge parent;
 
-    public ResultSetJsonMapper(FragmentSettings fragmentSettings) {
-        this.fragmentSettings = fragmentSettings;
+    public ResultSetJsonMapper(RdfJsonBridge parent) {
+        this.parent = parent;
         
         registerModifier(
                 "date",
@@ -270,7 +272,7 @@ public class ResultSetJsonMapper {
 
             if (key.equals("$fragment") && value instanceof String val) {
 
-                resolveFragment(json, val, qs, datasetGraph, ctx, binding, prefixes, true);
+                resolveFragment(json, val, qs, datasetGraph, ctx, binding, prefixes);
 
             } else {
 
@@ -291,6 +293,9 @@ public class ResultSetJsonMapper {
 
         return json;
     }
+    
+    //===========================================
+    //fragment
 
     private void resolveFragment(
             JSONObject json,
@@ -299,8 +304,7 @@ public class ResultSetJsonMapper {
             AticDatasetGraph datasetGraph,
             InvocationContext ctx,
             Map<Var, List<Node>> binding,
-            PrefixMapping prefixes,
-            boolean expandType
+            PrefixMapping prefixes
     ) {
 
         Node subject = RdfJsonBridge.parseToken(value, prefixes);
@@ -316,172 +320,10 @@ public class ResultSetJsonMapper {
             subject = subjects.get(0);
         }
 
-        //get locale from binding
-        String locale = "en";
-        if (binding != null) {
-            List<Node> localeNodes = binding.get(Var.alloc("locale"));
-            if (localeNodes != null && !localeNodes.isEmpty() && localeNodes.get(0).isLiteral()) {
-                locale = localeNodes.get(0).getLiteralLexicalForm();
-            }
-        }
-
-        json.put("@id", subject.getURI());
-
-        for (FragmentProperty fp : fragmentSettings.getProperties()) {
-
-            //we do not need again @type for a type
-            if (fp.getKey().equals("@type") && !expandType) {
-                continue;
-            }
-
-            Node predicate = fp.getProperty();
-
-            Node object;
-
-            if (fp.isLanguageAware()) {
-
-                object = getBestLanguageMatch(
-                        subject,
-                        predicate,
-                        locale,
-                        datasetGraph,
-                        ctx
-                );
-
-            } else {
-
-                object = getFirstObject(
-                        subject,
-                        predicate,
-                        datasetGraph,
-                        ctx
-                );
-            }
-
-            if (object != null) {
-                Object o = toJson(ModelFactory.createDefaultModel().asRDFNode(object));
-
-                json.put(fp.getKey(), o);
-
-                if (fp.getKey().equals("@type")) {
-                    resolveFragment((JSONObject) o, object.getURI(), qs, datasetGraph, ctx, binding, prefixes, false);
-                }
-            }
-        }
     }
+
+    //==========================
     
-    //friendly version for resolving fragments
-    public JSONObject resolveFragment(
-            Node node,
-            boolean expandType,
-            AticDatasetGraph datasetGraph,
-            InvocationContext ctx) { 
-        JSONObject json = JSONUtils.createJSONObject();
-        String value = "?subject";
-        QuerySolutionMap qs = new QuerySolutionMap();
-        qs.add(value, model.asRDFNode(node));
-        resolveFragment(json, value, qs, datasetGraph, ctx, null, new PrefixMappingZero(), expandType);
-        return json;
-    }
-
-    private Node getBestLanguageMatch(
-            Node subject,
-            Node predicate,
-            String locale,
-            AticDatasetGraph datasetGraph,
-            InvocationContext ctx
-    ) {
-
-        Node exact = null;
-        Node untagged = null;
-        Node first = null;
-
-        ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) datasetGraph.find(
-                Node.ANY,
-                subject,
-                predicate,
-                Node.ANY,
-                ctx
-        );
-
-        try {
-
-            while (it.hasNext()) {
-
-                Node object
-                        = it.next().getObject();
-
-                if (!object.isLiteral()) {
-
-                    if (first == null) {
-                        first = object;
-                    }
-
-                    continue;
-                }
-
-                if (first == null) {
-                    first = object;
-                }
-
-                String lang
-                        = object.getLiteralLanguage();
-
-                if (lang.equalsIgnoreCase(locale)) {
-                    exact = object;
-                    break;
-                }
-
-                if (lang.isBlank()
-                        && untagged == null) {
-
-                    untagged = object;
-                }
-            }
-
-        } finally {
-            it.close();
-        }
-
-        if (exact != null) {
-            return exact;
-        }
-
-        if (untagged != null) {
-            return untagged;
-        }
-
-        return first;
-    }
-
-    private Node getFirstObject(
-            Node subject,
-            Node predicate,
-            AticDatasetGraph datasetGraph,
-            InvocationContext ctx
-    ) {
-
-        ExtendedIterator<Quad> it = (ExtendedIterator<Quad>) datasetGraph.find(
-                Node.ANY,
-                subject,
-                predicate,
-                Node.ANY,
-                ctx
-        );
-
-        try {
-
-            if (it.hasNext()) {
-                return it.next().getObject();
-            }
-
-            return null;
-
-        } finally {
-            it.close();
-        }
-    }
-
     //this is called to resolve a value
     private Object resolveValue(
             String key,
@@ -607,7 +449,7 @@ public class ResultSetJsonMapper {
 
         return toJson(model.asRDFNode(current));
     }
-
+    
     private void fillBinding(
             QuerySolution qs,
             Map<Var, List<Node>> binding
@@ -698,3 +540,12 @@ public class ResultSetJsonMapper {
     }
 
 }
+        Fragment fragment = FragmentStorage.buildFragment(datasetGraph, subject, parent.getFragmentSettings(), ctx, new HashSet<>());
+        
+        //we use recursiveContext to be able to fully turn it back to RDF
+        JSONObject fragmentObj = fragment.toJsonFragment(ctx.getLocale(), true);
+        
+        //copy into json
+        fragmentObj.keys().forEachRemaining(k -> {
+            json.put(k, fragmentObj.get(k));
+        });

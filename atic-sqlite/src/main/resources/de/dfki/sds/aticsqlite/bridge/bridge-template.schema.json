@@ -1,0 +1,164 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "JSON Schema for bridge query/mutation templates. Validates the structure used by the bridge package (SparqlQueryBuilder, ResultSetJsonMapper, RdfJsonBridge) to execute SPARQL queries against an RDF dataset and produce JSON output.",
+  "type": "object",
+  "properties": {
+    "$type": {
+      "type": "string",
+      "enum": ["array", "object"],
+      "description": "Controls output shape. \"array\" returns a JSON array; \"object\" returns the first element. When absent, the bridge infers: 0 results -> null, 1 result -> single value, n results -> array."
+    },
+    "$map": {
+      "description": "Maps SPARQL query results to JSON. Either a string (a single variable reference like \"?name\") or an object where each key maps to a value. Supported special keys: \"@id\" (SPARQL variable whose URI becomes the JSON @id), \"@value\"/\"@type\" (typed literal), \"$fragment\" (auto-expands a resource using configured fragment properties). Other keys become JSON properties resolved from SPARQL bindings. Supports modifiers via $ suffix: \"?date$date:dd.MM.yyyy\", \"?name$upper\". Also supports CURIE-based property access via \"$foaf:name\" (requires \"@id\" in the same $map). Nested JSON objects that contain \"$where\" are treated as sub-queries.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "@id": { "$ref": "#/$defs/mapValue" },
+            "@value": { "$ref": "#/$defs/mapValue" },
+            "@type": { "$ref": "#/$defs/mapValue" },
+            "$fragment": { "$ref": "#/$defs/mapValue" }
+          },
+          "additionalProperties": { "$ref": "#/$defs/mapValue" }
+        }
+      ]
+    },
+    "$where": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "SPARQL WHERE clause graph patterns. Each string is a triple pattern (e.g. \"?person foaf:name ?name\" or \"?person a schema:Person\"). Patterns are appended directly into the SPARQL WHERE block. IMPORTANT: patterns must NOT include a trailing '.' – the bridge's {@code SparqlQueryBuilder} adds the period automatically when building the final SPARQL query."
+    },
+    "$filter": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "SPARQL FILTER expressions. Each string is a FILTER expression appended into the WHERE block, e.g. \"LANG(?desc) = 'en'\"."
+    },
+    "$groupby": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "SPARQL GROUP BY variables, e.g. \"?person\"."
+    },
+    "$orderby": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "SPARQL ORDER BY expressions, e.g. \"DESC(?name)\", \"ASC(?person)\"."
+    },
+    "$limit": {
+      "type": "integer",
+      "description": "SPARQL LIMIT. Supports integer or variable reference (\"?limit\") resolved from query params or $default bindings."
+    },
+    "$offset": { "$ref": "#/$defs/mapValue",
+      "description": "SPARQL OFFSET. Supports integer or variable reference (\"?offset\")."
+    },
+    "$distinct": {
+      "type": "boolean",
+      "description": "When true, adds DISTINCT to the SPARQL SELECT clause."
+    },
+    "$from": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ],
+      "description": "SPARQL FROM clause. A string or array of graph URIs."
+    },
+    "$to": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ],
+      "description": "Target graph for mutation operations (POST/PUT/PATCH/DELETE)."
+    },
+    "@context": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "JSON-LD @context object mapping prefixes to URI namespaces. Used to expand CURIEs in $where patterns and $map values."
+    },
+    "$default": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/mapValue" },
+      "description": "Default variable bindings. Values can be plain literals, URIs (via \"@id\"), typed literals (via \"@value\"/\"@type\"), or CURIE strings (e.g. \"schema:Person\"). These are resolved before query parameters are applied."
+    },
+    "$pagination": {
+      "type": "object",
+      "properties": {
+        "offset": { "$ref": "#/$defs/mapValue" },
+        "limit": { "$ref": "#/$defs/mapValue" }
+      },
+      "additionalProperties": false,
+      "required": ["offset", "limit"],
+      "description": "Pagination configuration. Both offset and limit must be specified. Each can be an integer or a variable reference (e.g. \"?offset\") resolved from query params or $default bindings. When present, the bridge wraps the result as { \"data\": ..., \"pagination\": { \"limit\", \"total\", \"totalPages\", \"currentPageIndex\", \"firstPage\", \"prevPage\", \"currentPage\", \"nextPage\", \"lastPage\", \"pages\" } }."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "mapValue": {
+      "description": "A value used in $map, $default, or $pagination. Represents a SPARQL variable reference (\"?x\"), a CURIE-based property access (\"$foaf:name\"), a JSON-LD literal/URI object, a nested query template object, or a plain JSON literal (string, number, boolean, null). Supports modifiers via $ suffix: \"?date$date:dd.MM.yyyy\", \"?name$upper\".",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "JSON-LD literal/URI value. Used in $map and $default.",
+          "properties": {
+            "@id": { "type": "string" },
+            "@value": { "type": "string" },
+            "@type": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "A nested query template. Detected by the presence of \"$where\". The bridge executes this as a sub-query with inherited bindings.",
+          "properties": {
+            "$map": { "$ref": "#/$defs/mapObject" },
+            "$where": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "$orderby": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "$type": {
+              "type": "string",
+              "enum": ["array", "object"]
+            },
+            "$limit": { "type": "integer" },
+            "$offset": { "$ref": "#/$defs/mapValue" },
+            "$default": { "$ref": "#/$defs/defaultObject" },
+            "$pagination": { "$ref": "#/$defs/paginationObj" }
+          },
+          "additionalProperties": false
+        },
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" }
+      ]
+    },
+    "mapObject": {
+      "type": "object",
+      "description": "$map value definition: maps SPARQL variables to JSON properties. See the top-level $map for details.",
+      "properties": {
+        "@id": { "$ref": "#/$defs/mapValue" },
+        "@value": { "$ref": "#/$defs/mapValue" },
+        "@type": { "$ref": "#/$defs/mapValue" },
+        "$fragment": { "$ref": "#/$defs/mapValue" }
+      },
+      "additionalProperties": { "$ref": "#/$defs/mapValue" }
+    },
+    "defaultObject": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/mapValue" }
+    },
+    "paginationObj": {
+      "type": "object",
+      "properties": {
+        "offset": { "$ref": "#/$defs/mapValue" },
+        "limit": { "$ref": "#/$defs/mapValue" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

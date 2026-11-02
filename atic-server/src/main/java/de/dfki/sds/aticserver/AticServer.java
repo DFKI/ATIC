@@ -15,18 +15,27 @@ import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.Session;
 import de.dfki.sds.atic.agent.SessionListener;
 import de.dfki.sds.atic.conf.ConfigLoader;
+import de.dfki.sds.atic.helper.JSONUtils;
+import de.dfki.sds.atic.invex.AticQueryResults;
+import de.dfki.sds.atic.invex.QueryOptions;
+import de.dfki.sds.atic.invex.QueryResults;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraph;
 import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
+import de.dfki.sds.atic.jenatic.Fragment;
+import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.AticGraphUtils;
 import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
 import de.dfki.sds.aticsqlite.DatabaseOptions;
+import de.dfki.sds.aticsqlite.FragmentStorage;
+import de.dfki.sds.aticsqlite.FragmentStorage.FragmentSettingsEntry;
 import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
 import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
+import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph.OntologyFormat;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import de.dfki.sds.aticsqlite.workbook.Cell;
@@ -59,6 +68,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.net.URLEncoder;
@@ -67,6 +77,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -75,6 +86,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
@@ -87,6 +99,7 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.graph.Triple;
 import org.apache.jena.query.ARQ;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -99,6 +112,7 @@ import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.TxnType;
 import org.apache.jena.rdf.model.Model;
+import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.rdfpatch.changes.RDFChangesBase;
@@ -115,6 +129,7 @@ import org.apache.jena.update.UpdateExecution;
 import org.apache.jena.update.UpdateExecutionFactory;
 import org.apache.jena.update.UpdateFactory;
 import org.apache.jena.update.UpdateRequest;
+import org.apache.jena.vocabulary.OWL;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
 import org.apache.jena.vocabulary.VOID;
@@ -140,7 +155,6 @@ public class AticServer {
 
     private SqliteAticDatasetGraph datasetGraph;
     private MoleculeEndpoint moleculeEndpoint;
-    private final RdfJsonBridge rdfJsonBridge;
 
     private RDFPatchWriter rdfPatchWriter;
 
@@ -166,10 +180,9 @@ public class AticServer {
         Capabilities.Builder capBuilder = Capabilities.builder();
         capBuilder.rdfStarEnabled(config.isRdfStarEnabled());
         capBuilder.propertyTypeAware(config.isPropertyTypeAware());
+        capBuilder.invexEnabled(config.isInvexEnabled());
 
         datasetGraph = new SqliteAticDatasetGraph(database, rdfPatchWriter, capBuilder.build());
-
-        rdfJsonBridge = new RdfJsonBridge();
     }
 
     private void initFolders() {
@@ -342,6 +355,11 @@ public class AticServer {
         // SPARQL update endpoint
         routes.post("/update", this::handleSparqlUpdate);
 
+        routes.get("/invex", this::handleInvex);
+        routes.query("/invex", this::handleInvex);
+        routes.get("/invex/health", this::getInvexHealth);
+        routes.post("/invex/rebuild", this::postInvexRebuild);
+
         routes.patch("/dataset", this::patchDataset);
 
         //Share/Unshare Graphs
@@ -357,6 +375,8 @@ public class AticServer {
         routes.get("/graph", this::getGraph);
         routes.post("/graph", this::postGraph);
         routes.delete("/graph/{uri}", this::deleteGraph);
+        routes.post("/graph/derived-ontology", this::postDerivedOntology);
+        routes.post("/graph/derived-bridge-template", this::postDerivedBridgeTemplate);
 
         routes.post("/rml/execution", this::postRmlExecution);
 
@@ -380,6 +400,15 @@ public class AticServer {
         routes.get("/users", this::getUsers);
         routes.get("/agents", this::getAgents);
         routes.get("/principal", this::getQueryPrincipal);
+
+        // Fragment Settings CRUD
+        routes.post("/fragment/settings", this::postFragmentSettings);
+        routes.get("/fragment/settings", this::getFragmentSettings);
+        routes.get("/fragment/settings/all", this::getFragmentSettingsAll);
+        routes.delete("/fragment/settings", this::deleteFragmentSettings);
+
+        // Fragment by URI (builds fragment using current settings)
+        routes.get("/fragment/{uri}", this::getFragment);
 
         routes.get("/vkg/{uri}/**", this::handleVirtualGraphRequest);
 
@@ -943,6 +972,127 @@ public class AticServer {
     }
 
     //------------------------------------------
+    // graph helpers for sorted ontology output
+    private static int category(Triple t) {
+        Node predicate = t.getPredicate();
+        Node object = t.getObject();
+
+        // Check for rdf:type assertions
+        if (predicate.equals(RDF.type.asNode())) {
+
+            String objUri = object.getURI();
+
+            // Class declarations: owl:Class, rdfs:Class
+            if ("http://www.w3.org/2002/07/owl#Class"
+                    .equals(objUri)
+                || "http://www.w3.org/2000/01/rdf-schema#Class"
+                    .equals(objUri)) {
+                return 0; // classes first
+            }
+
+            // Property declarations
+            if ("http://www.w3.org/2002/07/owl#ObjectProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#DatatypeProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#FunctionalProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#InverseFunctionalProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#SymmetricProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#AsymmetricProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#TransitiveProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"
+                    .equals(objUri)) {
+                return 1; // properties second
+            }
+        }
+
+        return 2; // ABox assertions and everything else
+    }
+
+    private static String nodeKey(Node node) {
+        if (node.isURI()) {
+            return "U:" + node.getURI();
+        }
+
+        if (node.isBlank()) {
+            return "B:" + node.getBlankNodeLabel();
+        }
+
+        if (node.isLiteral()) {
+            return "L:" + node.getLiteralLexicalForm()
+                + "|lang=" + Objects.toString(
+                    node.getLiteralLanguage(), "")
+                + "|datatype=" + Objects.toString(
+                    node.getLiteralDatatypeURI(), "");
+        }
+
+        return node.toString();
+    }
+
+    private void postDerivedOntology(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        JSONObject jsonConf = new JSONObject(ctx.body());
+
+        String uri = jsonConf.getString("uri");
+        OntologyFormat format = OntologyFormat.valueOf(jsonConf.getString("format").toUpperCase());
+        String prefix = jsonConf.getString("prefix");
+        String iri = jsonConf.getString("iri");
+
+        Graph ontology = datasetGraph.calculateRead(() -> {
+            AticGraph graph = datasetGraph.getGraph(NodeFactory.createURI(uri), ictx);
+            return datasetGraph.deriveOntologyFromABox(graph, prefix, iri, format, ictx);
+        });
+
+        ctx.contentType("text/turtle");
+
+        // Use class-first comparator: owl:Class/rdfs:Class declarations,
+        // then owl:ObjectProperty/owl:DatatypeProperty/rdf:Property,
+        // then everything else.
+        Comparator<Triple> classFirst = Comparator
+            .comparing((Triple t) -> category(t))
+            .thenComparing(t -> nodeKey(t.getSubject()))
+            .thenComparing(t -> nodeKey(t.getPredicate()))
+            .thenComparing(t -> nodeKey(t.getObject()));
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        OrderedTurtleWriter.writeSorted(out, ontology, classFirst);
+        ctx.result(out.toString(StandardCharsets.UTF_8));
+    }
+
+    private void postDerivedBridgeTemplate(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        JSONObject jsonConf = new JSONObject(ctx.body());
+        String uri = jsonConf.getString("uri");
+
+        Map<Node, JSONObject> map = datasetGraph.calculateRead(() -> {
+            AticGraph graph = datasetGraph.getGraph(NodeFactory.createURI(uri), ictx);
+            return datasetGraph.deriveBridgeTemplatesFromABox(graph, ictx);
+        });
+
+        JSONArray result = new JSONArray();
+
+        map.entrySet().stream()
+                .sorted(Comparator.comparing(entry -> entry.getKey().getURI()))
+                .forEach(entry -> {
+                    JSONObject item = new JSONObject();
+                    item.put("uri", entry.getKey().getURI());
+                    item.put("name", AticGraphUtils.getLocalName(entry.getKey().getURI()));
+                    item.put("template", entry.getValue());
+                    result.put(item);
+                });
+
+        ctx.contentType("application/json");
+        ctx.result(result.toString());
+    }
+
+    //------------------------------------------
     //rml
     private void postRmlExecution(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
@@ -1380,6 +1530,205 @@ public class AticServer {
     }
 
     //-----------------------------------------
+    //invex
+    private void handleInvex(Context ctx) throws IOException, Exception {
+        String accept = ctx.header("Accept");
+        HandlerType method = ctx.method();
+
+        //HTML version for human
+        if (HandlerType.GET.equals(method) && accept != null && accept.contains("text/html")) {
+            try (InputStream is = AticServer.class.getResourceAsStream(
+                    "/de/dfki/sds/aticserver/www/app/invex.html")) {
+                if (is == null) {
+                    ctx.status(404).result("invex.html not found");
+                    return;
+                }
+                String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                ctx.html(html);
+                return;
+            }
+        }
+
+        //need QUERY
+        if (!HandlerType.QUERY.equals(method)) {
+            ctx.status(405).result("Method not allowed. Use QUERY.");
+            return;
+        }
+
+        //from auth
+        int userId = ctx.attribute("user.id");
+
+        JSONObject body = new JSONObject(ctx.body());
+        if (!body.has("operation")
+                || body.isNull("operation")
+                || !(body.opt("operation") instanceof String)
+                || body.getString("operation").isBlank()) {
+            ctx.status(400).json(Map.of(
+                    "status", "failed",
+                    "message", "Missing or invalid 'operation'. Allowed values: initialize, continue."
+            ));
+            return;
+        }
+        String operation = body.getString("operation");
+        if (!operation.equals("initialize") && !operation.equals("continue")) {
+            ctx.status(400).json(Map.of(
+                    "status", "failed",
+                    "message", "Unsupported operation '" + operation
+                    + "'. Allowed values: initialize, continue."
+            ));
+            return;
+        }
+
+        AticQueryResults aqr = null;
+
+        if (operation.equals("continue")) {
+            String queryProcessId = body.optString("queryProcessID");
+
+            aqr = datasetGraph.calculateRead(() -> {
+                try {
+                    return datasetGraph.proceedWithQuery(queryProcessId);
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            });
+
+        } else if (operation.equals("initialize")) {
+
+            //TODO later maybe fromJson impl in QueryOptions
+            QueryOptions qo = new QueryOptions();
+            if (body.has("queryProcessID") && !body.isNull("queryProcessID")) {
+                qo.setQueryProcessID(body.getString("queryProcessID"));
+            }
+            if (body.has("searchString") && !body.isNull("searchString")) {
+                qo.setSearchString(body.getString("searchString"));
+            }
+            if (body.has("limit") && !body.isNull("limit")) {
+                qo.setLimit(body.getInt("limit"));
+            }
+            if (body.has("offset") && !body.isNull("offset")) {
+                qo.setOffset(body.getInt("offset"));
+            }
+
+            //from auth
+            qo.setUserID(userId);
+
+            aqr = datasetGraph.initializeQuery(qo);
+        }
+
+        if (aqr == null) {
+            ctx.status(500).json(Map.of(
+                    "status", "failed",
+                    "message", "AticQueryResults was null"
+            ));
+            return;
+        }
+
+        JSONObject resp = JSONUtils.createJSONObject();
+        resp.put("success", aqr.isSuccess());
+        resp.put("queryAccepted", aqr.isQueryAccepted());
+
+        // Found nodes
+        List<Node> nodes = aqr.getFoundNodes();
+        if (nodes != null) {
+            JSONArray nodesJson = new JSONArray();
+            for (Node node : nodes) {
+                if (node != null) {
+                    nodesJson.put(node.toString());
+                } else {
+                    nodesJson.put(JSONObject.NULL);
+                }
+            }
+            resp.put("foundNodes", nodesJson);
+        }
+
+        String processID = aqr.getQueryProcessID();
+        if (processID != null) {
+            resp.put("queryProcessID", processID);
+        }
+
+        // Raw query result metadata
+        QueryResults raw = aqr.getRawResults();
+
+        if (raw != null) {
+            JSONObject rawJson = new JSONObject();
+
+            rawJson.put("success", raw.isSuccess());
+            rawJson.put("queryAccepted", raw.isQueryAccepted());
+            rawJson.put("responseTime", raw.getResponseTime());
+            rawJson.put("limit", raw.getLimit());
+            rawJson.put("offset", raw.getOffset());
+            rawJson.put("luceneUpperBoundGuestimation", raw.getLuceneUpperBoundGuestimation());
+            rawJson.put("luceneUpperBoundGuestimationTime", raw.getLuceneUpperBoundGuestimationTime());
+            rawJson.put("luceneLowerBound", raw.getLuceneLowerBound());
+            rawJson.put("returnedResourceIDsCount", raw.getReturnedResourceIDsCount());
+
+            String rawProcessID = raw.getQueryProcessID();
+            if (rawProcessID != null) {
+                rawJson.put("queryProcessID", rawProcessID);
+            }
+
+            String error = raw.getError();
+            if (error != null) {
+                rawJson.put("error", error);
+            }
+
+            long[] ids = raw.getFoundResourceIDs();
+            if (ids != null) {
+                JSONArray idsJson = new JSONArray();
+                for (long id : ids) {
+                    idsJson.put(id);
+                }
+                rawJson.put("foundResourceIDs", idsJson);
+            }
+
+            resp.put("rawResults", rawJson);
+        }
+
+        ctx.json(resp.toString(4));
+    }
+
+    private void getInvexHealth(Context ctx) {
+        JSONObject json = new JSONObject();
+
+        json.put("available", datasetGraph.isInvexAvailable());
+
+        ctx.status(200)
+                .contentType("application/json")
+                .result(json.toString());
+    }
+
+    //TODO later should be done with servicia for long-running job
+    private void postInvexRebuild(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        if (!datasetGraph.isAdmin(ictx)) {
+            ctx.status(403).json(Map.of(
+                    "status", "failed",
+                    "message", "Administrator privileges are required to rebuild the index."
+            ));
+            return;
+        }
+
+        JSONObject json = new JSONObject();
+
+        try {
+            datasetGraph.rebuildInvex();
+        } catch (Exception ex) {
+            json.put("status", "failed");
+            json.put("stacktrace", ExceptionUtils.getStackTrace(ex));
+            json.put("message", ex.getMessage());
+
+            ctx.status(500)
+                    .contentType("application/json")
+                    .result(json.toString());
+            return;
+        }
+
+        json.put("status", "success");
+        ctx.status(200).json(json.toString());
+    }
+
+    //-----------------------------------------
     //patch
     private void patchDataset(Context ctx) throws IOException {
         InvocationContext ictx = fromJavalinContext(ctx);
@@ -1697,6 +2046,14 @@ public class AticServer {
         }
 
         InvocationContext ictx = fromJavalinContext(ctx);
+        
+        //per call an instance
+        RdfJsonBridge rdfJsonBridge = new RdfJsonBridge();
+        
+        //invocation context decides fragment settings
+        datasetGraph.executeRead(() -> {
+            rdfJsonBridge.setFragmentSettings(this.datasetGraph.getFragmentStorage().suggestSettings(ictx));
+        });
 
         switch (method) {
 
@@ -2050,6 +2407,140 @@ public class AticServer {
     }
 
     //---------------------------------------
+    //Fragment Settings CRUD
+    private void postFragmentSettings(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        JSONObject body = new JSONObject(ctx.body());
+
+        String contextUri = body.optString("contextUri", null);
+        String groupName = body.optString("groupName", null);
+
+        FragmentSettings settings = FragmentSettings.fromJson(body.getJSONObject("settings"));
+
+        Node context = contextUri != null ? NodeFactory.createURI(contextUri) : null;
+
+        datasetGraph.executeWrite(() -> {
+            datasetGraph.getFragmentStorage().save(context, groupName, settings, ictx);
+        });
+
+        ctx.json(Map.of("success", true));
+    }
+
+    private void getFragmentSettings(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        String contextUri = ctx.queryParam("contextUri");
+        String groupName = ctx.queryParam("groupName");
+
+        Node context = contextUri != null ? NodeFactory.createURI(contextUri) : null;
+
+        FragmentSettings settings = datasetGraph.calculateRead(() -> {
+            if (groupName != null && !groupName.isEmpty()) {
+                return datasetGraph.getFragmentStorage().load(context, groupName, ictx);
+            } else if (context != null) {
+                return datasetGraph.getFragmentStorage().load(context, ictx);
+            } else {
+                return datasetGraph.getFragmentStorage().load(ictx);
+            }
+        });
+
+        if (settings == null) {
+            ctx.status(404).json(Map.of("error", "Fragment settings not found"));
+            return;
+        }
+
+        ctx.json(settings.toJson().toMap());
+    }
+
+    private void getFragmentSettingsAll(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        List<FragmentSettingsEntry> entries = datasetGraph.calculateRead(() -> datasetGraph.getFragmentStorage().loadAll(ictx));
+
+        JSONArray array = new JSONArray();
+        for (FragmentSettingsEntry entry : entries) {
+            array.put(entry.toJson());
+        }
+
+        ctx.json(Map.of("fragmentSettings", array.toList()));
+    }
+
+    private void deleteFragmentSettings(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+
+        String contextUri = ctx.queryParam("contextUri");
+        String groupName = ctx.queryParam("groupName");
+
+        Node context = contextUri != null ? NodeFactory.createURI(contextUri) : null;
+
+        datasetGraph.executeWrite(() -> {
+            if (groupName != null && !groupName.isEmpty()) {
+                datasetGraph.getFragmentStorage().delete(context, groupName, ictx);
+            } else if (context != null) {
+                datasetGraph.getFragmentStorage().delete(context, ictx);
+            } else {
+                datasetGraph.getFragmentStorage().delete(ictx);
+            }
+        });
+
+        ctx.json(Map.of("success", true));
+    }
+
+    private void getFragment(Context ctx) {
+        String uri = ctx.pathParam("uri");
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Locale locale = Locale.ENGLISH;
+
+        // Parse Accept-Language header, fall back to English if absent
+        // Accept-Language can contain multiple comma-separated values with
+        // quality weights, e.g. "de-DE;q=0.9, en;q=0.8, ja;q=0.7".
+        // We take the first (highest priority) and strip any quality weight.
+        String acceptLang = ctx.header("Accept-Language");
+        if (acceptLang != null && !acceptLang.isBlank()) {
+            try {
+                List<Locale.LanguageRange> ranges
+                        = Locale.LanguageRange.parse(acceptLang);
+
+                if (!ranges.isEmpty() && !ranges.get(0).getRange().equals("*")) {
+                    locale = Locale.forLanguageTag(ranges.get(0).getRange());
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Fall back to English
+            }
+        }
+
+        try {
+            Node node = NodeFactory.createURI(uri);
+
+            List<Fragment> fragments = datasetGraph.calculateRead(() -> {
+                FragmentStorage storage = datasetGraph.getFragmentStorage();
+                storage.suggestSettings(ictx); // validates settings exist
+                return storage.buildFragments(List.of(node), ictx);
+            });
+
+            Fragment fragment = fragments.get(0);
+
+            //a bit harsh: an empty fragment could mean that the resource does not have fragment properties
+            //TODO change later to contains check?
+            if (fragment.getSubgraph().isEmpty()) {
+                ctx.status(HttpStatus.NOT_FOUND);
+                ctx.json(Map.of("error", "No fragment found for URI: " + uri));
+                return;
+            }
+
+            JSONObject json = fragment.toJsonFragment(locale);
+
+            ctx.json(json.toString());
+        } catch (IllegalArgumentException e) {
+            ctx.status(HttpStatus.BAD_REQUEST);
+            ctx.json(Map.of("error", "Invalid URI: " + uri));
+        } catch (Exception e) {
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR);
+            ctx.json(Map.of("error", "Failed to build fragment: " + e.getMessage()));
+        }
+    }
+
+    //---------------------------------------
     //auth
     private void postRegister(Context ctx) {
         String firstname = ctx.formParam("firstname");
@@ -2330,10 +2821,6 @@ public class AticServer {
 
     /*package*/ RDFPatchWriter getRdfPatchWriter() {
         return rdfPatchWriter;
-    }
-
-    public RdfJsonBridge getRdfJsonBridge() {
-        return rdfJsonBridge;
     }
 
 }

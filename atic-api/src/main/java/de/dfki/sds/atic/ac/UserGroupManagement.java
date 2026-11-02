@@ -20,6 +20,8 @@ public interface UserGroupManagement {
     public User getUser(int userId, InvocationContext ctx);
 
     public Group getGroup(String groupname, InvocationContext ctx);
+    
+    public Group getGroup(int groupId, InvocationContext ctx);
 
     public void assignUserToGroup(String username, String groupname, InvocationContext ctx);
 

@@ -324,8 +324,10 @@ public class AgentEvaluation {
 
     }
 
+    /*
     public static void main(String[] args) {
         AgentEvaluation agentEvaluation = new AgentEvaluation();
         agentEvaluation.runAll("/de/dfki/sds/aticsqlite/agenteval", "evaluations.txt");
     }
+    */
 }

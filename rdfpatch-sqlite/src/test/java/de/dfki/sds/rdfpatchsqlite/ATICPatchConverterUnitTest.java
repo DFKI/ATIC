@@ -549,6 +549,50 @@ public class ATICPatchConverterUnitTest {
     }
 
     @Test
+    public void testAliceMultipleTypes() {
+        String trig = """
+        @prefix ex: <http://example.org/> .
+        @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+        @prefix schema: <https://schema.org/> .
+        """;
+
+        String patchText = """
+        A <http://example.org/alice>
+          <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>
+          <http://xmlns.com/foaf/0.1/Person> .
+
+        A <http://example.org/alice>
+          <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>
+          <https://schema.org/Person> .
+
+        A <http://example.org/alice>
+          <http://xmlns.com/foaf/0.1/name>
+          "Alice" .
+        """;
+
+        String expectedBody = """
+                              {
+                                "patch": [
+                                  {
+                                    "op": "add",
+                                    "ref": [{"@id": "http://example.org/alice"}],
+                                    "value": {
+                                      "@type": [
+                                        "http://xmlns.com/foaf/0.1/Person",
+                                        "https://schema.org/Person"
+                                      ],
+                                      "name": "Alice"
+                                    }
+                                  }
+                                ],
+                                "@context": {"name": "http://xmlns.com/foaf/0.1/name"}
+                              }
+                          """;
+
+        test(trig, patchText, expectedBody);
+    }
+
+    @Test
     public void testAliceLabelAndCommentChange() {
         String trig = """
         @prefix ex: <http://example.org/> .

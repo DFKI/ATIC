@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Test;
  *
  */
 public class RdfJsonBridgeViaServerUnitTest {
-
+    
     private static Path tempDir;
     private static AticConfig appConfig;
     private static AticServer server;

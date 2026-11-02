@@ -2,6 +2,7 @@ package de.dfki.sds.aticsqlite;
 
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
+import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.bridge.FragmentSettings;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
@@ -186,8 +187,8 @@ public class RdfJsonBridgeUnitTest {
         loadData(test.getString("data"));
 
         if (test.has("fragmentSettings")) {
-            FragmentSettings settings = FragmentSettings.fromJson(test.getJSONObject("fragmentSettings"));
-            rdfJsonBridge.setFragmentSettings(settings);
+            FragmentSettings fragmentSetting = FragmentSettings.fromJson(test.getJSONObject("fragmentSettings"));
+            rdfJsonBridge.setFragmentSettings(fragmentSetting);
         }
 
         User user = dataset.calculateRead(() -> {
@@ -228,8 +229,8 @@ public class RdfJsonBridgeUnitTest {
         loadData(test.getString("data"));
 
         if (test.has("fragmentSettings")) {
-            FragmentSettings settings = FragmentSettings.fromJson(test.getJSONObject("fragmentSettings"));
-            rdfJsonBridge.setFragmentSettings(settings);
+            FragmentSettings fragmentSetting = FragmentSettings.fromJson(test.getJSONObject("fragmentSettings"));
+            rdfJsonBridge.setFragmentSettings(fragmentSetting);
         }
 
         User user = dataset.calculateRead(() -> {
