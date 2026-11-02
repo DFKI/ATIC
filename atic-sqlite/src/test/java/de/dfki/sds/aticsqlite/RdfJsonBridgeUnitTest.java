@@ -4,7 +4,6 @@ import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.InvocationContext;
-import de.dfki.sds.aticsqlite.bridge.FragmentSettings;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import io.json.compare.CompareMode;
 import io.json.compare.JSONCompare;

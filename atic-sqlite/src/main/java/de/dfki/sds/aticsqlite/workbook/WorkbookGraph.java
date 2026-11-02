@@ -4,8 +4,6 @@ import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.AticGraphUtils;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
-import de.dfki.sds.aticsqlite.bridge.FragmentSettings;
-import de.dfki.sds.aticsqlite.bridge.ResultSetJsonMapper;
 import java.awt.Rectangle;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -77,8 +75,6 @@ public class WorkbookGraph implements AticGraph {
 
     private Map<WorkbookSheet, SheetCache> cacheMap;
 
-    private ResultSetJsonMapper mapper;
-
     //TODO expiration time would be useful
     private class SheetCache {
 
@@ -118,8 +114,6 @@ public class WorkbookGraph implements AticGraph {
         graphEventManager = new SimpleEventManager();
 
         cacheMap = new HashMap<>();
-
-        mapper = new ResultSetJsonMapper(FragmentSettings.defaultSettings());
     }
 
     public void ensureGraph(InvocationContext ctx) {
@@ -1119,15 +1113,6 @@ public class WorkbookGraph implements AticGraph {
     @Override
     public boolean dependsOn(Graph other, InvocationContext ctx) {
         throw new UnsupportedOperationException("Not supported yet.");
-    }
-
-    //getter & setter
-    public FragmentSettings getFragmentSettings() {
-        return mapper.getFragmentSettings();
-    }
-
-    public void setFragmentSettings(FragmentSettings fragmentSettings) {
-        mapper.setFragmentSettings(fragmentSettings);
     }
 
 }

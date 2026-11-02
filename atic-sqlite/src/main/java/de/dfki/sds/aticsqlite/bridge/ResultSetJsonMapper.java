@@ -14,7 +14,6 @@ import java.util.Map;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.query.QuerySolution;
-import org.apache.jena.query.QuerySolutionMap;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.rdf.model.Literal;
 import org.apache.jena.rdf.model.Model;
@@ -24,7 +23,6 @@ import org.apache.jena.rdf.model.Resource;
 import org.apache.jena.shared.PrefixMapping;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.core.Var;
-import org.apache.jena.sparql.graph.PrefixMappingZero;
 import org.apache.jena.util.iterator.ExtendedIterator;
 import org.apache.jena.vocabulary.XSD;
 import org.json.JSONArray;
@@ -320,6 +318,15 @@ public class ResultSetJsonMapper {
             subject = subjects.get(0);
         }
 
+        Fragment fragment = FragmentStorage.buildFragment(datasetGraph, subject, parent.getFragmentSettings(), ctx, new HashSet<>());
+        
+        //we use recursiveContext to be able to fully turn it back to RDF
+        JSONObject fragmentObj = fragment.toJsonFragment(ctx.getLocale(), true);
+        
+        //copy into json
+        fragmentObj.keys().forEachRemaining(k -> {
+            json.put(k, fragmentObj.get(k));
+        });
     }
 
     //==========================
@@ -531,21 +538,5 @@ public class ResultSetJsonMapper {
         return lit.getLexicalForm();
     }
 
-    public FragmentSettings getFragmentSettings() {
-        return fragmentSettings;
-    }
-
-    public void setFragmentSettings(FragmentSettings fragmentSettings) {
-        this.fragmentSettings = fragmentSettings;
-    }
-
 }
-        Fragment fragment = FragmentStorage.buildFragment(datasetGraph, subject, parent.getFragmentSettings(), ctx, new HashSet<>());
         
-        //we use recursiveContext to be able to fully turn it back to RDF
-        JSONObject fragmentObj = fragment.toJsonFragment(ctx.getLocale(), true);
-        
-        //copy into json
-        fragmentObj.keys().forEachRemaining(k -> {
-            json.put(k, fragmentObj.get(k));
-        });

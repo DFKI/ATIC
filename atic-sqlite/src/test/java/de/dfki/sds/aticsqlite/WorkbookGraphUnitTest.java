@@ -99,14 +99,14 @@ public class WorkbookGraphUnitTest {
         WorkbookConfig workbookConfig = WorkbookConfig.builder().name("Test Workbook").build();
         Node workbook = dataset.calculateWrite(() -> wg.addWorkbooks(List.of(workbookConfig), ctx).get(0));
 
-        SheetConfig sheetConfig = SheetConfig.builder().name("Test Sheet").rowQuery("SELECT * WHERE { ?s ?p ?o }").build();
+        SheetConfig sheetConfig = SheetConfig.builder().name("Test Sheet").rowQuery("SELECT * WHERE { ?rowEntity ?p ?o }").build();
         List<Node> sheets = dataset.calculateWrite(() -> wg.addSheets(workbook, List.of(sheetConfig), ctx));
 
         JSONObject expectedSheet = JSONUtils.createJSONObject()
                 .put("@id", sheets.get(0).getURI())
                 .put("name", "Test Sheet")
                 .put("columns", new JSONArray())
-                .put("rowQuery", "SELECT * WHERE { ?s ?p ?o }");
+                .put("rowQuery", "SELECT * WHERE { ?rowEntity ?p ?o }");
 
         JSONObject expected = JSONUtils.createJSONObject()
                 .put("name", "Test Workbook")
@@ -132,7 +132,7 @@ public class WorkbookGraphUnitTest {
         WorkbookConfig workbookConfig = WorkbookConfig.builder().name("Test Workbook").build();
         Node workbook = dataset.calculateWrite(() -> wg.addWorkbooks(List.of(workbookConfig), ctx).get(0));
 
-        SheetConfig sheetConfig = SheetConfig.builder().name("Test Sheet").rowQuery("SELECT * WHERE { ?s ?p ?o }").build();
+        SheetConfig sheetConfig = SheetConfig.builder().name("Test Sheet").rowQuery("SELECT * WHERE { ?rowEntity ?p ?o }").build();
         Node sheet = dataset.calculateWrite(() -> wg.addSheets(workbook, List.of(sheetConfig), ctx).get(0));
 
         ColumnConfig columnConfig = ColumnConfig.builder()
@@ -154,7 +154,7 @@ public class WorkbookGraphUnitTest {
         JSONObject expectedSheet = JSONUtils.createJSONObject()
                 .put("@id", sheet.getURI())
                 .put("name", "Test Sheet")
-                .put("rowQuery", "SELECT * WHERE { ?s ?p ?o }")
+                .put("rowQuery", "SELECT * WHERE { ?rowEntity ?p ?o }")
                 .put("columns", new JSONArray().put(expectedColumn));
 
         JSONObject expected = JSONUtils.createJSONObject()
@@ -181,7 +181,7 @@ public class WorkbookGraphUnitTest {
         WorkbookConfig workbookConfig = WorkbookConfig.builder().name("Test Workbook").build();
         Node workbook = dataset.calculateWrite(() -> wg.addWorkbooks(List.of(workbookConfig), ctx).get(0));
 
-        SheetConfig sheetConfig = SheetConfig.builder().name("Test Sheet").rowQuery("SELECT * WHERE { ?s ?p ?o }").build();
+        SheetConfig sheetConfig = SheetConfig.builder().name("Test Sheet").rowQuery("SELECT * WHERE { ?rowEntity ?p ?o }").build();
         Node sheet = dataset.calculateWrite(() -> wg.addSheets(workbook, List.of(sheetConfig), ctx).get(0));
 
         ColumnConfig titleConfig = ColumnConfig.builder().name("Title").property(NodeFactory.createURI("http://example.org/title")).type(ColumnType.Literal).direction(Direction.Outgoing).build();
@@ -214,7 +214,7 @@ public class WorkbookGraphUnitTest {
         JSONObject expectedSheet = JSONUtils.createJSONObject()
                 .put("@id", sheet.getURI())
                 .put("name", "Test Sheet")
-                .put("rowQuery", "SELECT * WHERE { ?s ?p ?o }")
+                .put("rowQuery", "SELECT * WHERE { ?rowEntity ?p ?o }")
                 .put("columns", new JSONArray().put(titleColumn).put(descriptionColumn).put(dateColumn));
 
         JSONObject expected = JSONUtils.createJSONObject()
@@ -335,7 +335,7 @@ public class WorkbookGraphUnitTest {
         WorkbookConfig workbookConfig = WorkbookConfig.builder().name("Person Workbook").build();
         Node workbook = dataset.calculateWrite(() -> wg.addWorkbooks(List.of(workbookConfig), ctx).get(0));
 
-        SheetConfig sheetConfig = SheetConfig.builder().name("Person Sheet").rowQuery(WorkbookGraph.ROW_ENTITY_VAR + " a <https://schema.org/Person>").build();
+        SheetConfig sheetConfig = SheetConfig.builder().name("Person Sheet").rowQuery("SELECT * { " + WorkbookGraph.ROW_ENTITY_VAR + " a <https://schema.org/Person> }").build();
         Node sheet = dataset.calculateWrite(() -> wg.addSheets(workbook, List.of(sheetConfig), ctx).get(0));
 
         ColumnConfig nameConfig = ColumnConfig.builder().name("Name").property(NodeFactory.createURI("http://xmlns.com/foaf/0.1/name")).type(ColumnType.Literal).direction(Direction.Outgoing).build();

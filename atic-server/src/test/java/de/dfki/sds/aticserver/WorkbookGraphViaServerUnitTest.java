@@ -152,7 +152,7 @@ public class WorkbookGraphViaServerUnitTest {
 
         SheetConfig sheetConfig = SheetConfig.builder()
                 .name("People")
-                .rowQuery(WorkbookGraph.ROW_ENTITY_VAR + " a <http://xmlns.com/foaf/0.1/Person>")
+                .rowQuery("SELECT * { " + WorkbookGraph.ROW_ENTITY_VAR + " a <http://xmlns.com/foaf/0.1/Person> }")
                 .build();
 
         HttpRequest postSheetRequest = HttpRequest.newBuilder()
@@ -202,14 +202,16 @@ public class WorkbookGraphViaServerUnitTest {
 
         Assertions.assertEquals(200, getCellsResponse.statusCode());
 
-        JSONArray rows = new JSONArray(getCellsResponse.body());
+        JSONObject body = new JSONObject(getCellsResponse.body());
+        
+        JSONArray cells = body.getJSONArray("cells");
 
-        Assertions.assertEquals(2, rows.length());
-        Assertions.assertEquals(1, rows.getJSONArray(0).length());
-        Assertions.assertEquals(1, rows.getJSONArray(1).length());
+        Assertions.assertEquals(2, cells.length());
+        Assertions.assertEquals(1, cells.getJSONArray(0).length());
+        Assertions.assertEquals(1, cells.getJSONArray(1).length());
 
-        Cell firstCell = Cell.fromJson(rows.getJSONArray(0).getJSONObject(0));
-        Cell secondCell = Cell.fromJson(rows.getJSONArray(1).getJSONObject(0));
+        Cell firstCell = Cell.fromJson(cells.getJSONArray(0).getJSONObject(0));
+        Cell secondCell = Cell.fromJson(cells.getJSONArray(1).getJSONObject(0));
 
         Assertions.assertEquals("Alice", firstCell.getNodes().get(0).getLiteralLexicalForm());
         Assertions.assertEquals("Bob", secondCell.getNodes().get(0).getLiteralLexicalForm());
@@ -246,7 +248,7 @@ public class WorkbookGraphViaServerUnitTest {
 
         SheetConfig sheetConfig = SheetConfig.builder()
                 .name("People")
-                .rowQuery(WorkbookGraph.ROW_ENTITY_VAR + " a <http://xmlns.com/foaf/0.1/Person>")
+                .rowQuery("SELECT * { " + WorkbookGraph.ROW_ENTITY_VAR + " a <http://xmlns.com/foaf/0.1/Person> }")
                 .build();
 
         HttpRequest postSheetRequest = HttpRequest.newBuilder()
@@ -307,13 +309,16 @@ public class WorkbookGraphViaServerUnitTest {
         HttpResponse<String> getCellsResponse = client.send(getCellsRequest, HttpResponse.BodyHandlers.ofString());
         Assertions.assertEquals(200, getCellsResponse.statusCode());
 
-        JSONArray rows = new JSONArray(getCellsResponse.body());
-        Assertions.assertEquals(2, rows.length());
-        Assertions.assertEquals(1, rows.getJSONArray(0).length());
-        Assertions.assertEquals(1, rows.getJSONArray(1).length());
+        JSONObject body = new JSONObject(getCellsResponse.body());
+        
+        JSONArray cells = body.getJSONArray("cells");
+        
+        Assertions.assertEquals(2, cells.length());
+        Assertions.assertEquals(1, cells.getJSONArray(0).length());
+        Assertions.assertEquals(1, cells.getJSONArray(1).length());
 
-        Cell firstCell = Cell.fromJson(rows.getJSONArray(0).getJSONObject(0));
-        Cell secondCell = Cell.fromJson(rows.getJSONArray(1).getJSONObject(0));
+        Cell firstCell = Cell.fromJson(cells.getJSONArray(0).getJSONObject(0));
+        Cell secondCell = Cell.fromJson(cells.getJSONArray(1).getJSONObject(0));
 
         Assertions.assertEquals("Same Name", firstCell.getNodes().get(0).getLiteralLexicalForm());
         Assertions.assertEquals("Same Name", secondCell.getNodes().get(0).getLiteralLexicalForm());
