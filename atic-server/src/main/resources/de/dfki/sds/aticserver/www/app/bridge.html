@@ -97,7 +97,7 @@
             </div>
 
 
-            <div class="row mb-3">
+            <div class="row mb-3" v-if="activeQuery">
                 <div class="col">
                     <div class="d-flex align-items-center gap-2">
                         <select
@@ -130,6 +130,51 @@
                             >
                             <i class="fa fa-cog"></i> Send
                         </button>
+
+                        <div class="d-flex flex-wrap align-items-center gap-2 ms-3">
+                            <small class="text-muted">Params:</small>
+                            <template v-for="(param, idx) in queryParamsList" :key="idx">
+                                <div class="d-flex align-items-center gap-1" :class="{'opacity-50': param.ignored}">
+                                    <input
+                                        type="text"
+                                        class="form-control form-control-sm"
+                                        style="width: 110px"
+                                        placeholder="key"
+                                        v-model="activeQuery.params[idx].key"
+                                        :disabled="param.ignored"
+                                        >
+                                    <input
+                                        type="text"
+                                        class="form-control form-control-sm"
+                                        style="width: 140px"
+                                        placeholder="value"
+                                        v-model="activeQuery.params[idx].value"
+                                        :disabled="param.ignored"
+                                        >
+                                    <button
+                                        class="btn btn-outline-secondary py-0 px-2"
+                                        @click="toggleIgnore(idx)"
+                                        :title="param.ignored ? 'Include' : 'Ignore'"
+                                        >
+                                        <i class="fa" :class="param.ignored ? 'fa-eye-slash' : 'fa-eye'" style="font-size: 10px"></i>
+                                    </button>
+                                    <button
+                                        class="btn btn-outline-secondary py-0 px-2"
+                                        @click="removeParam(idx)"
+                                        title="Remove"
+                                        >
+                                        <i class="fa fa-times" style="font-size: 10px"></i>
+                                    </button>
+                                </div>
+                            </template>
+                            <button
+                                class="btn btn-outline-primary py-0 px-2"
+                                @click="addParam"
+                                title="Add parameter"
+                                >
+                                <i class="fa fa-plus" style="font-size: 10px"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -291,6 +336,10 @@ var app = createApp({
                     this.activeQuery.method = value;
                 }
             }
+        },
+
+        queryParamsList() {
+            return this.activeQuery?.params || [];
         }
     },
 
@@ -323,7 +372,8 @@ var app = createApp({
                 name: `Bridge ${this.nextQueryNumber}`,
                 content: this.defaultTemplate,
                 method: "QUERY",
-                data: ""
+                data: "",
+                params: []
             });
 
             this.nextQueryNumber++;
@@ -415,10 +465,18 @@ var app = createApp({
                 let response;
 
                 if (method === "QUERY") {
+                    const paramsObj = {};
+                    this.activeQuery.params.forEach(p => {
+                        if (p.key && !p.ignored) {
+                            paramsObj[p.key] = p.value;
+                        }
+                    });
+
                     response = await axios({
                         method: method,
                         url: "/bridge",
                         data: template,
+                        params: paramsObj,
                         headers
                     });
 
@@ -483,6 +541,10 @@ var app = createApp({
 
                 this.prefixes = state.prefixes || this.defaultPrefixes;
                 this.queries = state.queries || [];
+                this.queries.forEach(q => {
+                    if (!q.params) q.params = [];
+                    q.params.forEach(p => { if (typeof p.ignored !== 'boolean') p.ignored = false; });
+                });
                 this.activeQueryIndex = state.activeQueryIndex || 0;
                 this.nextQueryNumber = state.nextQueryNumber || 1;
             }
@@ -496,7 +558,8 @@ var app = createApp({
                         content: this.defaultTemplate,
                         method: "QUERY",
                         data: "",
-                        dryRun: false
+                        dryRun: false,
+                        params: []
                     }
                 ];
 
@@ -526,6 +589,21 @@ var app = createApp({
             axios.post('/auth/logout').then(response => {
                 window.location.href = response.data.redirect;
             });
+        },
+
+        addParam() {
+            if (!this.activeQuery) return;
+            this.activeQuery.params.push({ key: "", value: "", ignored: false });
+        },
+
+        toggleIgnore(index) {
+            if (!this.activeQuery) return;
+            this.activeQuery.params[index].ignored = !this.activeQuery.params[index].ignored;
+        },
+
+        removeParam(index) {
+            if (!this.activeQuery) return;
+            this.activeQuery.params.splice(index, 1);
         }
     }
 
