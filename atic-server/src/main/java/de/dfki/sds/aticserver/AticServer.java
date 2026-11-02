@@ -31,6 +31,7 @@ import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
 import de.dfki.sds.aticsqlite.DatabaseOptions;
+import de.dfki.sds.aticsqlite.FragmentStorage;
 import de.dfki.sds.aticsqlite.FragmentStorage.FragmentSettingsEntry;
 import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
 import de.dfki.sds.aticsqlite.RDFPatchListener;
@@ -60,6 +61,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.net.URLEncoder;
@@ -77,6 +79,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
@@ -89,6 +92,7 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.graph.Triple;
 import org.apache.jena.query.ARQ;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -118,6 +122,7 @@ import org.apache.jena.update.UpdateExecution;
 import org.apache.jena.update.UpdateExecutionFactory;
 import org.apache.jena.update.UpdateFactory;
 import org.apache.jena.update.UpdateRequest;
+import org.apache.jena.vocabulary.OWL;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
 import org.apache.jena.vocabulary.VOID;
@@ -143,7 +148,6 @@ public class AticServer {
 
     private SqliteAticDatasetGraph datasetGraph;
     private MoleculeEndpoint moleculeEndpoint;
-    private final RdfJsonBridge rdfJsonBridge;
 
     private RDFPatchWriter rdfPatchWriter;
 
@@ -172,8 +176,6 @@ public class AticServer {
         capBuilder.invexEnabled(config.isInvexEnabled());
 
         datasetGraph = new SqliteAticDatasetGraph(database, rdfPatchWriter, capBuilder.build());
-
-        rdfJsonBridge = new RdfJsonBridge();
     }
 
     private void initFolders() {
@@ -397,6 +399,9 @@ public class AticServer {
         routes.get("/fragment/settings", this::getFragmentSettings);
         routes.get("/fragment/settings/all", this::getFragmentSettingsAll);
         routes.delete("/fragment/settings", this::deleteFragmentSettings);
+
+        // Fragment by URI (builds fragment using current settings)
+        routes.get("/fragment/{uri}", this::getFragment);
 
         routes.get("/vkg/{uri}/**", this::handleVirtualGraphRequest);
 
@@ -688,6 +693,69 @@ public class AticServer {
         }
     }
 
+    //------------------------------------------
+    // graph helpers for sorted ontology output
+    private static int category(Triple t) {
+        Node predicate = t.getPredicate();
+        Node object = t.getObject();
+
+        // Check for rdf:type assertions
+        if (predicate.equals(RDF.type.asNode())) {
+
+            String objUri = object.getURI();
+
+            // Class declarations: owl:Class, rdfs:Class
+            if ("http://www.w3.org/2002/07/owl#Class"
+                    .equals(objUri)
+                || "http://www.w3.org/2000/01/rdf-schema#Class"
+                    .equals(objUri)) {
+                return 0; // classes first
+            }
+
+            // Property declarations
+            if ("http://www.w3.org/2002/07/owl#ObjectProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#DatatypeProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#FunctionalProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#InverseFunctionalProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#SymmetricProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#AsymmetricProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/2002/07/owl#TransitiveProperty"
+                    .equals(objUri)
+                || "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"
+                    .equals(objUri)) {
+                return 1; // properties second
+            }
+        }
+
+        return 2; // ABox assertions and everything else
+    }
+
+    private static String nodeKey(Node node) {
+        if (node.isURI()) {
+            return "U:" + node.getURI();
+        }
+
+        if (node.isBlank()) {
+            return "B:" + node.getBlankNodeLabel();
+        }
+
+        if (node.isLiteral()) {
+            return "L:" + node.getLiteralLexicalForm()
+                + "|lang=" + Objects.toString(
+                    node.getLiteralLanguage(), "")
+                + "|datatype=" + Objects.toString(
+                    node.getLiteralDatatypeURI(), "");
+        }
+
+        return node.toString();
+    }
+
     private void postDerivedOntology(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
 
@@ -704,9 +772,19 @@ public class AticServer {
         });
 
         ctx.contentType("text/turtle");
-        StringWriter sw = new StringWriter();
-        RDFDataMgr.write(sw, ModelFactory.createModelForGraph(ontology), Lang.TURTLE);
-        ctx.result(sw.toString());
+
+        // Use class-first comparator: owl:Class/rdfs:Class declarations,
+        // then owl:ObjectProperty/owl:DatatypeProperty/rdf:Property,
+        // then everything else.
+        Comparator<Triple> classFirst = Comparator
+            .comparing((Triple t) -> category(t))
+            .thenComparing(t -> nodeKey(t.getSubject()))
+            .thenComparing(t -> nodeKey(t.getPredicate()))
+            .thenComparing(t -> nodeKey(t.getObject()));
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        OrderedTurtleWriter.writeSorted(out, ontology, classFirst);
+        ctx.result(out.toString(StandardCharsets.UTF_8));
     }
 
     private void postDerivedBridgeTemplate(Context ctx) {
@@ -1722,6 +1800,14 @@ public class AticServer {
         }
 
         InvocationContext ictx = fromJavalinContext(ctx);
+        
+        //per call an instance
+        RdfJsonBridge rdfJsonBridge = new RdfJsonBridge();
+        
+        //invocation context decides fragment settings
+        datasetGraph.executeRead(() -> {
+            rdfJsonBridge.setFragmentSettings(this.datasetGraph.getFragmentStorage().suggestSettings(ictx));
+        });
 
         switch (method) {
 
@@ -2083,8 +2169,9 @@ public class AticServer {
         String contextUri = body.optString("contextUri", null);
         String groupName = body.optString("groupName", null);
 
-        Node context = contextUri != null ? NodeFactory.createURI(contextUri) : null;
         FragmentSettings settings = FragmentSettings.fromJson(body.getJSONObject("settings"));
+
+        Node context = contextUri != null ? NodeFactory.createURI(contextUri) : null;
 
         datasetGraph.executeWrite(() -> {
             datasetGraph.getFragmentStorage().save(context, groupName, settings, ictx);
@@ -2151,6 +2238,60 @@ public class AticServer {
         });
 
         ctx.json(Map.of("success", true));
+    }
+
+    private void getFragment(Context ctx) {
+        String uri = ctx.pathParam("uri");
+        InvocationContext ictx = fromJavalinContext(ctx);
+        Locale locale = Locale.ENGLISH;
+
+        // Parse Accept-Language header, fall back to English if absent
+        // Accept-Language can contain multiple comma-separated values with
+        // quality weights, e.g. "de-DE;q=0.9, en;q=0.8, ja;q=0.7".
+        // We take the first (highest priority) and strip any quality weight.
+        String acceptLang = ctx.header("Accept-Language");
+        if (acceptLang != null && !acceptLang.isBlank()) {
+            try {
+                List<Locale.LanguageRange> ranges
+                        = Locale.LanguageRange.parse(acceptLang);
+
+                if (!ranges.isEmpty() && !ranges.get(0).getRange().equals("*")) {
+                    locale = Locale.forLanguageTag(ranges.get(0).getRange());
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Fall back to English
+            }
+        }
+
+        try {
+            Node node = NodeFactory.createURI(uri);
+
+            List<Fragment> fragments = datasetGraph.calculateRead(() -> {
+                FragmentStorage storage = datasetGraph.getFragmentStorage();
+                storage.suggestSettings(ictx); // validates settings exist
+                return storage.buildFragments(List.of(node), ictx);
+            });
+
+            Fragment fragment = fragments.get(0);
+
+            //a bit harsh: an empty fragment could mean that the resource does not have fragment properties
+            //TODO change later to contains check?
+            if (fragment.getSubgraph().isEmpty()) {
+                ctx.status(HttpStatus.NOT_FOUND);
+                ctx.json(Map.of("error", "No fragment found for URI: " + uri));
+                return;
+            }
+
+            JSONObject json = fragment.toJsonFragment(locale);
+
+            ctx.json(json.toString());
+        } catch (IllegalArgumentException e) {
+            ctx.status(HttpStatus.BAD_REQUEST);
+            ctx.json(Map.of("error", "Invalid URI: " + uri));
+        } catch (Exception e) {
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR);
+            ctx.json(Map.of("error", "Failed to build fragment: " + e.getMessage()));
+        }
     }
 
     //---------------------------------------
@@ -2441,10 +2582,6 @@ public class AticServer {
 
     /*package*/ RDFPatchWriter getRdfPatchWriter() {
         return rdfPatchWriter;
-    }
-
-    public RdfJsonBridge getRdfJsonBridge() {
-        return rdfJsonBridge;
     }
 
 }

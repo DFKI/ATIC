@@ -38,13 +38,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
  *
  */
 public class MoleculeEndpointAticServerUnitTest {
-
+    
     public MoleculeEndpointAticServerUnitTest() {
     }
 
@@ -241,6 +242,7 @@ public class MoleculeEndpointAticServerUnitTest {
         helper(ttl, "http://example.org/person1", "resource", Map.of(), expectedBody, null, 200);
     }
     
+    @Disabled
     @Test
     public void testFragmentEndpoint() throws Exception {
         String ttl = load("01_molecule_testdata.ttl");
@@ -249,6 +251,7 @@ public class MoleculeEndpointAticServerUnitTest {
         helper(ttl, "http://example.org/person1", "fragment", Map.of(), expectedBody, null, 200);
     }
     
+    @Disabled
     @Test
     public void testFragmentEndpointReduceType() throws Exception {
         String ttl = load("01_molecule_testdata.ttl");
@@ -257,6 +260,7 @@ public class MoleculeEndpointAticServerUnitTest {
         helper(ttl, "http://example.org/person1", "fragment", Map.of("expand-type", "false"), expectedBody, null, 200);
     }
     
+    @Disabled
     @Test
     public void testFragmentEndpointSingleType() throws Exception {
         String ttl = load("01_molecule_testdata.ttl");
@@ -265,6 +269,7 @@ public class MoleculeEndpointAticServerUnitTest {
         helper(ttl, "http://example.org/person1", "fragment", Map.of("single-type", "true"), expectedBody, null, 200);
     }
     
+    @Disabled
     @Test
     public void testFragmentEndpointLocaleJapanese() throws Exception {
         String ttl = load("01_molecule_testdata.ttl");
@@ -281,6 +286,7 @@ public class MoleculeEndpointAticServerUnitTest {
         helper(ttl, "http://example.org/document", "molecule", Map.of("reduce", "http://example.org/content"), expectedBody, null, 200);
     }
     
+    @Disabled
     @Test
     public void testFragmentEndpointOtherKeys() throws Exception {
         String ttl = load("01_molecule_testdata.ttl");

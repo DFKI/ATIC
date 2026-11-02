@@ -19,42 +19,71 @@
     "expected": [
         {
             "@id": "https://example.org/id/alice-smith",
-            "comment": {
-                "@value": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects.",
-                "@language": "en"
-            },
             "label": "Alice Smith",
+            "comment": "Alice Smith is a data scientist specializing in machine learning, data analysis, and knowledge graphs. She enjoys transforming complex datasets into practical insights and collaborating on innovative research projects.",
+            "@context": {
+                "label": {
+                    "@id": "http://xmlns.com/foaf/0.1/name",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                },
+                "comment": {
+                    "@id": "https://schema.org/description",
+                    "@language": "en"
+                }
+            },
             "additional": "Female"
         },
         {
             "@id": "https://example.org/id/bob-johnson",
-            "comment": {
-                "@value": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software.",
-                "@language": "en"
-            },
             "label": "Bob Johnson",
+            "comment": "Bob Johnson is a software engineer with expertise in distributed systems, backend development, and cloud-native applications. He enjoys mentoring colleagues and building reliable software.",
+            "@context": {
+                "label": {
+                    "@id": "http://xmlns.com/foaf/0.1/name",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                },
+                "comment": {
+                    "@id": "https://schema.org/description",
+                    "@language": "en"
+                }
+            },
             "additional": "Male"
         },
         {
             "@id": "https://example.org/id/carol-miller",
-            "comment": {
-                "@value": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning.",
-                "@language": "en"
-            },
             "label": "Carol Miller",
+            "comment": "Carol Miller is a project manager focused on coordinating interdisciplinary teams and delivering successful digital transformation projects. She values clear communication and efficient planning.",
+            "@context": {
+                "label": {
+                    "@id": "http://xmlns.com/foaf/0.1/name",
+                    "@type": "http://www.w3.org/2001/XMLSchema#string"
+                },
+                "comment": {
+                    "@id": "https://schema.org/description",
+                    "@language": "en"
+                }
+            },
             "additional": "Female"
         }
     ],
     "data": "data_01_bridge_persons.ttl",
     "params": {},
     "fragmentSettings": {
-        "label": {
-            "uri": "http://xmlns.com/foaf/0.1/name",
-            "languageAware": true
-        },
-        "comment": {
-            "uri": "https://schema.org/description",
-            "languageAware": true
-        }
+        "properties": [
+            {
+                "key": "label",
+                "properties": [{
+                        "@id": "http://xmlns.com/foaf/0.1/name"
+                    }],
+                "languageAware": true
+            },
+            {
+                "key": "comment",
+                "properties": [{
+                        "@id": "https://schema.org/description"
+                    }],
+                "languageAware": true
+            }
+        ]
     }
 }

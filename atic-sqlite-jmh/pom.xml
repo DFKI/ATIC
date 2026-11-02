@@ -22,7 +22,7 @@
             <artifactId>jmh-generator-annprocess</artifactId>
             <version>1.37</version>
         </dependency>
-        
+
         <dependency>
             <groupId>de.dfki.sds</groupId>
             <artifactId>atic-sqlite</artifactId>
@@ -33,14 +33,14 @@
             <artifactId>jena-tdb2</artifactId>
             <version>${jena.version}</version>
         </dependency>
-        
+
         <!-- bsbm -->
         <dependency>
             <groupId>ca.umontreal.iro.simul</groupId>
             <artifactId>ssj</artifactId>
             <version>3.3.2</version>
         </dependency>
-        
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
