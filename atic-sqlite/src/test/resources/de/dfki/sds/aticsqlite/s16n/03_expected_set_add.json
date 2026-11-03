@@ -2,22 +2,29 @@
     "columns": [{
         "name": "Name",
         "property": {"@id": "http://xmlns.com/foaf/0.1/name"},
-        "@id": "urn:atic:column-934252c7-1de9-4c24-aee7-689949c37cbd",
+        "@id": "urn:atic:column-66773483-0dc7-4765-8b5e-dc843d358084",
         "type": "Literal",
         "direction": "Outgoing"
     }],
     "rows": [{
-        "workbook": {"@id": "urn:atic:workbook-e9e89fec-f9b8-41de-9dba-19dc23b3e4f7"},
-        "sheet": {"@id": "urn:atic:sheet-5196554f-ab67-41ee-afd9-59099c578883"},
+        "workbook": {"@id": "urn:atic:workbook-e6c0bca1-5f58-437a-919b-25927d1ab995"},
+        "sheet": {"@id": "urn:atic:sheet-59c5aaeb-b927-4dc1-826f-ae8845d9b072"},
         "rowIndex": 0,
         "columnIndex": -1,
-        "content": [{"@id": "https://example.org/id/alice-smith"}]
+        "content": [{
+            "@id": "https://example.org/id/alice-smith",
+            "type": {
+                "@id": "https://schema.org/Person",
+                "type": {"@id": "http://www.w3.org/2000/01/rdf-schema#Class"}
+            },
+            "@context": {"type": {"@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"}}
+        }]
     }],
     "cells": [[{
-        "workbook": {"@id": "urn:atic:workbook-e9e89fec-f9b8-41de-9dba-19dc23b3e4f7"},
-        "column": {"@id": "urn:atic:column-934252c7-1de9-4c24-aee7-689949c37cbd"},
+        "workbook": {"@id": "urn:atic:workbook-e6c0bca1-5f58-437a-919b-25927d1ab995"},
+        "column": {"@id": "urn:atic:column-66773483-0dc7-4765-8b5e-dc843d358084"},
         "rowEntity": {"@id": "https://example.org/id/alice-smith"},
-        "sheet": {"@id": "urn:atic:sheet-5196554f-ab67-41ee-afd9-59099c578883"},
+        "sheet": {"@id": "urn:atic:sheet-59c5aaeb-b927-4dc1-826f-ae8845d9b072"},
         "rowIndex": 0,
         "columnIndex": 0,
         "content": [

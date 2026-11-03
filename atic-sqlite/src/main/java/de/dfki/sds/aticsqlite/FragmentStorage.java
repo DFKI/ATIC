@@ -17,7 +17,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.apache.jena.graph.Node;
+import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.sparql.core.Quad;
+import org.apache.jena.sparql.util.ModelUtils;
 import org.apache.jena.util.iterator.ExtendedIterator;
 import org.json.JSONObject;
 
@@ -44,6 +46,10 @@ public class FragmentStorage {
 
     //==================================
     //fragment
+    
+    public Fragment buildFragment(Node node, InvocationContext ctx) {
+        return buildFragments(List.of(node), ctx).get(0);
+    }
     
     public List<Fragment> buildFragments(long[] resourceIds, InvocationContext ctx) {
         // Remove duplicate resource IDs while preserving order.
@@ -72,6 +78,23 @@ public class FragmentStorage {
         }
 
         return fragments;
+    }
+    
+    public List<RDFNode> buildFragmentsOrLiterals(List<Node> nodes, InvocationContext ctx) {
+        FragmentSettings settings = suggestSettings(ctx);
+
+        List<RDFNode> rdfNodes = new ArrayList<>(nodes.size());
+
+        for (Node node : nodes) {
+            Set<Node> visited = new HashSet<>();
+            if(node.isURI()) {
+                rdfNodes.add(buildFragment(node, settings, ctx, visited));
+            } else {
+                rdfNodes.add(ModelUtils.convertGraphNodeToRDFNode(node));
+            }
+        }
+
+        return rdfNodes;
     }
 
     private Fragment buildFragment(Node node, FragmentSettings settings, InvocationContext ctx, Set<Node> visited) {

@@ -1,6 +1,7 @@
 package de.dfki.sds.aticsqlite.workbook;
 
 import de.dfki.sds.atic.jenatic.AticGraph;
+import de.dfki.sds.atic.jenatic.Fragment;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.AticGraphUtils;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
@@ -32,6 +33,7 @@ import org.apache.jena.query.QueryFactory;
 import org.apache.jena.query.QueryParseException;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
+import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.rdf.model.Resource;
 import org.apache.jena.rdf.model.ResourceFactory;
 import org.apache.jena.shared.PrefixMapping;
@@ -48,9 +50,8 @@ import org.json.JSONObject;
  */
 public class WorkbookGraph implements AticGraph {
 
-    //TODO if @type is same for all in content, could be also on Cell
-    //TODO turn uri nodes to FragmentNodes
-    //TODO build an endpoint: /workbooks/{uri}/sheets/{uri}/cells    with ?window=0,0,10,10 or ?position=0,0
+    //TODO if @type is same for all in content, could be also on Cell (cell gets @type info)
+    
     //use GET POST DELETE
     public static final Node node = NodeFactory.createURI("urn:atic:workbooks");
 
@@ -79,26 +80,26 @@ public class WorkbookGraph implements AticGraph {
     private class SheetCache {
 
         //caches
-        private IndexAllocation<Node> rowCache;
+        private IndexAllocation<Resource> rowCache;
         private IndexAllocation<Node> columnCache;
-        private Map<ResourceColumn, List<Node>> valueCache;
+        private Map<ResourceColumn, List<RDFNode>> contentCache;
         private Query recentQuery;
 
         //settings
         private int pageSize = 20;
-        private int valueCacheThreshold = 100;
-        private int valueCacheCleanupMaxDist = pageSize * 3;
+        private int contentCacheThreshold = 100;
+        private int contentCacheCleanupMaxDist = pageSize * 3;
         private Integer maxNumberOfRows;
 
         public SheetCache() {
             this.rowCache = new IndexAllocation<>();
             this.columnCache = new IndexAllocation<>();
-            this.valueCache = new HashMap<>();
+            this.contentCache = new HashMap<>();
         }
 
     }
 
-    private record ResourceColumn(Node resource, Node column) {
+    private record ResourceColumn(Resource resource, Node column) {
 
     }
 
@@ -114,6 +115,9 @@ public class WorkbookGraph implements AticGraph {
         graphEventManager = new SimpleEventManager();
 
         cacheMap = new HashMap<>();
+        
+        //TODO use
+        //datasetGraph.getFragmentStorage().buildFragments(nodes, InvocationContext.EMPTY);
     }
 
     public void ensureGraph(InvocationContext ctx) {
@@ -406,7 +410,7 @@ public class WorkbookGraph implements AticGraph {
         updateRowCache(cache, sheetConfig.getRowQuery(), rowIndex, ctx);
 
         //row cache is now filled
-        Node rowEntity = cache.rowCache.getObject(rowIndex);
+        Resource rowEntity = cache.rowCache.getObject(rowIndex);
 
         //row does not exist
         if (rowEntity == null) {
@@ -421,14 +425,13 @@ public class WorkbookGraph implements AticGraph {
         //special case: we are interested in the row entity, not one of its columns
         //we use a predefined entity row column here
         if (columnIndex < 0) {
-            //return new Cell(rowEntity, entityRowColumn);
             return Cell.builder()
                     .workbook(workbook)
                     .sheet(sheet)
                     .location(rowIndex, columnIndex)
                     .column(entityRowColumn)
                     .rowEntity(rowEntity)
-                    .addNode(node)
+                    .addContent(rowEntity)
                     .build();
         }
 
@@ -448,10 +451,10 @@ public class WorkbookGraph implements AticGraph {
 
         //JSONObject selectedColumn = getColumn(selectedSheet, column);
         //ColumnConfig columnConfig = ColumnConfig.fromJson(selectedColumn);
-        ResourceColumn key = updateValueCache(cache, rowEntity, rowIndex, column, selectedSheet, ctx);
+        ResourceColumn key = updateContentCache(cache, rowEntity, rowIndex, column, selectedSheet, ctx);
 
-        //value cache is now filled
-        List<Node> values = cache.valueCache.get(key);
+        //content cache is now filled
+        List<RDFNode> values = cache.contentCache.get(key);
 
         if (values == null) {
             throw new RuntimeException("values should never be null");
@@ -463,7 +466,7 @@ public class WorkbookGraph implements AticGraph {
                 .column(column)
                 .rowEntity(rowEntity)
                 .location(rowIndex, columnIndex)
-                .nodes(values)
+                .content(values)
                 .build();
     }
 
@@ -501,7 +504,7 @@ public class WorkbookGraph implements AticGraph {
         }
 
         for (int rowIndex = rect.y; rowIndex < rect.y + rect.height; rowIndex++) {
-            Node row = cache.rowCache.getObject(rowIndex);
+            Resource row = cache.rowCache.getObject(rowIndex);
 
             Cell.Builder cellBuilder = Cell.builder()
                     .workbook(workbook)
@@ -509,10 +512,7 @@ public class WorkbookGraph implements AticGraph {
                     .location(rowIndex, -1);
 
             if (row != null) {
-                cellBuilder
-                        //.column(row)
-                        //.rowEntity(row)
-                        .addNode(row);
+                cellBuilder.addContent(row);
             }
 
             window.getRowHeader().add(cellBuilder.build());
@@ -530,7 +530,7 @@ public class WorkbookGraph implements AticGraph {
 
         updateRowCache(cache, sheetConfig.getRowQuery(), rowIndex, ctx);
 
-        Node rowEntity = cache.rowCache.getObject(rowIndex);
+        Resource rowEntity = cache.rowCache.getObject(rowIndex);
         if (rowEntity == null) {
             throw new IllegalArgumentException("Cell has no row");
         }
@@ -551,13 +551,13 @@ public class WorkbookGraph implements AticGraph {
         switch (operation) {
             case Set:
                 removeColumnValues(rowEntity, property, columnConfig.getDirection(), ctx);
-                addColumnValues(rowEntity, property, columnConfig.getDirection(), cell.getNodes(), ctx);
+                addColumnValues(rowEntity, property, columnConfig.getDirection(), cell.getContent(), ctx);
                 break;
             case Add:
-                addColumnValues(rowEntity, property, columnConfig.getDirection(), cell.getNodes(), ctx);
+                addColumnValues(rowEntity, property, columnConfig.getDirection(), cell.getContent(), ctx);
                 break;
             case Remove:
-                removeColumnValues(rowEntity, property, columnConfig.getDirection(), cell.getNodes(), ctx);
+                removeColumnValues(rowEntity, property, columnConfig.getDirection(), cell.getContent(), ctx);
                 break;
         }
 
@@ -566,9 +566,9 @@ public class WorkbookGraph implements AticGraph {
 
         //since resource changed, cache might be old so we invalidate it by deleting it
         ResourceColumn key = new ResourceColumn(rowEntity, column);
-        cache.valueCache.remove(key);
+        cache.contentCache.remove(key);
 
-        updateValueCache(cache, rowEntity, rowIndex, column, selectedSheet, ctx);
+        updateContentCache(cache, rowEntity, rowIndex, column, selectedSheet, ctx);
     }
 
     //TODO maybe turn around so bulk is done so update is not called so often
@@ -592,7 +592,7 @@ public class WorkbookGraph implements AticGraph {
         SheetConfig sheetConfig = SheetConfig.fromJson(selectedSheet);
 
         // TODO later: sample from SPARQL query
-        List<Node> sample = cache.rowCache.toDeflatedList();
+        List<Resource> sample = cache.rowCache.toDeflatedList();
 
         if (sample == null || sample.isEmpty()) {
             return;
@@ -601,8 +601,8 @@ public class WorkbookGraph implements AticGraph {
         Set<Node> visitedProperties = new HashSet<>();
         List<ColumnConfig> columnConfigs = new ArrayList<>();
 
-        for (Node rowEntity : sample) {
-            if (rowEntity == null || !rowEntity.isConcrete()) {
+        for (Resource rowEntity : sample) {
+            if (rowEntity == null) {
                 continue;
             }
 
@@ -611,8 +611,8 @@ public class WorkbookGraph implements AticGraph {
                     Direction.Incoming)) {
 
                 ExtendedIterator<Quad> iterator = direction == Direction.Outgoing
-                        ? (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, rowEntity, Node.ANY, Node.ANY, ctx)
-                        : (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, Node.ANY, Node.ANY, rowEntity, ctx);
+                        ? (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, rowEntity.asNode(), Node.ANY, Node.ANY, ctx)
+                        : (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, Node.ANY, Node.ANY, rowEntity.asNode(), ctx);
 
                 try {
                     while (iterator.hasNext()) {
@@ -666,34 +666,34 @@ public class WorkbookGraph implements AticGraph {
 
     //set helper
     //TODO solve Quad.defaultGraphIRI for set
-    private void addColumnValues(Node rowEntity, Node property, Direction direction, List<Node> values, InvocationContext ctx) {
-        for (Node value : values) {
+    private void addColumnValues(Resource rowEntity, Node property, Direction direction, List<RDFNode> values, InvocationContext ctx) {
+        for (RDFNode value : values) {
             if (direction == Direction.Outgoing) {
-                datasetGraph.add(new Quad(Quad.defaultGraphIRI, rowEntity, property, value), ctx);
+                datasetGraph.add(new Quad(Quad.defaultGraphIRI, rowEntity.asNode(), property, value.asNode()), ctx);
             } else {
-                datasetGraph.add(new Quad(Quad.defaultGraphIRI, value, property, rowEntity), ctx);
+                datasetGraph.add(new Quad(Quad.defaultGraphIRI, value.asNode(), property, rowEntity.asNode()), ctx);
             }
         }
     }
 
-    private void removeColumnValues(Node rowEntity, Node property, Direction direction, List<Node> values, InvocationContext ctx) {
-        for (Node value : values) {
+    private void removeColumnValues(Resource rowEntity, Node property, Direction direction, List<RDFNode> values, InvocationContext ctx) {
+        for (RDFNode value : values) {
             if (direction == Direction.Outgoing) {
-                datasetGraph.delete(new Quad(Quad.defaultGraphIRI, rowEntity, property, value), ctx);
+                datasetGraph.delete(new Quad(Quad.defaultGraphIRI, rowEntity.asNode(), property, value.asNode()), ctx);
             } else {
-                datasetGraph.delete(new Quad(Quad.defaultGraphIRI, value, property, rowEntity), ctx);
+                datasetGraph.delete(new Quad(Quad.defaultGraphIRI, value.asNode(), property, rowEntity.asNode()), ctx);
             }
         }
     }
 
-    private void removeColumnValues(Node rowEntity, Node property, Direction direction, InvocationContext ctx) {
+    private void removeColumnValues(Resource rowEntity, Node property, Direction direction, InvocationContext ctx) {
         ExtendedIterator<Quad> iterator = null;
 
         try {
             if (direction == Direction.Outgoing) {
-                iterator = (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, rowEntity, property, Node.ANY, ctx);
+                iterator = (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, rowEntity.asNode(), property, Node.ANY, ctx);
             } else {
-                iterator = (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, Node.ANY, property, rowEntity, ctx);
+                iterator = (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, Node.ANY, property, rowEntity.asNode(), ctx);
             }
 
             List<Quad> quads = iterator.toList();
@@ -733,9 +733,10 @@ public class WorkbookGraph implements AticGraph {
             while (rs.hasNext()) {
                 QuerySolution qs = rs.next();
                 Resource re = qs.get(ROW_ENTITY_VAR.substring(1)).asResource();
+                Fragment fragment = datasetGraph.getFragmentStorage().buildFragment(re.asNode(), ctx);
                 //row number starts at 1
                 int index = (int) (offset + (rs.getRowNumber() - 1));
-                cache.rowCache.putOverwrite(re.asNode(), index);
+                cache.rowCache.putOverwrite(fragment, index);
             }
             //if we reach the end we mark it so that we do not ask again when caching
             if (rs.getRowNumber() < query.getLimit()) {
@@ -745,10 +746,10 @@ public class WorkbookGraph implements AticGraph {
         }
     }
 
-    private ResourceColumn updateValueCache(SheetCache cache, Node rowEntity, int rowIndex, Node columnIndicator, JSONObject selectedSheet, InvocationContext ctx) {
+    private ResourceColumn updateContentCache(SheetCache cache, Resource rowEntity, int rowIndex, Node columnIndicator, JSONObject selectedSheet, InvocationContext ctx) {
         //check the cache
         ResourceColumn key = new ResourceColumn(rowEntity, columnIndicator);
-        if (!cache.valueCache.containsKey(key)) {
+        if (!cache.contentCache.containsKey(key)) {
             //if cache is empty we have to load it
 
             //again we only load all columns for our window
@@ -756,7 +757,7 @@ public class WorkbookGraph implements AticGraph {
 
             for (int i = fromTo[0]; i <= fromTo[1]; i++) {
                 //we use the row cache, should be initialized already
-                Node res = cache.rowCache.getObject(i);
+                Resource res = cache.rowCache.getObject(i);
 
                 //no recsource no row for it
                 if (res == null) {
@@ -783,13 +784,13 @@ public class WorkbookGraph implements AticGraph {
                     try {
                         switch (columnConfig.getDirection()) {
                             case Outgoing:
-                                iterator = (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, res, property, Node.ANY, ctx);
+                                iterator = (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, res.asNode(), property, Node.ANY, ctx);
                                 while (iterator.hasNext()) {
                                     values.add(iterator.next().getObject());
                                 }
                                 break;
                             case Incoming:
-                                iterator = (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, Node.ANY, property, res, ctx);
+                                iterator = (ExtendedIterator<Quad>) datasetGraph.find(Node.ANY, Node.ANY, property, res.asNode(), ctx);
                                 while (iterator.hasNext()) {
                                     values.add(iterator.next().getSubject());
                                 }
@@ -800,30 +801,32 @@ public class WorkbookGraph implements AticGraph {
                             iterator.close();
                         }
                     }
+                    
+                    //uri node can be enriched to Fragment
+                    List<RDFNode> rdfNodes = datasetGraph.getFragmentStorage().buildFragmentsOrLiterals(values, ctx);
 
-                    //TODO uri node can be enriched to FragmentNodes
                     //update cache
-                    cache.valueCache.put(new ResourceColumn(res, col), values);
+                    cache.contentCache.put(new ResourceColumn(res, col), rdfNodes);
                 }
             }
 
         }
 
-        //if value cache get too large we need to reduce it again
+        //if content cache get too large we need to reduce it again
         //does nothing if cache is not over threshold
-        manageValueCache(cache, rowIndex);
+        manageContentCache(cache, rowIndex);
 
         return key;
     }
 
-    private void manageValueCache(SheetCache cache, int indexIndicator) {
+    private void manageContentCache(SheetCache cache, int indexIndicator) {
         //only do something when over threshold
-        if (cache.valueCache.size() < cache.valueCacheThreshold) {
+        if (cache.contentCache.size() < cache.contentCacheThreshold) {
             return;
         }
 
         Set<ResourceColumn> toBeRemoved = new HashSet<>();
-        for (ResourceColumn rc : cache.valueCache.keySet()) {
+        for (ResourceColumn rc : cache.contentCache.keySet()) {
             Integer index = cache.rowCache.getIndex(rc.resource);
             //if the resource is not part of the current row cache
             //its values might also be not needed for now
@@ -833,12 +836,12 @@ public class WorkbookGraph implements AticGraph {
                 int dist = Math.abs(index - indexIndicator);
                 //heuristic:
                 //if large distance, these values might not be needed for the current displayed indices
-                if (dist > cache.valueCacheCleanupMaxDist) {
+                if (dist > cache.contentCacheCleanupMaxDist) {
                     toBeRemoved.add(rc);
                 }
             }
         }
-        toBeRemoved.forEach(rc -> cache.valueCache.remove(rc));
+        toBeRemoved.forEach(rc -> cache.contentCache.remove(rc));
 
         //int size = valueCache.size();
         /*
@@ -1017,6 +1020,33 @@ public class WorkbookGraph implements AticGraph {
             throw new IllegalArgumentException(
                     "rowQuery must select the variable " + ROW_ENTITY_VAR);
         }
+    }
+
+    /**
+     * Converts a Jena Node to an RDFNode (RDF model type).
+     * This wraps a Node into the appropriate Resource or Literal implementation.
+     */
+    @Deprecated
+    private static RDFNode toRDFNode(Node node) {
+        if (node.isURI()) {
+            return ResourceFactory.createResource(node.getURI());
+        }
+        if (node.isLiteral()) {
+            String lang = node.getLiteralLanguage();
+            if (lang != null && !lang.isEmpty()) {
+                return ResourceFactory.createLangLiteral(
+                        node.getLiteralLexicalForm(), lang);
+            }
+            String dt = node.getLiteralDatatypeURI();
+            if (dt != null) {
+                return ResourceFactory.createTypedLiteral(
+                        node.getLiteralLexicalForm(),
+                        NodeFactory.getType(dt));
+            }
+            return ResourceFactory.createStringLiteral(node.getLiteralLexicalForm());
+        }
+        // blank node
+        return ResourceFactory.createResource("_:" + node.getBlankNodeLabel());
     }
 
     //----------------------------------

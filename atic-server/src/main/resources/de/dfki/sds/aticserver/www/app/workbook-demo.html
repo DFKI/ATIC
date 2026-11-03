@@ -112,7 +112,7 @@
                                     :key="'col-' + ci">
                                     <div class="col-header-content">
                                         <div v-if="col" class="d-flex align-items-center justify-content-between">
-                                            <div v-if="col?.property?.['@id']" class="col-prop" @click.stop="copyToClipboard(col.property['@id'])" title="Copy property URI">
+                                            <div v-if="col?.property?.['@id']" class="col-prop" @click.stop="copyToClipboard(col.property['@id'])" :title="col.property['@id']">
                                                 <i class="fa fa-copy copy-icon me-1"></i>
                                             </div>
                                             <div class="col-name me-1">
@@ -474,9 +474,13 @@
         <script id="render-cell-value-template" type="x-template">
             <div class="cell-value-tag" :title="fullValueText">
             <span v-if="isResource">
-            <div @click.stop="copyToClipboard(fullValueText)" title="Copy">
-                <i class="fa fa-link me-1"></i>{{ fullValueText }}
-            </div>
+                <div @click.stop="copyToClipboard(fullValueText)" title="Copy">
+                    <i class="fa fa-link me-1"></i>
+                    
+                    <span v-if="val.label"> {{ val.label }}</span>
+                    <span v-else>{{ fullValueText }}</span>
+                    
+                </div>
             </span>
             <span v-else-if="isBoolean">
             <input type="checkbox" :checked="value === true" disabled style="cursor: default;">
@@ -491,8 +495,10 @@
             {{ valueText }}
             </span>
             <span v-else>
-            <!-- i class="fa fa-font me-1 text-muted"></i -->
-            {{ valueText }}
+            
+                <span v-if="val.label"> {{ val.label }}</span>
+                <span v-else>{{ valueText }}</span>
+            
             </span>
             </div>
         </script>
@@ -546,7 +552,7 @@ const CellValueRenderer = {
         copyToClipboard(text) {
             if (!text)
                 return;
-            console.log(text);
+            //console.log(text);
             navigator.clipboard.writeText(text).then(() => {
                 // Brief visual feedback
                 const toast = document.createElement('div');

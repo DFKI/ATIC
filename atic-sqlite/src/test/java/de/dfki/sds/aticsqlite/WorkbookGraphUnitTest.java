@@ -43,7 +43,7 @@ public class WorkbookGraphUnitTest {
 
     private SqliteAticDatasetGraph dataset;
     
-    private boolean PRINT = false;
+    private boolean PRINT = true;
 
     @BeforeEach
     void setup(@org.junit.jupiter.api.io.TempDir Path tempDir) throws Exception {
@@ -286,7 +286,7 @@ public class WorkbookGraphUnitTest {
     
     @Test
     public void testSetRemove() throws IOException {
-        Cell c = Cell.builder().addNode(NodeFactory.createLiteralString("Alice Smith")).build();
+        Cell c = Cell.builder().addContent(org.apache.jena.rdf.model.ResourceFactory.createStringLiteral("Alice Smith")).build();
         testSetOperation(Operation.Remove, "04_expected_set_remove.json", c);
     }
     
@@ -296,7 +296,7 @@ public class WorkbookGraphUnitTest {
         Coordinates coordinates = preparePersonWorkbook();
         
         if(c == null) {
-            c = Cell.builder().addNode(NodeFactory.createLiteralString("Other Name")).build();
+            c = Cell.builder().addContent(org.apache.jena.rdf.model.ResourceFactory.createStringLiteral("Other Name")).build();
         }
         
         Cell finalCell = c;

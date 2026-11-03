@@ -1,10 +1,14 @@
 package de.dfki.sds.aticsqlite.workbook;
 
+import de.dfki.sds.atic.jenatic.Fragment;
 import java.util.ArrayList;
 import java.util.List;
 import static org.apache.jena.datatypes.xsd.XSDDatatype.*;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.rdf.model.RDFNode;
+import org.apache.jena.rdf.model.Resource;
+import org.apache.jena.rdf.model.ResourceFactory;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -13,11 +17,11 @@ public class Cell {
     private Node workbook;
     private Node sheet;
     private Node column;
-    private Node rowEntity;
+    private Resource rowEntity;
     private Integer rowIndex;
     private Integer columnIndex;
 
-    private final List<Node> nodes;
+    private final List<RDFNode> content;
 
     private Cell(Builder builder) {
         this.workbook = builder.workbook;
@@ -26,7 +30,7 @@ public class Cell {
         this.rowEntity = builder.rowEntity;
         this.rowIndex = builder.rowIndex;
         this.columnIndex = builder.columnIndex;
-        this.nodes = builder.nodes;
+        this.content = builder.content;
     }
 
     public static Builder builder() {
@@ -38,10 +42,10 @@ public class Cell {
         private Node workbook;
         private Node sheet;
         private Node column;
-        private Node rowEntity;
+        private Resource rowEntity;
         private int rowIndex;
         private int columnIndex;
-        private List<Node> nodes = new ArrayList<>();
+        private List<RDFNode> content = new ArrayList<>();
 
         public Builder workbook(Node workbook) {
             this.workbook = workbook;
@@ -58,7 +62,7 @@ public class Cell {
             return this;
         }
 
-        public Builder rowEntity(Node rowEntity) {
+        public Builder rowEntity(Resource rowEntity) {
             this.rowEntity = rowEntity;
             return this;
         }
@@ -79,22 +83,22 @@ public class Cell {
             return this;
         }
 
-        public Builder nodes(List<Node> nodes) {
-            this.nodes = nodes;
+        public Builder content(List<RDFNode> content) {
+            this.content = content;
             return this;
         }
 
-        public Builder addNode(Node node) {
-            this.nodes.add(node);
+        public Builder addContent(RDFNode node) {
+            this.content.add(node);
             return this;
         }
 
         public Builder fromJson(JSONObject json) {
             JSONArray content = json.getJSONArray("content");
-            this.nodes = new ArrayList<>();
+            this.content = new ArrayList<>();
 
             for (int i = 0; i < content.length(); i++) {
-                this.nodes.add(fromJsonLd(content.getJSONObject(i)));
+                this.content.add(fromJsonLd(content.getJSONObject(i)));
             }
 
             if (json.has("workbook")) {
@@ -141,8 +145,8 @@ public class Cell {
         return columnIndex;
     }
 
-    public List<Node> getNodes() {
-        return nodes;
+    public List<RDFNode> getContent() {
+        return content;
     }
 
     public static Cell fromJson(JSONObject json) {
@@ -150,13 +154,13 @@ public class Cell {
     }
 
     public JSONObject toJson() {
-        JSONArray content = new JSONArray();
+        JSONArray contentArray = new JSONArray();
 
-        for (Node node : nodes) {
-            content.put(toJsonLd(node));
+        for (RDFNode node : content) {
+            contentArray.put(toJsonLd(node));
         }
 
-        JSONObject json = new JSONObject().put("content", content);
+        JSONObject json = new JSONObject().put("content", contentArray);
 
         if (workbook != null) {
             json.put("workbook", new JSONObject().put("@id", workbook.getURI()));
@@ -178,6 +182,13 @@ public class Cell {
         }
 
         return json;
+    }
+
+    public static JSONObject toJsonLd(RDFNode node) {
+        if(node instanceof Fragment fragment) {
+            return fragment.toJsonFragment(); //TODO locale?
+        }
+        return toJsonLd(node.asNode());
     }
 
     public static JSONObject toJsonLd(Node node) {
@@ -252,9 +263,9 @@ public class Cell {
         throw new IllegalArgumentException("Unsupported Node type: " + node);
     }
 
-    public static Node fromJsonLd(JSONObject json) {
+    public static RDFNode fromJsonLd(JSONObject json) {
         if (json.has("@id")) {
-            return NodeFactory.createURI(json.getString("@id"));
+            return ResourceFactory.createResource(json.getString("@id"));
         }
 
         if (!json.has("@value")) {
@@ -271,7 +282,7 @@ public class Cell {
                         "@language requires a string @value: " + json);
             }
 
-            return NodeFactory.createLiteralLang(
+            return ResourceFactory.createLangLiteral(
                     (String) value,
                     json.getString("@language"));
         }
@@ -285,14 +296,14 @@ public class Cell {
                         "Explicit @type requires a string @value: " + json);
             }
 
-            return NodeFactory.createLiteralDT(
+            return ResourceFactory.createTypedLiteral(
                     (String) value,
                     NodeFactory.getType(datatype));
         }
 
         // Native JSON boolean
         if (value instanceof Boolean) {
-            return NodeFactory.createLiteralDT(
+            return ResourceFactory.createTypedLiteral(
                     value.toString(),
                     NodeFactory.getType(
                             "http://www.w3.org/2001/XMLSchema#boolean"));
@@ -318,14 +329,14 @@ public class Cell {
                 //preserve the datatype via @type (or disable native numeric conversion) for lossless round-tripping.
             }
 
-            return NodeFactory.createLiteralDT(
+            return ResourceFactory.createTypedLiteral(
                     lexicalForm,
                     NodeFactory.getType(datatype));
         }
 
         // Native JSON string
         if (value instanceof String) {
-            return NodeFactory.createLiteralString((String) value);
+            return ResourceFactory.createStringLiteral((String) value);
         }
 
         throw new IllegalArgumentException(
@@ -334,7 +345,7 @@ public class Cell {
     }
 
     public boolean isEmpty() {
-        return nodes.isEmpty();
+        return content.isEmpty();
     }
 
 }

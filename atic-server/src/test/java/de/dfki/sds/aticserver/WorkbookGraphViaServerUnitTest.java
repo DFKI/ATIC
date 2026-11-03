@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.StringJoiner;
 import org.apache.commons.io.FileUtils;
 import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.rdf.model.Literal;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
 import org.json.JSONArray;
@@ -213,8 +214,8 @@ public class WorkbookGraphViaServerUnitTest {
         Cell firstCell = Cell.fromJson(cells.getJSONArray(0).getJSONObject(0));
         Cell secondCell = Cell.fromJson(cells.getJSONArray(1).getJSONObject(0));
 
-        Assertions.assertEquals("Alice", firstCell.getNodes().get(0).getLiteralLexicalForm());
-        Assertions.assertEquals("Bob", secondCell.getNodes().get(0).getLiteralLexicalForm());
+        Assertions.assertEquals("Alice", ((Literal) firstCell.getContent().get(0)).getLexicalForm());
+        Assertions.assertEquals("Bob", ((Literal) secondCell.getContent().get(0)).getLexicalForm());
     }
 
     @Test
@@ -285,7 +286,7 @@ public class WorkbookGraphViaServerUnitTest {
         Assertions.assertEquals(1, new JSONArray(postColumnResponse.body()).length());
 
         Cell cell = Cell.builder()
-                .nodes(List.of(NodeFactory.createLiteralString("Same Name")))
+                .content(List.of(org.apache.jena.rdf.model.ResourceFactory.createStringLiteral("Same Name")))
                 .build();
 
         HttpRequest setRequest = HttpRequest.newBuilder()
@@ -320,8 +321,8 @@ public class WorkbookGraphViaServerUnitTest {
         Cell firstCell = Cell.fromJson(cells.getJSONArray(0).getJSONObject(0));
         Cell secondCell = Cell.fromJson(cells.getJSONArray(1).getJSONObject(0));
 
-        Assertions.assertEquals("Same Name", firstCell.getNodes().get(0).getLiteralLexicalForm());
-        Assertions.assertEquals("Same Name", secondCell.getNodes().get(0).getLiteralLexicalForm());
+        Assertions.assertEquals("Same Name", ((Literal) firstCell.getContent().get(0)).getLexicalForm());
+        Assertions.assertEquals("Same Name", ((Literal) secondCell.getContent().get(0)).getLexicalForm());
     }
 
     //=================================================
