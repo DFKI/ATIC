@@ -140,7 +140,7 @@
                                     <i v-if="windowRows[ri].content.length > 0"
                                        class="fa fa-copy copy-icon"
                                        @click.stop="copyToClipboard(windowRows[ri].content[0]['@id'])"
-                                       title="Copy resource URI"></i>
+                                       :title="windowRows[ri].content[0]['@id']"></i>
                                     <span v-else >&nbsp;</span>
                                 </td>
                                 <!-- Data Cells -->
@@ -474,7 +474,7 @@
         <script id="render-cell-value-template" type="x-template">
             <div class="cell-value-tag" :title="fullValueText">
             <span v-if="isResource">
-                <div @click.stop="copyToClipboard(fullValueText)" title="Copy">
+                <div @click.stop="copyToClipboard(fullValueText)" :title="val.label || fullValueText">
                     <i class="fa fa-link me-1"></i>
                     
                     <span v-if="val.label"> {{ val.label }}</span>
@@ -483,7 +483,7 @@
                 </div>
             </span>
             <span v-else-if="isBoolean">
-            <input type="checkbox" :checked="value === true" disabled style="cursor: default;">
+            <input type="checkbox" :checked="value === true || value === 'true'" disabled style="cursor: default;">
             <span class="ms-1">{{ valueText }}</span>
             </span>
             <span v-else-if="isLangString">
