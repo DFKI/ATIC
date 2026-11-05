@@ -463,15 +463,15 @@ var app = createApp({
                 }
 
                 let response;
+                
+                const paramsObj = {};
+                this.activeQuery.params.forEach(p => {
+                    if (p.key && !p.ignored) {
+                        paramsObj[p.key] = p.value;
+                    }
+                });
 
                 if (method === "QUERY") {
-                    const paramsObj = {};
-                    this.activeQuery.params.forEach(p => {
-                        if (p.key && !p.ignored) {
-                            paramsObj[p.key] = p.value;
-                        }
-                    });
-
                     response = await axios({
                         method: method,
                         url: "/bridge",
@@ -492,6 +492,7 @@ var app = createApp({
                             template,
                             data
                         },
+                        params: paramsObj,
                         headers
                     });
 

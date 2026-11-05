@@ -1811,13 +1811,9 @@ public class AticServer {
             case "PATCH":
             case "DELETE":
 
-                Map<String, List<String>> queryParamsForPatch
-                        = ctx.queryParamMap();
+                Map<String, List<String>> queryParamsForPatch = ctx.queryParamMap();
 
-                JSONObject request
-                        = new JSONObject(
-                                ctx.body()
-                        );
+                JSONObject request = new JSONObject(ctx.body());
 
                 RDFPatch patch = datasetGraph.calculateRead(() -> {
                     return rdfJsonBridge.toPatch(

@@ -405,9 +405,10 @@ public class DefinitionConstructor {
         // --- $where ---
         List<String> wherePatterns = new ArrayList<>();
 
+        //better no type info because of post/put/patch/delete
         // ?person a :Person
-        String typeCuri = uriToCuri(type.getURI(), prefixMap);
-        wherePatterns.add(typeVar + " a " + typeCuri);
+        //String typeCuri = uriToCuri(type.getURI(), prefixMap);
+        //wherePatterns.add(typeVar + " a " + typeCuri);
 
         // Find properties whose range contains the supplied type.
         Map<Property, Set<Resource>> propertyRanges = analyzer.getPropertyRanges();

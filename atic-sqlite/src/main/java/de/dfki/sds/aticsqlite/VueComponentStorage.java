@@ -530,6 +530,9 @@ public class VueComponentStorage {
                 try {
                     this.$methodState$templateName.result = await this.$method(this.template$templateName, data, params);
                     this.$methodState$templateName.success = true;
+               
+                    await this.query$templateName(params);
+               
                     return this.$methodState$templateName.result;
                 } catch (error) {
                     this.$methodState$templateName.error = error.message || String(error);
