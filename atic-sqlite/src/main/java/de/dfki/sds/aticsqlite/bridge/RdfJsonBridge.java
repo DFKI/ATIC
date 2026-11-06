@@ -129,7 +129,7 @@ public class RdfJsonBridge {
                 );
             }
 
-            JSONObject result = new JSONObject();
+            JSONObject result = JSONUtils.createJSONObject();
 
             for (String key : obj.keySet()) {
 
@@ -151,8 +151,7 @@ public class RdfJsonBridge {
 
         if (node instanceof JSONArray array) {
 
-            JSONArray result
-                    = new JSONArray();
+            JSONArray result = new JSONArray();
 
             for (Object item : array) {
 
@@ -360,7 +359,7 @@ public class RdfJsonBridge {
         JSONArray pages = new JSONArray();
         for (long page = 1; page <= totalPages; page++) {
             long pageOffset = (page - 1) * size;
-            pages.put(new JSONObject()
+            pages.put(JSONUtils.createJSONObject()
                     .put("offset", pageOffset)
                     .put("label", String.valueOf(page))
                     .put("number", page));
@@ -465,7 +464,7 @@ public class RdfJsonBridge {
     }
 
     private JSONObject inherit(JSONObject parentTemplate, JSONObject childTemplate) {
-        JSONObject retTemplate = new JSONObject(childTemplate.toString());
+        JSONObject retTemplate = JSONUtils.parseOrdered(childTemplate.toString());
 
         if (parentTemplate.has("$from")
                 && !retTemplate.has("$from")
@@ -516,7 +515,7 @@ public class RdfJsonBridge {
                 Object parsed = trimmed;
 
                 if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-                    parsed = new JSONObject(trimmed);
+                    parsed = JSONUtils.parseOrdered(trimmed);
                 } else if ("true".equalsIgnoreCase(trimmed)
                         || "false".equalsIgnoreCase(trimmed)) {
                     parsed = Boolean.parseBoolean(trimmed);
@@ -648,7 +647,7 @@ public class RdfJsonBridge {
                 //so we delete the queried triples and insert the given ones to simulate a PUT
 
                 //we modify the template: we remove limit so everything is queried and overwritten by PUT
-                JSONObject templateCopy = new JSONObject(template.toString());
+                JSONObject templateCopy = JSONUtils.parseOrdered(template.toString());
                 removeAll(templateCopy, "$limit");
                 removeAll(templateCopy, "$offset");
                 removeAll(templateCopy, "$pagination");

@@ -3,6 +3,7 @@ package de.dfki.sds.aticserver;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.conf.ConfigLoader;
+import de.dfki.sds.atic.helper.JSONUtils;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import java.io.ByteArrayInputStream;
@@ -103,7 +104,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             schema:email "carol.miller@example.org" .
                          """;
 
-        JSONObject template = new JSONObject("""
+        JSONObject template = JSONUtils.parseOrdered("""
         {
             "$type": "array",
             "$map": {
@@ -133,7 +134,7 @@ public class RdfJsonBridgeViaServerUnitTest {
                          
                          """;
 
-        JSONObject template = new JSONObject("""
+        JSONObject template = JSONUtils.parseOrdered("""
         {
             "$type": "array",
             "$map": {
@@ -188,7 +189,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             schema:email "bob.johnson@example.org" .
                          """;
 
-        JSONObject template = new JSONObject("""
+        JSONObject template = JSONUtils.parseOrdered("""
         {
             "$type": "array",
             "$map": {
@@ -244,7 +245,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             schema:email "bob.johnson@example.org" .
                          """;
 
-        JSONObject template = new JSONObject("""
+        JSONObject template = JSONUtils.parseOrdered("""
         {
             "$type": "array",
             "$map": {
@@ -284,7 +285,7 @@ public class RdfJsonBridgeViaServerUnitTest {
                          
                          """;
 
-        JSONObject template = new JSONObject("""
+        JSONObject template = JSONUtils.parseOrdered("""
         {
             "$type": "array",
             "$map": {
@@ -334,7 +335,7 @@ public class RdfJsonBridgeViaServerUnitTest {
             schema:email "david.dean@example.org" .
         """;
 
-        JSONObject template = new JSONObject("""
+        JSONObject template = JSONUtils.parseOrdered("""
         {
             "$type": "array",
             "$map": {

@@ -1788,10 +1788,7 @@ public class AticServer {
                 Map<String, List<String>> queryParams
                         = ctx.queryParamMap();
 
-                JSONObject template
-                        = new JSONObject(
-                                ctx.body()
-                        );
+                JSONObject template = JSONUtils.parseOrdered(ctx.body());
 
                 Object result = datasetGraph.calculateRead(() -> {
                     return rdfJsonBridge.toJson(
@@ -1801,8 +1798,17 @@ public class AticServer {
                             ictx
                     );
                 });
+                
+                String stringRepr;
+                if(result instanceof JSONObject jsonObj) {
+                    stringRepr = jsonObj.toString(2);
+                } else if(result instanceof JSONArray jsonArr) {
+                    stringRepr = jsonArr.toString(2);
+                } else {
+                    stringRepr = result.toString();
+                }
 
-                ctx.json(result.toString());
+                ctx.json(stringRepr);
 
                 break;
 

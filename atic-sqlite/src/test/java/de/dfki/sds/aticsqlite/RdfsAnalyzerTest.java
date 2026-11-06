@@ -372,7 +372,7 @@ public class RdfsAnalyzerTest {
         //             foaf:knows (RESOURCE, SINGLE)
         // Since knows has SINGLE cardinality, it gets a simple variable binding (not nested)
         assertEquals("array", actual.getString("$type"));
-        assertEquals(10, actual.getInt("$limit"));
+        assertEquals("?limitPerson", actual.getString("$limit"));
 
         JSONObject map = actual.getJSONObject("$map");
         assertEquals("?person", map.getString("@id"));
@@ -468,7 +468,7 @@ public class RdfsAnalyzerTest {
 
         // Top-level structure
         assertEquals("array", actual.getString("$type"));
-        assertEquals(10, actual.getInt("$limit"));
+        assertEquals("?limitPerson", actual.getString("$limit"));
 
         JSONObject map = actual.getJSONObject("$map");
         assertEquals("?person", map.getString("@id"));
@@ -478,7 +478,7 @@ public class RdfsAnalyzerTest {
         // "knows" should be a nested sub-query object (not a simple variable string)
         JSONObject knowsNested = map.getJSONObject("knows");
         assertEquals("array", knowsNested.getString("$type"));
-        assertEquals("?knows", knowsNested.getJSONObject("$map").getString("@id"));
+        assertEquals("?knows", knowsNested.getJSONObject("$map").getString("$fragment"));
 
         JSONArray knowsWhere = knowsNested.getJSONArray("$where");
         assertEquals(1, knowsWhere.length());
