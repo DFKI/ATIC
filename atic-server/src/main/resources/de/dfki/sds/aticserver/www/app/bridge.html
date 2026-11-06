@@ -10,6 +10,22 @@
         <script src="/app/js/vue.global.prod.js" ></script>
         <script src="/app/js/axios.min.js"></script>
 
+        <!-- Ace Editor -->
+        <script src="/app/js/ace.js"></script>
+        <script>
+            ace.config.set("basePath", "/app/js");
+        </script>
+
+        <style>
+            .ace-editor-container {
+                width: 100%;
+                height: calc(100vh - 420px);
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                min-height: 200px;
+            }
+        </style>
+
         <link rel="shortcut icon" href="/app/favicon.ico">
 
         <title>Bridge | Atic</title>
@@ -243,18 +259,8 @@
                     </ul>
 
 
-                    <div v-if="activeResultTab === 'json'" style="font-size: 12px">
-                        <div v-if="jsonData">
-                            <pre
-                                class="font-monospace mb-0"
-                                style="font-size: 12px; white-space: pre-wrap;"
-                                >{{ jsonData }}</pre>
-                            
-                            <!-- JSON.stringify(jsonData, null, 2) -->
-                        </div>
-                        <div v-else class="alert alert-secondary">
-                            No data
-                        </div>
+                    <div v-show="activeResultTab === 'json'">
+                        <div id="editor-json" class="ace-editor-container"></div>
                     </div>
 
                     <div v-if="activeResultTab === 'rdf-patch'" style="font-size: 12px">
@@ -318,7 +324,9 @@ var app = createApp({
             deleteConfirmIndex: null,
 
             defaultTemplate: `{{defaultTemplate}}
-`
+`,
+
+            aceEditor: null
         };
     },
 
@@ -348,6 +356,7 @@ var app = createApp({
     mounted() {
         this.getAuthMe();
         this.loadState();
+        this.initAceEditor();
     },
 
     watch: {
@@ -362,8 +371,13 @@ var app = createApp({
             handler() {
                 this.saveState();
             }
-        }
+        },
 
+        activeResultTab() {
+            if (this.aceEditor) {
+                this.aceEditor.resize(true);
+            }
+        }
     },
 
     methods: {
@@ -452,6 +466,10 @@ var app = createApp({
             this.rdfPatchResult = null;
             this.jsonData = null;
 
+            if (this.aceEditor) {
+                this.aceEditor.setValue("", 1);
+            }
+
             try {
                 const method = this.activeQuery.method;
                 const template = JSON.parse(this.activeQuery.content);
@@ -483,6 +501,7 @@ var app = createApp({
                     });
 
                     this.jsonData = response.data;
+                    this.updateJsonEditor(response.data);
                     this.activeResultTab = "json";
                 } else {
                     const data = JSON.parse(this.activeQuery.data);
@@ -607,6 +626,44 @@ var app = createApp({
         removeParam(index) {
             if (!this.activeQuery) return;
             this.activeQuery.params.splice(index, 1);
+        },
+
+        initAceEditor() {
+            ace.require("ace/lib/default_english_messages")
+                .defaultEnglishMessages["editor.tooltip.disable-editing"] = "";
+
+            const container = document.getElementById('editor-json');
+            if (!container) return;
+            this.aceEditor = ace.edit('editor-json');
+            this.aceEditor.setOptions({
+                useWorker: false,
+                fontSize: '13px',
+                readOnly: true,
+                highlightActiveLine: false,
+                showPrintMargin: false,
+                wrap: true,
+                enableBasicAutocompletion: false,
+                enableLiveAutocompletion: false,
+                tabSize: 2
+            });
+            this.aceEditor.setTheme('ace/theme/github');
+            this.aceEditor.session.setMode('ace/mode/json');
+            this.aceEditor.setOptions({
+                foldStyle: 'start',
+                showGutter: true,
+                displayIndentGuides: true,
+                highlightGutterLine: false
+            });
+            this.aceEditor.renderer.setScrollMargin(8, 8);
+        },
+
+        updateJsonEditor(json) {
+            if (!this.aceEditor) return;
+            const formatted = JSON.stringify(json, null, 4);
+            this.aceEditor.setValue(formatted, -1);
+            // Auto-fit to content and enable folding
+            this.aceEditor.session.getMode().getFoldStart = this.aceEditor.session.getFoldStart;
+            this.aceEditor.resize(true);
         }
     }
 
