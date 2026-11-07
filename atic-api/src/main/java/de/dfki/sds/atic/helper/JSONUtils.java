@@ -3,6 +3,7 @@ package de.dfki.sds.atic.helper;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONParserConfiguration;
 import org.json.JSONTokener;
@@ -37,6 +38,19 @@ public class JSONUtils {
         Object val = tokener.nextValue();
         
         if(val instanceof JSONObject obj) {
+            return obj;
+        }
+        
+        throw new RuntimeException("" + val.getClass());
+    }
+    
+    public static JSONArray parseOrderedArray(String source) {
+        
+        JSONTokener tokener = new OrderedJSONTokener(source);
+        
+        Object val = tokener.nextValue();
+        
+        if(val instanceof JSONArray obj) {
             return obj;
         }
         

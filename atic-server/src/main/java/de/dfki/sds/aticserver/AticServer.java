@@ -2273,7 +2273,7 @@ public class AticServer {
         InvocationContext ictx = fromJavalinContext(ctx);
         JSONObject json;
         try {
-            json = new JSONObject(ctx.body());
+            json = JSONUtils.parseOrdered(ctx.body());
         } catch (Exception ex) {
             throw new BadRequestResponse("Invalid JSON request body");
         }

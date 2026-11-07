@@ -1,5 +1,6 @@
 package de.dfki.sds.aticsqlite;
 
+import de.dfki.sds.atic.helper.JSONUtils;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -46,9 +47,7 @@ public class VueComponentStorage {
                                 rs.getString("name")
                         );
 
-                        component.setBridges(
-                                new JSONArray(rs.getString("bridges"))
-                        );
+                        component.setBridges(JSONUtils.parseOrderedArray(rs.getString("bridges")));
                         component.setScript(rs.getString("script"));
                         component.setTemplate(rs.getString("template"));
                         component.setStyle(rs.getString("style"));
@@ -76,9 +75,7 @@ public class VueComponentStorage {
                                     rs.getString("name")
                             );
 
-                            component.setBridges(
-                                    new JSONArray(rs.getString("bridges"))
-                            );
+                            component.setBridges(JSONUtils.parseOrderedArray(rs.getString("bridges")));
                             component.setScript(rs.getString("script"));
                             component.setTemplate(rs.getString("template"));
                             component.setStyle(rs.getString("style"));
@@ -110,9 +107,7 @@ public class VueComponentStorage {
                                     rs.getString("name")
                             );
 
-                            component.setBridges(
-                                    new JSONArray(rs.getString("bridges"))
-                            );
+                            component.setBridges(JSONUtils.parseOrderedArray(rs.getString("bridges")));
                             component.setScript(rs.getString("script"));
                             component.setTemplate(rs.getString("template"));
                             component.setStyle(rs.getString("style"));
