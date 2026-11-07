@@ -402,6 +402,7 @@ public class AticServer {
         routes.get("/vue-components", this::getVueComponents);
         routes.delete("/vue-components", this::deleteVueComponent);
         routes.get("/vue-sandbox/*", this::getVueSandbox);
+        routes.get("/vue-components/zip", this::getVueComponentsZip);
 
         // Fragment by URI (builds fragment using current settings)
         routes.get("/fragment/{uri}", this::getFragment);
@@ -2399,6 +2400,30 @@ public class AticServer {
         }
 
         ctx.result(content);
+    }
+
+    private void getVueComponentsZip(Context ctx) throws java.io.IOException {
+        File tempZip;
+        try {
+            tempZip = File.createTempFile("vue-components-", ".zip");
+            tempZip.deleteOnExit();
+        } catch (IOException e) {
+            ctx.status(500).result("Failed to create temp file: " + e.getMessage());
+            return;
+        }
+
+        try {
+            datasetGraph.executeRead(() -> datasetGraph.getVueComponentStorage().exportZip(tempZip));
+        } catch (RuntimeException e) {
+            tempZip.delete();
+            ctx.status(500).result("Failed to create zip: " + e.getMessage());
+            return;
+        }
+
+        String downloadName = "vue-components.zip";
+        ctx.header("Content-Disposition", "attachment; filename=\"" + downloadName + "\"");
+        ctx.contentType("application/zip");
+        ctx.result(new java.io.FileInputStream(tempZip));
     }
 
     //---------------------------------------

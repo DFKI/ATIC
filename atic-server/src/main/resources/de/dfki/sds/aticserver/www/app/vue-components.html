@@ -70,6 +70,11 @@
                                 @click="openNewComponent">
                             <i class="fa fa-plus me-1"></i> New Component
                         </button>
+                        <button type="button" class="btn btn-secondary ms-2"
+                                :disabled="components.length === 0"
+                                @click="downloadZip">
+                            <i class="fa fa-download me-1"></i> Download
+                        </button>
                     </h3>
                     <div v-if="loading" class="spinner-border text-primary" role="status" style="width: 1.5rem; height: 1.5rem;"
                          @click="loading = false">
@@ -733,6 +738,9 @@ createApp({
             axios.post('/auth/logout').then(response => {
                 window.location.href = response.data.redirect;
             });
+        },
+        downloadZip() {
+            window.open('/vue-components/zip', '_blank');
         },
         open_error_modal(msg) {
             this.error = msg;

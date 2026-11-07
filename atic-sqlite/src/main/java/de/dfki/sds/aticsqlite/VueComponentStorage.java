@@ -2,12 +2,17 @@ package de.dfki.sds.aticsqlite;
 
 import de.dfki.sds.atic.helper.JSONUtils;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.apache.commons.text.StringEscapeUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -186,6 +191,27 @@ public class VueComponentStorage {
         throw new RuntimeException("Not implemented: " + format);
     }
 
+    public void exportZip(File zipFile) {
+        List<VueComponent> components = loadAll();
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipFile))) {
+            for (VueComponent component : components) {
+                String dirPath = normalizePath(component.getPath());
+                String fileName = component.getName() + ".vue";
+                String entryPath = dirPath.isEmpty() || dirPath.equals("/")
+                        ? fileName
+                        : dirPath + "/" + fileName;
+
+                String content = asVue(component);
+                ZipEntry entry = new ZipEntry(entryPath);
+                zos.putNextEntry(entry);
+                zos.write(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                zos.closeEntry();
+            }
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
     private String asJs(VueComponent component, String componentsPath, String assetsPath) {
 
         StringBuilder sb = new StringBuilder();
@@ -199,6 +225,40 @@ public class VueComponentStorage {
         sb.insert(b + 1, "\n\ntemplate: `\n" + component.getTemplate() + "\n`,\n\n");
 
         //TODO do style later, there is no style: property in options API
+        return sb.toString();
+    }
+
+    private String asVue(VueComponent component) {
+        String script = component.getScript() == null ? "" : component.getScript();
+        String template = component.getTemplate() == null ? "" : component.getTemplate();
+        String style = component.getStyle() == null ? "" : component.getStyle();
+
+        String wrappedScript = includeBridges(script, BRIDGE_ENDPOINT, component.getBridges());
+
+        // Wrap the script content in export default { ... }
+        String exportScript;
+        int openBrace = wrappedScript.indexOf("export default {");
+        if (openBrace >= 0) {
+            exportScript = wrappedScript;
+        } else {
+            exportScript = "export default {\n" + wrappedScript + "\n}";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<script>\n");
+        sb.append(exportScript);
+        sb.append("\n</script>\n\n");
+
+        sb.append("<template>\n");
+        sb.append(template);
+        sb.append("\n</template>\n\n");
+
+        if (!style.isBlank()) {
+            sb.append("<style scoped>\n");
+            sb.append(style);
+            sb.append("\n</style>\n");
+        }
+
         return sb.toString();
     }
 
