@@ -10,6 +10,7 @@ import de.dfki.sds.atic.ac.PermissionDeniedException;
 import de.dfki.sds.atic.ac.Principal;
 import de.dfki.sds.atic.ac.PrincipalPermission;
 import de.dfki.sds.atic.ac.User;
+import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.agent.Attachment;
 import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.Session;
@@ -135,6 +136,8 @@ import org.mindrot.jbcrypt.BCrypt;
 public class AticServer {
 
     private static final Logger LOGGER = Logger.getLogger(AticServer.class.getName());
+
+    public static final String ATIC_ADMIN_SECRET_ENV = "ATIC_ADMIN_SECRET";
 
     private Javalin app;
 
@@ -287,7 +290,7 @@ public class AticServer {
         datasetGraph.close();
         app.stop();
     }
-    
+
     // Configuration-Driven CRUD Endpoints (CDCE)
     private void initCDCE(RoutesConfig routes) {
         if (!cdceFolder.exists() || !cdceFolder.isDirectory()) {
@@ -349,6 +352,9 @@ public class AticServer {
         routes.get("/auth/me", this::getAuthMe);
         routes.post("/auth/logout", this::postLogout);
         routes.put("/auth/password", this::putPassword);
+        if(config.isAdminsecretEnabled() || config.isSwitchuserEnabled()) {
+            routes.post("/auth/su/{username}", this::postSwitchUser);
+        }
 
         routes.get("/config", this::getAllConfig);
         routes.get("/config/{name}", this::getSingleConfig);
@@ -2528,20 +2534,7 @@ public class AticServer {
             return;
         }
 
-        String jwt = JwtUtil.createToken(user);
-
-        Cookie cookie = new Cookie("access_token", jwt);
-        cookie.setHttpOnly(true);
-        cookie.setPath("/"); // send on every request
-        cookie.setMaxAge(60 * 60 * 24); // 1 hour
-        cookie.setSecure(ctx.req().isSecure());
-        ctx.cookie(cookie);
-
-        ctx.json(Map.of(
-                "access_token", jwt,
-                "successful", true,
-                "redirect", getConfig().getLandingpage()
-        ));
+        giveToken(user, ctx);
     }
 
     private void postLogout(Context ctx) {
@@ -2594,6 +2587,92 @@ public class AticServer {
         }
     }
 
+    private void postSwitchUser(Context ctx) {
+        String username = ctx.pathParam("username");
+
+        String token = getToken(ctx);
+
+        //1. token is secret and /auth/su/admin is used
+        if (config.isAdminsecretEnabled()) {
+            if (username.equals(UserGroupManagement.ADMIN_USERNAME)) {
+                String secret = Objects.requireNonNull(
+                        System.getProperty(ATIC_ADMIN_SECRET_ENV,
+                                System.getenv(ATIC_ADMIN_SECRET_ENV)),
+                        ATIC_ADMIN_SECRET_ENV + " configuration missing"
+                );
+
+                if (token.equals(secret)) {
+                    User user;
+                    try {
+                        user = Txn.calculateRead(datasetGraph, () -> {
+                            return datasetGraph.getUser(username, InvocationContext.EMPTY);
+                        });
+
+                    } catch (IllegalStateException ex) {
+                        ctx.status(401);
+                        ctx.json(Map.of("successful", false));
+                        return;
+                    }
+
+                    giveToken(user, ctx);
+                    return;
+                } else {
+                    ctx.status(401);
+                    ctx.json(Map.of("successful", false));
+                    return;
+                }
+            }
+        }
+
+        //2. token is admin token and /auth/su/user is used
+        if (config.isSwitchuserEnabled()) {
+            try {
+
+                //authenticated user needs to be admin
+                JSONObject payload = JwtUtil.validateToken(token);
+                String type = payload.getString("type");
+                String un = payload.getString("username");
+                if (type.equals("user") && un.equals(UserGroupManagement.ADMIN_USERNAME)) {
+                    User user;
+                    try {
+                        user = Txn.calculateRead(datasetGraph, () -> {
+                            return datasetGraph.getUser(username, InvocationContext.EMPTY);
+                        });
+
+                    } catch (IllegalStateException ex) {
+                        ctx.status(401);
+                        ctx.json(Map.of("successful", false));
+                        return;
+                    }
+
+                    giveToken(user, ctx);
+                } else {
+                    throw new UnauthorizedResponse("Unauthorized: admin required");
+                }
+
+            } catch (JWTVerificationException e) {
+                throw new UnauthorizedResponse("Unauthorized: " + e.getMessage());
+            }
+        }
+    }
+
+    private void giveToken(User user, Context ctx) {
+        String jwt = JwtUtil.createToken(user);
+
+        Cookie cookie = new Cookie("access_token", jwt);
+        cookie.setHttpOnly(true);
+        cookie.setPath("/"); // send on every request
+        cookie.setMaxAge(60 * 60 * 24); // 1 hour
+        cookie.setSecure(ctx.req().isSecure());
+        ctx.cookie(cookie);
+
+        ctx.json(Map.of(
+                "access_token", jwt,
+                "successful", true,
+                "redirect", getConfig().getLandingpage()
+        ));
+    }
+
     private void authorizationMiddleware(Context ctx) {
         if (ctx.method() == HandlerType.OPTIONS) {
             return;
@@ -2609,6 +2688,12 @@ public class AticServer {
                 || path.equals("/auth/register")
                 || path.startsWith("/app")) {
             return;
+        }
+
+        if (config.isAdminsecretEnabled() || config.isSwitchuserEnabled()) {
+            if (path.startsWith("/auth/su/")) {
+                return;
+            }
         }
 
         String token = getToken(ctx);
