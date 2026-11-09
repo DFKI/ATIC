@@ -26,6 +26,9 @@ public class AticConfig {
     @Config(value = "cdce.endpoint.path", description = "Path where Configuration-Driven CRUD Endpoints are registered")
     String cdceEndpointPath = "/api";
     
+    @Config(value = "registration", description = "Users can register on their own")
+    boolean registration = true;
+    
     @Config(value = "print.log", description = "Prints what is logged")
     boolean printLog = true;
     
@@ -193,6 +196,10 @@ PREFIX ex: <http://example.org/>
 
     public boolean isInvexEnabled() {
         return invex;
+    }
+
+    public boolean isRegistrationEnabled() {
+        return registration;
     }
     
 }

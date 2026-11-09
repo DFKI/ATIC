@@ -329,10 +329,15 @@ public class AticServer {
         routes.get("/app", ctx -> ctx.redirect("/app/login.html"));
         routes.get("/app/login.html", this::getAppLogin);
 
+        if(config.isRegistrationEnabled()) {
+            routes.post("/auth/register", this::postRegister);
+        } else {
+            routes.get("/app/reg.html", ctx -> {  ctx.status(404); });
+        }
+        
         routes.get("/about", this::getAbout);
 
         routes.post("/auth/token", this::postToken);
-        routes.post("/auth/register", this::postRegister);
         routes.get("/auth/me", this::getAuthMe);
         routes.post("/auth/logout", this::postLogout);
         routes.put("/auth/password", this::putPassword);
