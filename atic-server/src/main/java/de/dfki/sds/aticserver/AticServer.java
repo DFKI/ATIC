@@ -274,10 +274,20 @@ public class AticServer {
             }
         });
 
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOGGER.info("Received shutdown signal. Stopping server...");
+            close();
+        }, "shutdown-hook"));
+
         app.start(config.getHost(), config.getPort());
         LOGGER.info(() -> "atic server running at http://" + config.getHost() + ":" + config.getPort());
     }
 
+    public void close() {
+        datasetGraph.close();
+        app.stop();
+    }
+    
     // Configuration-Driven CRUD Endpoints (CDCE)
     private void initCDCE(RoutesConfig routes) {
         if (!cdceFolder.exists() || !cdceFolder.isDirectory()) {
@@ -318,10 +328,6 @@ public class AticServer {
         moleculeEndpoint.register(routes, "", datasetGraph);
     }
 
-    public void close() {
-        app.stop();
-    }
-
     private void initRoutes(RoutesConfig routes) {
         routes.before("/*", this::authorizationMiddleware);
 
@@ -329,12 +335,14 @@ public class AticServer {
         routes.get("/app", ctx -> ctx.redirect("/app/login.html"));
         routes.get("/app/login.html", this::getAppLogin);
 
-        if(config.isRegistrationEnabled()) {
+        if (config.isRegistrationEnabled()) {
             routes.post("/auth/register", this::postRegister);
         } else {
-            routes.get("/app/reg.html", ctx -> {  ctx.status(404); });
+            routes.get("/app/reg.html", ctx -> {
+                ctx.status(404);
+            });
         }
-        
+
         routes.get("/about", this::getAbout);
 
         routes.post("/auth/token", this::postToken);
@@ -1804,11 +1812,11 @@ public class AticServer {
                             ictx
                     );
                 });
-                
+
                 String stringRepr;
-                if(result instanceof JSONObject jsonObj) {
+                if (result instanceof JSONObject jsonObj) {
                     stringRepr = jsonObj.toString(2);
-                } else if(result instanceof JSONArray jsonArr) {
+                } else if (result instanceof JSONArray jsonArr) {
                     stringRepr = jsonArr.toString(2);
                 } else {
                     stringRepr = result.toString();
