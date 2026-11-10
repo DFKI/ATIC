@@ -26,8 +26,17 @@ public class AticConfig {
     @Config(value = "cdce.endpoint.path", description = "Path where Configuration-Driven CRUD Endpoints are registered")
     String cdceEndpointPath = "/api";
     
+    @Config(value = "registration", description = "Users can register on their own")
+    boolean registration = true;
+    
     @Config(value = "print.log", description = "Prints what is logged")
     boolean printLog = true;
+    
+    @Config(value = "adminsecret", description = "Use a secret "+ AticServer.ATIC_ADMIN_SECRET_ENV +" to become admin")
+    boolean adminsecret = false;
+    
+    @Config(value = "switchuser", description = "As admin be able to switch user")
+    boolean switchuser = false;
     
     @Config(value = "locale", description = "Locale (e.g. en, de)")
     String locale = "en";
@@ -193,6 +202,18 @@ PREFIX ex: <http://example.org/>
 
     public boolean isInvexEnabled() {
         return invex;
+    }
+
+    public boolean isRegistrationEnabled() {
+        return registration;
+    }
+
+    public boolean isAdminsecretEnabled() {
+        return adminsecret;
+    }
+
+    public boolean isSwitchuserEnabled() {
+        return switchuser;
     }
     
 }

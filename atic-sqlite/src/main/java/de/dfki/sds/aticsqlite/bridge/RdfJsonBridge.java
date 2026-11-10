@@ -129,7 +129,7 @@ public class RdfJsonBridge {
                 );
             }
 
-            JSONObject result = new JSONObject();
+            JSONObject result = JSONUtils.createJSONObject();
 
             for (String key : obj.keySet()) {
 
@@ -151,8 +151,7 @@ public class RdfJsonBridge {
 
         if (node instanceof JSONArray array) {
 
-            JSONArray result
-                    = new JSONArray();
+            JSONArray result = new JSONArray();
 
             for (Object item : array) {
 
@@ -182,6 +181,8 @@ public class RdfJsonBridge {
             Map<Var, List<Node>> binding,
             PrefixMapping prefixes
     ) {
+        String mergeValue = template.optString("$merge", "merge");
+        ResultSetJsonMapper.Merging merging = ResultSetJsonMapper.Merging.valueOf(mergeValue.toUpperCase());
 
         Map<Var, List<Node>> bindingCopy = new HashMap<>(binding);
 
@@ -190,7 +191,8 @@ public class RdfJsonBridge {
                         template,
                         root,
                         binding,
-                        false
+                        false,
+                        ctx
                 );
 
         LOG.debug("SPARQL:\n{}", sparql);
@@ -226,6 +228,7 @@ public class RdfJsonBridge {
                     ctx,
                     binding,
                     prefixes,
+                    merging,
                     (JSONObject childTemplate, Map<Var, List<Node>> childBinding) -> executeQuery(
                             inherit(template, childTemplate),
                             root,
@@ -311,7 +314,8 @@ public class RdfJsonBridge {
                 template,
                 root,
                 binding,
-                true
+                true,
+                ctx
         );
 
         LOG.debug("Pagination COUNT SPARQL:\n{}", countSparql);
@@ -355,7 +359,7 @@ public class RdfJsonBridge {
         JSONArray pages = new JSONArray();
         for (long page = 1; page <= totalPages; page++) {
             long pageOffset = (page - 1) * size;
-            pages.put(new JSONObject()
+            pages.put(JSONUtils.createJSONObject()
                     .put("offset", pageOffset)
                     .put("label", String.valueOf(page))
                     .put("number", page));
@@ -460,7 +464,7 @@ public class RdfJsonBridge {
     }
 
     private JSONObject inherit(JSONObject parentTemplate, JSONObject childTemplate) {
-        JSONObject retTemplate = new JSONObject(childTemplate.toString());
+        JSONObject retTemplate = JSONUtils.parseOrdered(childTemplate.toString());
 
         if (parentTemplate.has("$from")
                 && !retTemplate.has("$from")
@@ -511,7 +515,7 @@ public class RdfJsonBridge {
                 Object parsed = trimmed;
 
                 if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-                    parsed = new JSONObject(trimmed);
+                    parsed = JSONUtils.parseOrdered(trimmed);
                 } else if ("true".equalsIgnoreCase(trimmed)
                         || "false".equalsIgnoreCase(trimmed)) {
                     parsed = Boolean.parseBoolean(trimmed);
@@ -565,8 +569,16 @@ public class RdfJsonBridge {
         if (context != null) {
             loadPrefixes(context, prefixes);
         }
+        
+        Map<Var, List<Node>> binding = new HashMap<>();
 
-        //TODO use queryParams
+        //if $default is there bindings are set
+        initDefault(template, prefixes, binding);
+        
+        //turn query params to bindings
+        //here query params get higher priority and overwrite $default
+        initQueryParams(queryParams, prefixes, binding);
+
         walk(
                 data,
                 template,
@@ -574,6 +586,7 @@ public class RdfJsonBridge {
                 uriSupplier,
                 method,
                 payload,
+                binding,
                 datasetGraph,
                 ctx
         );
@@ -634,8 +647,10 @@ public class RdfJsonBridge {
                 //so we delete the queried triples and insert the given ones to simulate a PUT
 
                 //we modify the template: we remove limit so everything is queried and overwritten by PUT
-                JSONObject templateCopy = new JSONObject(template.toString());
+                JSONObject templateCopy = JSONUtils.parseOrdered(template.toString());
                 removeAll(templateCopy, "$limit");
+                removeAll(templateCopy, "$offset");
+                removeAll(templateCopy, "$pagination");
 
                 Object dataFromQuery = toJson(queryParams, templateCopy, datasetGraph, ctx);
 
@@ -693,6 +708,7 @@ public class RdfJsonBridge {
             Supplier<String> uriSupplier,
             String method,
             DatasetGraph payload,
+            Map<Var, List<Node>> binding,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx
     ) {
@@ -710,6 +726,18 @@ public class RdfJsonBridge {
 
             Object map = templateObj.get("$map");
             JSONArray where = templateObj.getJSONArray("$where");
+            
+            //special $where for methods if exists 
+            if(method.equals("POST") && templateObj.has("$post")) {
+                where = templateObj.getJSONArray("$post");
+            } else if(method.equals("PUT") && templateObj.has("$put")) {
+                where = templateObj.getJSONArray("$put");
+            } else if(method.equals("PATCH") && templateObj.has("$patch")) {
+                where = templateObj.getJSONArray("$patch");
+            } else if(method.equals("DELETE") && templateObj.has("$delete")) {
+                where = templateObj.getJSONArray("$delete");
+            }
+            
 
             ParsedTemplate parsed = parseWhere(
                     map,
@@ -727,6 +755,7 @@ public class RdfJsonBridge {
                         uriSupplier,
                         method,
                         payload,
+                        binding,
                         datasetGraph,
                         ctx
                 );
@@ -745,6 +774,7 @@ public class RdfJsonBridge {
                                 uriSupplier,
                                 method,
                                 payload,
+                                binding,
                                 datasetGraph,
                                 ctx
                         );
@@ -784,6 +814,7 @@ public class RdfJsonBridge {
                                 uriSupplier,
                                 method,
                                 payload,
+                                binding,
                                 datasetGraph,
                                 ctx
                         );
@@ -814,6 +845,7 @@ public class RdfJsonBridge {
                     uriSupplier,
                     method,
                     payload,
+                    binding,
                     datasetGraph,
                     ctx
             );
@@ -828,6 +860,7 @@ public class RdfJsonBridge {
             Supplier<String> uriSupplier,
             String method,
             DatasetGraph payload,
+            Map<Var, List<Node>> initBindings,
             AticDatasetGraph datasetGraph,
             InvocationContext ctx
     ) {
@@ -837,7 +870,7 @@ public class RdfJsonBridge {
          * Variable bindings established while materializing this object.
          */
         //Map<Var, Node> bindings = new HashMap<>();
-        Map<Var, List<Node>> bindings = new HashMap<>();
+        Map<Var, List<Node>> bindings = new HashMap<>(initBindings);
 
         /*
          * Root subject.
@@ -1164,16 +1197,13 @@ public class RdfJsonBridge {
 
         List<Triple> triples = new ArrayList<>();
 
-        Map<String, Triple> jsonMappings
-                = new LinkedHashMap<>();
+        Map<String, Triple> jsonMappings = new LinkedHashMap<>();
 
-        Set<Var> literalVariables
-                = new HashSet<>();
+        Set<Var> literalVariables = new HashSet<>();
 
         Var rootVariable = null;
 
-        Map<String, Var> mappedVariables
-                = new HashMap<>();
+        Map<String, Var> mappedVariables = new HashMap<>();
 
         Var directVariable = null;
 
@@ -1200,7 +1230,7 @@ public class RdfJsonBridge {
                         )
                 );
 
-                if (key.equals("@id")) {
+                if (key.equals("@id") || key.equals("$fragment")) {
                     rootVariable
                             = Var.alloc(
                                     s.substring(1)

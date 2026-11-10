@@ -10,6 +10,7 @@ import de.dfki.sds.atic.ac.PermissionDeniedException;
 import de.dfki.sds.atic.ac.Principal;
 import de.dfki.sds.atic.ac.PrincipalPermission;
 import de.dfki.sds.atic.ac.User;
+import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.agent.Attachment;
 import de.dfki.sds.atic.agent.Message;
 import de.dfki.sds.atic.agent.Session;
@@ -26,7 +27,6 @@ import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
 import de.dfki.sds.atic.jenatic.Fragment;
 import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.InvocationContext;
-import de.dfki.sds.aticsqlite.AticGraphUtils;
 import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
@@ -38,16 +38,19 @@ import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph.OntologyFormat;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
+import de.dfki.sds.aticsqlite.VueComponent;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import de.dfki.sds.rdfpatchsqlite.Converter;
 import io.javalin.Javalin;
 import io.javalin.config.JavalinConfig;
 import io.javalin.config.RoutesConfig;
+import io.javalin.http.BadRequestResponse;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import io.javalin.http.Cookie;
 import io.javalin.http.HandlerType;
 import io.javalin.http.HttpStatus;
+import io.javalin.http.NotFoundResponse;
 import io.javalin.http.UnauthorizedResponse;
 import io.javalin.http.UploadedFile;
 import io.javalin.http.sse.SseClient;
@@ -61,7 +64,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.net.URLEncoder;
@@ -77,9 +79,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
@@ -105,7 +107,6 @@ import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.TxnType;
 import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
 import org.apache.jena.rdfpatch.changes.RDFChangesBase;
@@ -122,7 +123,6 @@ import org.apache.jena.update.UpdateExecution;
 import org.apache.jena.update.UpdateExecutionFactory;
 import org.apache.jena.update.UpdateFactory;
 import org.apache.jena.update.UpdateRequest;
-import org.apache.jena.vocabulary.OWL;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
 import org.apache.jena.vocabulary.VOID;
@@ -137,6 +137,8 @@ import org.mindrot.jbcrypt.BCrypt;
 public class AticServer {
 
     private static final Logger LOGGER = Logger.getLogger(AticServer.class.getName());
+
+    public static final String ATIC_ADMIN_SECRET_ENV = "ATIC_ADMIN_SECRET";
 
     private Javalin app;
 
@@ -276,8 +278,18 @@ public class AticServer {
             }
         });
 
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOGGER.info("Received shutdown signal. Stopping server...");
+            close();
+        }, "shutdown-hook"));
+
         app.start(config.getHost(), config.getPort());
         LOGGER.info(() -> "atic server running at http://" + config.getHost() + ":" + config.getPort());
+    }
+
+    public void close() {
+        datasetGraph.close();
+        app.stop();
     }
 
     // Configuration-Driven CRUD Endpoints (CDCE)
@@ -320,10 +332,6 @@ public class AticServer {
         moleculeEndpoint.register(routes, "", datasetGraph);
     }
 
-    public void close() {
-        app.stop();
-    }
-
     private void initRoutes(RoutesConfig routes) {
         routes.before("/*", this::authorizationMiddleware);
 
@@ -331,13 +339,23 @@ public class AticServer {
         routes.get("/app", ctx -> ctx.redirect("/app/login.html"));
         routes.get("/app/login.html", this::getAppLogin);
 
+        if (config.isRegistrationEnabled()) {
+            routes.post("/auth/register", this::postRegister);
+        } else {
+            routes.get("/app/reg.html", ctx -> {
+                ctx.status(404);
+            });
+        }
+
         routes.get("/about", this::getAbout);
 
         routes.post("/auth/token", this::postToken);
-        routes.post("/auth/register", this::postRegister);
         routes.get("/auth/me", this::getAuthMe);
         routes.post("/auth/logout", this::postLogout);
         routes.put("/auth/password", this::putPassword);
+        if(config.isAdminsecretEnabled() || config.isSwitchuserEnabled()) {
+            routes.post("/auth/su/{username}", this::postSwitchUser);
+        }
 
         routes.get("/config", this::getAllConfig);
         routes.get("/config/{name}", this::getSingleConfig);
@@ -399,6 +417,12 @@ public class AticServer {
         routes.get("/fragment/settings", this::getFragmentSettings);
         routes.get("/fragment/settings/all", this::getFragmentSettingsAll);
         routes.delete("/fragment/settings", this::deleteFragmentSettings);
+
+        routes.post("/vue-components", this::postVueComponent);
+        routes.get("/vue-components", this::getVueComponents);
+        routes.delete("/vue-components", this::deleteVueComponent);
+        routes.get("/vue-sandbox/*", this::getVueSandbox);
+        routes.get("/vue-components/zip", this::getVueComponentsZip);
 
         // Fragment by URI (builds fragment using current settings)
         routes.get("/fragment/{uri}", this::getFragment);
@@ -707,28 +731,28 @@ public class AticServer {
             // Class declarations: owl:Class, rdfs:Class
             if ("http://www.w3.org/2002/07/owl#Class"
                     .equals(objUri)
-                || "http://www.w3.org/2000/01/rdf-schema#Class"
-                    .equals(objUri)) {
+                    || "http://www.w3.org/2000/01/rdf-schema#Class"
+                            .equals(objUri)) {
                 return 0; // classes first
             }
 
             // Property declarations
             if ("http://www.w3.org/2002/07/owl#ObjectProperty"
                     .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#DatatypeProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#FunctionalProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#InverseFunctionalProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#SymmetricProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#AsymmetricProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/2002/07/owl#TransitiveProperty"
-                    .equals(objUri)
-                || "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"
-                    .equals(objUri)) {
+                    || "http://www.w3.org/2002/07/owl#DatatypeProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/2002/07/owl#FunctionalProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/2002/07/owl#InverseFunctionalProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/2002/07/owl#SymmetricProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/2002/07/owl#AsymmetricProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/2002/07/owl#TransitiveProperty"
+                            .equals(objUri)
+                    || "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"
+                            .equals(objUri)) {
                 return 1; // properties second
             }
         }
@@ -747,10 +771,10 @@ public class AticServer {
 
         if (node.isLiteral()) {
             return "L:" + node.getLiteralLexicalForm()
-                + "|lang=" + Objects.toString(
-                    node.getLiteralLanguage(), "")
-                + "|datatype=" + Objects.toString(
-                    node.getLiteralDatatypeURI(), "");
+                    + "|lang=" + Objects.toString(
+                            node.getLiteralLanguage(), "")
+                    + "|datatype=" + Objects.toString(
+                            node.getLiteralDatatypeURI(), "");
         }
 
         return node.toString();
@@ -777,10 +801,10 @@ public class AticServer {
         // then owl:ObjectProperty/owl:DatatypeProperty/rdf:Property,
         // then everything else.
         Comparator<Triple> classFirst = Comparator
-            .comparing((Triple t) -> category(t))
-            .thenComparing(t -> nodeKey(t.getSubject()))
-            .thenComparing(t -> nodeKey(t.getPredicate()))
-            .thenComparing(t -> nodeKey(t.getObject()));
+                .comparing((Triple t) -> category(t))
+                .thenComparing(t -> nodeKey(t.getSubject()))
+                .thenComparing(t -> nodeKey(t.getPredicate()))
+                .thenComparing(t -> nodeKey(t.getObject()));
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         OrderedTurtleWriter.writeSorted(out, ontology, classFirst);
@@ -793,20 +817,20 @@ public class AticServer {
         JSONObject jsonConf = new JSONObject(ctx.body());
         String uri = jsonConf.getString("uri");
 
-        Map<Node, JSONObject> map = datasetGraph.calculateRead(() -> {
+        List<JSONObject> templates = datasetGraph.calculateRead(() -> {
             AticGraph graph = datasetGraph.getGraph(NodeFactory.createURI(uri), ictx);
             return datasetGraph.deriveBridgeTemplatesFromABox(graph, ictx);
         });
 
         JSONArray result = new JSONArray();
 
-        map.entrySet().stream()
-                .sorted(Comparator.comparing(entry -> entry.getKey().getURI()))
+        templates.stream()
+                .sorted(Comparator.comparing(entry -> entry.getString("$wasDerivedFrom")))
                 .forEach(entry -> {
                     JSONObject item = new JSONObject();
-                    item.put("uri", entry.getKey().getURI());
-                    item.put("name", AticGraphUtils.getLocalName(entry.getKey().getURI()));
-                    item.put("template", entry.getValue());
+                    item.put("uri", entry.getString("$wasDerivedFrom"));
+                    item.put("name", entry.getString("$name"));
+                    item.put("template", entry);
                     result.put(item);
                 });
 
@@ -1800,10 +1824,10 @@ public class AticServer {
         }
 
         InvocationContext ictx = fromJavalinContext(ctx);
-        
+
         //per call an instance
         RdfJsonBridge rdfJsonBridge = new RdfJsonBridge();
-        
+
         //invocation context decides fragment settings
         datasetGraph.executeRead(() -> {
             rdfJsonBridge.setFragmentSettings(this.datasetGraph.getFragmentStorage().suggestSettings(ictx));
@@ -1817,10 +1841,7 @@ public class AticServer {
                 Map<String, List<String>> queryParams
                         = ctx.queryParamMap();
 
-                JSONObject template
-                        = new JSONObject(
-                                ctx.body()
-                        );
+                JSONObject template = JSONUtils.parseOrdered(ctx.body());
 
                 Object result = datasetGraph.calculateRead(() -> {
                     return rdfJsonBridge.toJson(
@@ -1831,7 +1852,16 @@ public class AticServer {
                     );
                 });
 
-                ctx.json(result.toString());
+                String stringRepr;
+                if (result instanceof JSONObject jsonObj) {
+                    stringRepr = jsonObj.toString(2);
+                } else if (result instanceof JSONArray jsonArr) {
+                    stringRepr = jsonArr.toString(2);
+                } else {
+                    stringRepr = result.toString();
+                }
+
+                ctx.json(stringRepr);
 
                 break;
 
@@ -1840,13 +1870,9 @@ public class AticServer {
             case "PATCH":
             case "DELETE":
 
-                Map<String, List<String>> queryParamsForPatch
-                        = ctx.queryParamMap();
+                Map<String, List<String>> queryParamsForPatch = ctx.queryParamMap();
 
-                JSONObject request
-                        = new JSONObject(
-                                ctx.body()
-                        );
+                JSONObject request = new JSONObject(ctx.body());
 
                 RDFPatch patch = datasetGraph.calculateRead(() -> {
                     return rdfJsonBridge.toPatch(
@@ -2294,6 +2320,164 @@ public class AticServer {
         }
     }
 
+    //--------------------------------------
+    //Vue Components CRUD
+    private void postVueComponent(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        JSONObject json;
+        try {
+            json = JSONUtils.parseOrdered(ctx.body());
+        } catch (Exception ex) {
+            throw new BadRequestResponse("Invalid JSON request body");
+        }
+
+        VueComponent component;
+        try {
+            component = VueComponent.fromJson(json);
+            if (component.getPath().isBlank() || component.getName().isBlank()) {
+                throw new BadRequestResponse("'path' and 'name' are required");
+            }
+            if (!(json.opt("bridges") instanceof JSONArray)) {
+                throw new BadRequestResponse("'bridges' must be a JSON array");
+            }
+        } catch (BadRequestResponse ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BadRequestResponse("Invalid Vue component JSON");
+        }
+
+        datasetGraph.executeWrite(() -> datasetGraph.getVueComponentStorage().save(component, ictx));
+        ctx.status(201).json(component.toJson().toString(4));
+    }
+
+    private void getVueComponents(Context ctx) {
+        String path = ctx.queryParam("path");
+        String name = ctx.queryParam("name");
+
+        if (name != null && path == null) {
+            throw new BadRequestResponse("'path' is required when 'name' is provided");
+        }
+        if (path != null && path.isBlank()) {
+            throw new BadRequestResponse("'path' must not be blank");
+        }
+        if (name != null && name.isBlank()) {
+            throw new BadRequestResponse("'name' must not be blank");
+        }
+
+        if (path != null && name != null) {
+            VueComponent component = datasetGraph.calculateRead(() -> datasetGraph.getVueComponentStorage().load(path, name));
+            if (component == null) {
+                throw new NotFoundResponse("Vue component not found");
+            }
+            ctx.json(component.toJson().toString(4));
+        } else if (path != null) {
+            List<VueComponent> components = datasetGraph.calculateRead(() -> datasetGraph.getVueComponentStorage().loadByPath(path));
+            JSONArray result = new JSONArray();
+            for (VueComponent component : components) {
+                result.put(component.toJson());
+            }
+            ctx.json(result.toString(4));
+        } else {
+            List<VueComponent> components = datasetGraph.calculateRead(() -> datasetGraph.getVueComponentStorage().loadAll());
+            JSONArray result = new JSONArray();
+            for (VueComponent component : components) {
+                result.put(component.toJson());
+            }
+            ctx.json(result.toString(4));
+        }
+    }
+
+    private void deleteVueComponent(Context ctx) {
+        String path = ctx.queryParam("path");
+        String name = ctx.queryParam("name");
+        if (path == null || path.isBlank() || name == null || name.isBlank()) {
+            throw new BadRequestResponse("Query parameters 'path' and 'name' are required");
+        }
+
+        VueComponent existing = datasetGraph.calculateRead(() -> datasetGraph.getVueComponentStorage().load(path, name));
+        if (existing == null) {
+            throw new NotFoundResponse("Vue component not found");
+        }
+
+        datasetGraph.executeWrite(() -> datasetGraph.getVueComponentStorage().delete(path, name));
+        ctx.status(204);
+    }
+
+    private void getVueSandbox(Context ctx) {
+        String prefix = "/vue-sandbox/";
+        String requestPath = ctx.path();
+
+        if (!requestPath.startsWith(prefix)) {
+            ctx.status(404);
+            return;
+        }
+
+        String relativePath = requestPath.substring(prefix.length());
+        int lastDot = relativePath.lastIndexOf('.');
+
+        if (lastDot < 0) {
+            ctx.status(404);
+            return;
+        }
+
+        String format = relativePath.substring(lastDot + 1);
+        if (!format.equals("html") && !format.equals("js")) {
+            ctx.status(404);
+            return;
+        }
+
+        relativePath = relativePath.substring(0, lastDot);
+
+        int lastSlash = relativePath.lastIndexOf('/');
+        String path = lastSlash >= 0 ? relativePath.substring(0, lastSlash) : "";
+        String name = lastSlash >= 0 ? relativePath.substring(lastSlash + 1) : relativePath;
+
+        if (name.isBlank()) {
+            ctx.status(404);
+            return;
+        }
+
+        String finalPath = path.isBlank() ? "/" : "/" + path;
+
+        String content = datasetGraph.calculateRead(()
+                -> datasetGraph.getVueComponentStorage().loadAs(
+                        finalPath, name, "/app/", "/vue-sandbox/", format
+                )
+        );
+
+        if ("html".equals(format)) {
+            ctx.contentType("text/html; charset=utf-8");
+        } else {
+            ctx.contentType("application/javascript; charset=utf-8");
+        }
+
+        ctx.result(content);
+    }
+
+    private void getVueComponentsZip(Context ctx) throws java.io.IOException {
+        File tempZip;
+        try {
+            tempZip = File.createTempFile("vue-components-", ".zip");
+            tempZip.deleteOnExit();
+        } catch (IOException e) {
+            ctx.status(500).result("Failed to create temp file: " + e.getMessage());
+            return;
+        }
+
+        try {
+            datasetGraph.executeRead(() -> datasetGraph.getVueComponentStorage().exportZip(tempZip));
+        } catch (RuntimeException e) {
+            tempZip.delete();
+            ctx.status(500).result("Failed to create zip: " + e.getMessage());
+            return;
+        }
+
+        String downloadName = "vue-components.zip";
+        ctx.header("Content-Disposition", "attachment; filename=\"" + downloadName + "\"");
+        ctx.contentType("application/zip");
+        ctx.result(new java.io.FileInputStream(tempZip));
+    }
+
     //---------------------------------------
     //auth
     private void postRegister(Context ctx) {
@@ -2383,20 +2567,7 @@ public class AticServer {
             return;
         }
 
-        String jwt = JwtUtil.createToken(user);
-
-        Cookie cookie = new Cookie("access_token", jwt);
-        cookie.setHttpOnly(true);
-        cookie.setPath("/"); // send on every request
-        cookie.setMaxAge(60 * 60 * 24); // 1 hour
-        cookie.setSecure(ctx.req().isSecure());
-        ctx.cookie(cookie);
-
-        ctx.json(Map.of(
-                "access_token", jwt,
-                "successful", true,
-                "redirect", getConfig().getLandingpage()
-        ));
+        giveToken(user, ctx);
     }
 
     private void postLogout(Context ctx) {
@@ -2449,6 +2620,92 @@ public class AticServer {
         }
     }
 
+    private void postSwitchUser(Context ctx) {
+        String username = ctx.pathParam("username");
+
+        String token = getToken(ctx);
+
+        //1. token is secret and /auth/su/admin is used
+        if (config.isAdminsecretEnabled()) {
+            if (username.equals(UserGroupManagement.ADMIN_USERNAME)) {
+                String secret = Objects.requireNonNull(
+                        System.getProperty(ATIC_ADMIN_SECRET_ENV,
+                                System.getenv(ATIC_ADMIN_SECRET_ENV)),
+                        ATIC_ADMIN_SECRET_ENV + " configuration missing"
+                );
+
+                if (token.equals(secret)) {
+                    User user;
+                    try {
+                        user = Txn.calculateRead(datasetGraph, () -> {
+                            return datasetGraph.getUser(username, InvocationContext.EMPTY);
+                        });
+
+                    } catch (IllegalStateException ex) {
+                        ctx.status(401);
+                        ctx.json(Map.of("successful", false));
+                        return;
+                    }
+
+                    giveToken(user, ctx);
+                    return;
+                } else {
+                    ctx.status(401);
+                    ctx.json(Map.of("successful", false));
+                    return;
+                }
+            }
+        }
+
+        //2. token is admin token and /auth/su/user is used
+        if (config.isSwitchuserEnabled()) {
+            try {
+
+                //authenticated user needs to be admin
+                JSONObject payload = JwtUtil.validateToken(token);
+                String type = payload.getString("type");
+                String un = payload.getString("username");
+                if (type.equals("user") && un.equals(UserGroupManagement.ADMIN_USERNAME)) {
+                    User user;
+                    try {
+                        user = Txn.calculateRead(datasetGraph, () -> {
+                            return datasetGraph.getUser(username, InvocationContext.EMPTY);
+                        });
+
+                    } catch (IllegalStateException ex) {
+                        ctx.status(401);
+                        ctx.json(Map.of("successful", false));
+                        return;
+                    }
+
+                    giveToken(user, ctx);
+                } else {
+                    throw new UnauthorizedResponse("Unauthorized: admin required");
+                }
+
+            } catch (JWTVerificationException e) {
+                throw new UnauthorizedResponse("Unauthorized: " + e.getMessage());
+            }
+        }
+    }
+
+    private void giveToken(User user, Context ctx) {
+        String jwt = JwtUtil.createToken(user);
+
+        Cookie cookie = new Cookie("access_token", jwt);
+        cookie.setHttpOnly(true);
+        cookie.setPath("/"); // send on every request
+        cookie.setMaxAge(60 * 60 * 24); // 1 hour
+        cookie.setSecure(ctx.req().isSecure());
+        ctx.cookie(cookie);
+
+        ctx.json(Map.of(
+                "access_token", jwt,
+                "successful", true,
+                "redirect", getConfig().getLandingpage()
+        ));
+    }
+
     private void authorizationMiddleware(Context ctx) {
         if (ctx.method() == HandlerType.OPTIONS) {
             return;
@@ -2464,6 +2721,12 @@ public class AticServer {
                 || path.equals("/auth/register")
                 || path.startsWith("/app")) {
             return;
+        }
+
+        if (config.isAdminsecretEnabled() || config.isSwitchuserEnabled()) {
+            if (path.startsWith("/auth/su/")) {
+                return;
+            }
         }
 
         String token = getToken(ctx);

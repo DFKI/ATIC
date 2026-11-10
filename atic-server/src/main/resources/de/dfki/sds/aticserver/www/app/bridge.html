@@ -10,6 +10,22 @@
         <script src="/app/js/vue.global.prod.js" ></script>
         <script src="/app/js/axios.min.js"></script>
 
+        <!-- Ace Editor -->
+        <script src="/app/js/ace.js"></script>
+        <script>
+            ace.config.set("basePath", "/app/js");
+        </script>
+
+        <style>
+            .ace-editor-container {
+                width: 100%;
+                height: calc(100vh - 420px);
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                min-height: 200px;
+            }
+        </style>
+
         <link rel="shortcut icon" href="/app/favicon.ico">
 
         <title>Bridge | Atic</title>
@@ -97,7 +113,7 @@
             </div>
 
 
-            <div class="row mb-3">
+            <div class="row mb-3" v-if="activeQuery">
                 <div class="col">
                     <div class="d-flex align-items-center gap-2">
                         <select
@@ -130,6 +146,51 @@
                             >
                             <i class="fa fa-cog"></i> Send
                         </button>
+
+                        <div class="d-flex flex-wrap align-items-center gap-2 ms-3">
+                            <small class="text-muted">Params:</small>
+                            <template v-for="(param, idx) in queryParamsList" :key="idx">
+                                <div class="d-flex align-items-center gap-1" :class="{'opacity-50': param.ignored}">
+                                    <input
+                                        type="text"
+                                        class="form-control form-control-sm"
+                                        style="width: 110px"
+                                        placeholder="key"
+                                        v-model="activeQuery.params[idx].key"
+                                        :disabled="param.ignored"
+                                        >
+                                    <input
+                                        type="text"
+                                        class="form-control form-control-sm"
+                                        style="width: 140px"
+                                        placeholder="value"
+                                        v-model="activeQuery.params[idx].value"
+                                        :disabled="param.ignored"
+                                        >
+                                    <button
+                                        class="btn btn-outline-secondary py-0 px-2"
+                                        @click="toggleIgnore(idx)"
+                                        :title="param.ignored ? 'Include' : 'Ignore'"
+                                        >
+                                        <i class="fa" :class="param.ignored ? 'fa-eye-slash' : 'fa-eye'" style="font-size: 10px"></i>
+                                    </button>
+                                    <button
+                                        class="btn btn-outline-secondary py-0 px-2"
+                                        @click="removeParam(idx)"
+                                        title="Remove"
+                                        >
+                                        <i class="fa fa-times" style="font-size: 10px"></i>
+                                    </button>
+                                </div>
+                            </template>
+                            <button
+                                class="btn btn-outline-primary py-0 px-2"
+                                @click="addParam"
+                                title="Add parameter"
+                                >
+                                <i class="fa fa-plus" style="font-size: 10px"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -198,16 +259,8 @@
                     </ul>
 
 
-                    <div v-if="activeResultTab === 'json'" style="font-size: 12px">
-                        <div v-if="jsonData">
-                            <pre
-                                class="font-monospace mb-0"
-                                style="font-size: 12px; white-space: pre-wrap;"
-                                >{{ JSON.stringify(jsonData, null, 2) }}</pre>
-                        </div>
-                        <div v-else class="alert alert-secondary">
-                            No data
-                        </div>
+                    <div v-show="activeResultTab === 'json'">
+                        <div id="editor-json" class="ace-editor-container"></div>
                     </div>
 
                     <div v-if="activeResultTab === 'rdf-patch'" style="font-size: 12px">
@@ -271,7 +324,9 @@ var app = createApp({
             deleteConfirmIndex: null,
 
             defaultTemplate: `{{defaultTemplate}}
-`
+`,
+
+            aceEditor: null
         };
     },
 
@@ -291,12 +346,17 @@ var app = createApp({
                     this.activeQuery.method = value;
                 }
             }
+        },
+
+        queryParamsList() {
+            return this.activeQuery?.params || [];
         }
     },
 
     mounted() {
         this.getAuthMe();
         this.loadState();
+        this.initAceEditor();
     },
 
     watch: {
@@ -311,8 +371,13 @@ var app = createApp({
             handler() {
                 this.saveState();
             }
-        }
+        },
 
+        activeResultTab() {
+            if (this.aceEditor) {
+                this.aceEditor.resize(true);
+            }
+        }
     },
 
     methods: {
@@ -323,7 +388,8 @@ var app = createApp({
                 name: `Bridge ${this.nextQueryNumber}`,
                 content: this.defaultTemplate,
                 method: "QUERY",
-                data: ""
+                data: "",
+                params: []
             });
 
             this.nextQueryNumber++;
@@ -400,6 +466,10 @@ var app = createApp({
             this.rdfPatchResult = null;
             this.jsonData = null;
 
+            if (this.aceEditor) {
+                this.aceEditor.setValue("", 1);
+            }
+
             try {
                 const method = this.activeQuery.method;
                 const template = JSON.parse(this.activeQuery.content);
@@ -413,16 +483,25 @@ var app = createApp({
                 }
 
                 let response;
+                
+                const paramsObj = {};
+                this.activeQuery.params.forEach(p => {
+                    if (p.key && !p.ignored) {
+                        paramsObj[p.key] = p.value;
+                    }
+                });
 
                 if (method === "QUERY") {
                     response = await axios({
                         method: method,
                         url: "/bridge",
                         data: template,
+                        params: paramsObj,
                         headers
                     });
 
                     this.jsonData = response.data;
+                    this.updateJsonEditor(response.data);
                     this.activeResultTab = "json";
                 } else {
                     const data = JSON.parse(this.activeQuery.data);
@@ -434,6 +513,7 @@ var app = createApp({
                             template,
                             data
                         },
+                        params: paramsObj,
                         headers
                     });
 
@@ -483,6 +563,10 @@ var app = createApp({
 
                 this.prefixes = state.prefixes || this.defaultPrefixes;
                 this.queries = state.queries || [];
+                this.queries.forEach(q => {
+                    if (!q.params) q.params = [];
+                    q.params.forEach(p => { if (typeof p.ignored !== 'boolean') p.ignored = false; });
+                });
                 this.activeQueryIndex = state.activeQueryIndex || 0;
                 this.nextQueryNumber = state.nextQueryNumber || 1;
             }
@@ -496,7 +580,8 @@ var app = createApp({
                         content: this.defaultTemplate,
                         method: "QUERY",
                         data: "",
-                        dryRun: false
+                        dryRun: false,
+                        params: []
                     }
                 ];
 
@@ -526,6 +611,59 @@ var app = createApp({
             axios.post('/auth/logout').then(response => {
                 window.location.href = response.data.redirect;
             });
+        },
+
+        addParam() {
+            if (!this.activeQuery) return;
+            this.activeQuery.params.push({ key: "", value: "", ignored: false });
+        },
+
+        toggleIgnore(index) {
+            if (!this.activeQuery) return;
+            this.activeQuery.params[index].ignored = !this.activeQuery.params[index].ignored;
+        },
+
+        removeParam(index) {
+            if (!this.activeQuery) return;
+            this.activeQuery.params.splice(index, 1);
+        },
+
+        initAceEditor() {
+            ace.require("ace/lib/default_english_messages")
+                .defaultEnglishMessages["editor.tooltip.disable-editing"] = "";
+
+            const container = document.getElementById('editor-json');
+            if (!container) return;
+            this.aceEditor = ace.edit('editor-json');
+            this.aceEditor.setOptions({
+                useWorker: false,
+                fontSize: '13px',
+                readOnly: true,
+                highlightActiveLine: false,
+                showPrintMargin: false,
+                wrap: true,
+                enableBasicAutocompletion: false,
+                enableLiveAutocompletion: false,
+                tabSize: 2
+            });
+            this.aceEditor.setTheme('ace/theme/github');
+            this.aceEditor.session.setMode('ace/mode/json');
+            this.aceEditor.setOptions({
+                foldStyle: 'start',
+                showGutter: true,
+                displayIndentGuides: true,
+                highlightGutterLine: false
+            });
+            this.aceEditor.renderer.setScrollMargin(8, 8);
+        },
+
+        updateJsonEditor(json) {
+            if (!this.aceEditor) return;
+            const formatted = JSON.stringify(json, null, 4);
+            this.aceEditor.setValue(formatted, -1);
+            // Auto-fit to content and enable folding
+            this.aceEditor.session.getMode().getFoldStart = this.aceEditor.session.getFoldStart;
+            this.aceEditor.resize(true);
         }
     }
 

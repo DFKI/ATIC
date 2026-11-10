@@ -158,6 +158,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     private Map<String, InvocationContext> invexProcessIdToContext;
     
     private FragmentStorage fragmentStorage;
+    
+    private VueComponentStorage vueComponentStorage;
 
     public SqliteAticDatasetGraph(Database db) {
         this(db, null);
@@ -183,6 +185,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             this.rdfPatchEmitter.addListener(mainListener);
         }
         this.fragmentStorage = new FragmentStorage(this);
+        this.vueComponentStorage = new VueComponentStorage(this);
         this.invexProcessIdToContext = new HashMap<>();
         bootstrap();
     }
@@ -240,6 +243,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 fragmentStorage.bootstrap();
             } catch (SQLException ex) {
                 throw new RuntimeException("Failed to bootstrap fragment storage", ex);
+            }
+        });
+        
+        this.executeWrite(() -> {
+            try {
+                vueComponentStorage.bootstrap();
+            } catch (SQLException ex) {
+                throw new RuntimeException("Failed to bootstrap vue component storage", ex);
             }
         });
         
@@ -4467,6 +4478,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     public FragmentStorage getFragmentStorage() {
         return fragmentStorage;
     }
+
+    public VueComponentStorage getVueComponentStorage() {
+        return vueComponentStorage;
+    }
     
     //==========================================================
     //extra
@@ -4684,7 +4699,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return ontology.getGraph();
     }
 
-    public Map<Node, JSONObject> deriveBridgeTemplatesFromABox(AticGraph graph, InvocationContext ictx) {
+    public List<JSONObject> deriveBridgeTemplatesFromABox(AticGraph graph, InvocationContext ictx) {
 
         //System.out.println("copy");
         //copy in memory: faster with rdfs analyzer
@@ -4703,15 +4718,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         //System.out.println("construct");
         DefinitionConstructor constructor = new DefinitionConstructor();
 
-        Map<Node, JSONObject> map = constructor.buildSuggestedTemplates(analyzer)
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(
-                        entry -> entry.getKey().asNode(),
-                        Map.Entry::getValue
-                ));
-
-        return map;
+        List<JSONObject> templates = constructor.buildSuggestedTemplates(analyzer);
+        
+        return templates;
     }
 
     public enum OntologyFormat {

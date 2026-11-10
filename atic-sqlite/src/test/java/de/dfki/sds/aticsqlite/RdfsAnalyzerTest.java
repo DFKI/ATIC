@@ -353,14 +353,14 @@ public class RdfsAnalyzerTest {
         });
 
         DefinitionConstructor dc = new DefinitionConstructor();
-        Map<Resource, JSONObject> templates = dc.buildSuggestedTemplates(analyzer);
+        List<JSONObject> templates = dc.buildSuggestedTemplates(analyzer);
 
         // Find the template for foaf:Person by URI (Jena Resource identity differs across model instances)
         String personUri = "http://xmlns.com/foaf/0.1/Person";
         JSONObject actual = null;
-        for (Map.Entry<Resource, JSONObject> e : templates.entrySet()) {
-            if (personUri.equals(e.getKey().getURI())) {
-                actual = e.getValue();
+        for (JSONObject e : templates) {
+            if (personUri.equals(e.getString("$wasDerivedFrom"))) {
+                actual = e;
                 break;
             }
         }
@@ -372,7 +372,7 @@ public class RdfsAnalyzerTest {
         //             foaf:knows (RESOURCE, SINGLE)
         // Since knows has SINGLE cardinality, it gets a simple variable binding (not nested)
         assertEquals("array", actual.getString("$type"));
-        assertEquals(10, actual.getInt("$limit"));
+        assertEquals("?limitPerson", actual.getString("$limit"));
 
         JSONObject map = actual.getJSONObject("$map");
         assertEquals("?person", map.getString("@id"));
@@ -450,13 +450,14 @@ public class RdfsAnalyzerTest {
         assertEquals(Cardinality.MULTI, analyzer.getRangeCardinality().get(FOAF.knows));
 
         DefinitionConstructor dc = new DefinitionConstructor();
-        Map<Resource, JSONObject> templates = dc.buildSuggestedTemplates(analyzer);
+        List<JSONObject> templates = dc.buildSuggestedTemplates(analyzer);
 
+        // Find the template for foaf:Person by URI (Jena Resource identity differs across model instances)
         String personUri = "http://xmlns.com/foaf/0.1/Person";
         JSONObject actual = null;
-        for (Map.Entry<Resource, JSONObject> e : templates.entrySet()) {
-            if (personUri.equals(e.getKey().getURI())) {
-                actual = e.getValue();
+        for (JSONObject e : templates) {
+            if (personUri.equals(e.getString("$wasDerivedFrom"))) {
+                actual = e;
                 break;
             }
         }
@@ -467,7 +468,7 @@ public class RdfsAnalyzerTest {
 
         // Top-level structure
         assertEquals("array", actual.getString("$type"));
-        assertEquals(10, actual.getInt("$limit"));
+        assertEquals("?limitPerson", actual.getString("$limit"));
 
         JSONObject map = actual.getJSONObject("$map");
         assertEquals("?person", map.getString("@id"));
@@ -477,7 +478,7 @@ public class RdfsAnalyzerTest {
         // "knows" should be a nested sub-query object (not a simple variable string)
         JSONObject knowsNested = map.getJSONObject("knows");
         assertEquals("array", knowsNested.getString("$type"));
-        assertEquals("?knows", knowsNested.getJSONObject("$map").getString("@id"));
+        assertEquals("?knows", knowsNested.getJSONObject("$map").getString("$fragment"));
 
         JSONArray knowsWhere = knowsNested.getJSONArray("$where");
         assertEquals(1, knowsWhere.length());

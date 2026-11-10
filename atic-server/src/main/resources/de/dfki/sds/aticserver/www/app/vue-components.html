@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <link href="css/bootstrap.min.css" rel="stylesheet" />
+        <link href="css/all.min.css" rel="stylesheet" />
+        <link href="css/loader.css" rel="stylesheet" />
+        <link href="css/link.css" rel="stylesheet" />
+
+        <script src="js/bootstrap.bundle.min.js" ></script>
+        <script src="js/vue.global.prod.js" ></script>
+        <script src="js/axios.min.js"></script>
+
+        <!-- Ace Editor -->
+        <script src="js/ace.js"></script>
+        <script>
+            ace.config.set("basePath", "js");
+        </script>
+
+        <link rel="shortcut icon" href="favicon.ico">
+        <title>Vue Components | Atic</title>
+
+        <style>
+            .list-col {
+                max-height: calc(100vh - 150px);
+                overflow-y: auto;
+            }
+            .edit-col {
+                max-height: calc(100vh - 150px);
+                overflow-y: auto;
+            }
+            .component-list-item {
+                cursor: pointer;
+                transition: background-color 0.15s ease;
+            }
+            .component-list-item:hover {
+                background-color: #f8f9fa;
+            }
+            .component-list-item.active {
+                background-color: #e7f1ff;
+                border-left: 3px solid #0d6efd;
+            }
+            .auto-save-indicator {
+                font-size: 12px;
+                transition: opacity 0.3s ease;
+            }
+            .sidebar-sticky {
+                position: sticky;
+                top: 1rem;
+            }
+            .ace-editor-container {
+                width: 100%;
+                height: calc(100vh - 385px);
+                border: 1px solid #dee2e6;
+                border-radius: 0 0 4px 4px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container-fluid mt-4" id="app">
+
+            <!-- Header bar -->
+            <div class="row align-items-center">
+                <div class="col d-flex align-items-center m-2">
+                    <h3 class="mb-0 d-flex align-items-center me-2">
+                        Vue Components
+                        <button type="button" class="btn btn-primary ms-2"
+                                :disabled="!canEdit"
+                                @click="openNewComponent">
+                            <i class="fa fa-plus me-1"></i> New Component
+                        </button>
+                        <button type="button" class="btn btn-secondary ms-2"
+                                :disabled="components.length === 0"
+                                @click="downloadZip">
+                            <i class="fa fa-download me-1"></i> Download
+                        </button>
+                    </h3>
+                    <div v-if="loading" class="spinner-border text-primary" role="status" style="width: 1.5rem; height: 1.5rem;"
+                         @click="loading = false">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="col-auto ms-auto me-2" v-if="user">
+                    <span class="me-2" :title="user.username">
+                        <i class="fa fa-user"></i> {{ user.firstname }} {{ user.lastname }}
+                    </span>
+                    <button class="btn btn-sm btn-danger" @click="postLogout()" title="Logout"><i class="fa fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <!-- Error alerts -->
+            <div class="row mb-3">
+                <div class="col">
+                    <div v-if="saveError" class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ saveError }}
+                        <button type="button" class="btn-close" @click="saveError = null"></button>
+                    </div>
+                    <div v-if="deleteError" class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ deleteError }}
+                        <button type="button" class="btn-close" @click="deleteError = null"></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Left column: Component list -->
+                <div class="col-md-3">
+                    <div class="list-col">
+                        <!-- Empty state -->
+                        <!--div v-if="components.length === 0" class="text-muted text-center py-5 border rounded">
+                            No Vue components found. Click "New Component" to create one.
+                        </div-->
+
+                        <!-- Component entries -->
+                        <div v-for="(comp, index) in components" :key="index"
+                             class="card mb-2 component-list-item"
+                             :class="{
+                             'active': editingComponent && editingComponent.name === comp.name && editingComponent.path === comp.path
+                             }">
+                            <div class="card-body p-2" :style="{cursor: canEdit ? 'pointer' : 'default', 'pointer-events': canEdit ? 'auto' : 'none'}">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1" :style="{cursor: canEdit ? 'pointer' : 'default'}" @click="canEdit ? editComponent(comp) : null">
+                                        <div class="fw-bold text-truncate" :title="comp.name">
+                                            {{ comp.name }}
+                                        </div>
+                                        <div class="small text-muted text-truncate" :title="comp.path">
+                                            {{ comp.path }}
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex gap-1 flex-shrink-0 ms-2">
+                                        <!-- Edit button -->
+                                        <!-- button type="button"
+                                                class="btn btn-sm btn-outline-primary"
+                                                title="Edit"
+                                                @click="editComponent(comp)">
+                                            <i class="fa fa-edit"></i>
+                                        </button -->
+
+                                        <!-- Delete button -->
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-danger"
+                                                title="Delete"
+                                                :disabled="!canEdit"
+                                                @click="deleteComponent(comp)">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right column: Edit area -->
+                <div class="col-md-9">
+                    <div class="edit-col">
+                        <!-- No component selected -->
+                        <div v-if="!editingComponent" class="text-muted">
+                        </div>
+
+                        <!-- Edit mode -->
+                        <div v-else class="sidebar-sticky">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ editingComponent.name }}</strong>
+                                        <small class="text-muted ms-2">({{ editingComponent.path }})</small>
+                                        <a class="ms-2"
+                                           :href="'/vue-sandbox' + (editingComponent.path === '/' ? '' : editingComponent.path) + '/' + editingComponent.name + '.html'"
+                                           target="_blank">HTML</a>
+
+                                        <a class="ms-2"
+                                           :href="'/vue-sandbox' + (editingComponent.path === '/' ? '' : editingComponent.path) + '/' + editingComponent.name + '.js'"
+                                           target="_blank">JS</a>
+                                    </div>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <!-- Auto-save indicator -->
+                                        <span class="auto-save-indicator" :class="autoSaveState.class" v-if="autoSaveState.text">
+                                            <i :class="autoSaveState.icon"></i>
+                                            {{ autoSaveState.text }}
+                                        </span>
+
+                                        <!-- Save button -->
+                                        <button type="button" class="btn btn-sm btn-primary" @click="saveCurrent"
+                                                :disabled="saving">
+                                            <i class="fa fa-save me-1"></i>
+                                            <span v-if="saving" class="spinner-border spinner-border-sm"></span>
+                                            <span v-else>Save</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Name and Path fields -->
+                                    <div class="row mb-2">
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-normal">Name</label>
+                                            <input type="text" class="form-control form-control-sm"
+                                                   v-model.trim="editingComponent.name"
+                                                   placeholder="e.g. MyComponent" />
+                                            <small class="form-text">Use PascalCase and do not include a <code>.vue</code> extension.</small>
+                                        </div>
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-normal">Path</label>
+                                            <input type="text" class="form-control form-control-sm"
+                                                   v-model.trim="editingComponent.path"
+                                                   placeholder="e.g. /components/widgets" />
+                                        </div>
+                                    </div>
+
+                                    <!-- Tabs for Bridges, Script, Template, Style -->
+                                    <ul class="nav nav-tabs mb-0">
+                                        <li class="nav-item">
+                                            <a class="nav-link" :class="{active: activeTab === 'bridges'}" href="#" @click.prevent="activeTab='bridges'">
+                                                <i class="fa fa-plug me-1"></i>Bridges
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" :class="{active: activeTab === 'script'}" href="#" @click.prevent="activeTab='script'">
+                                                <i class="fa fa-file-code me-1"></i>Script
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" :class="{active: activeTab === 'template'}" href="#" @click.prevent="activeTab='template'">
+                                                <i class="fa fa-window-maximize me-1"></i>Template
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" :class="{active: activeTab === 'style'}" href="#" @click.prevent="activeTab='style'">
+                                                <i class="fa fa-paint-brush me-1"></i>Style
+                                            </a>
+                                        </li>
+                                    </ul>
+                                    <div class="tab-content">
+                                        <div class="tab-pane fade" :class="{show: activeTab === 'bridges', 'active': activeTab === 'bridges'}">
+                                            <div id="editor-bridges" class="ace-editor-container"></div>
+                                        </div>
+                                        <div class="tab-pane fade" :class="{show: activeTab === 'script', 'active': activeTab === 'script'}">
+                                            <div id="editor-script" class="ace-editor-container"></div>
+                                        </div>
+                                        <div class="tab-pane fade" :class="{show: activeTab === 'template', 'active': activeTab === 'template'}">
+                                            <div id="editor-template" class="ace-editor-container"></div>
+                                        </div>
+                                        <div class="tab-pane fade" :class="{show: activeTab === 'style', 'active': activeTab === 'style'}">
+                                            <div id="editor-style" class="ace-editor-container"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div style="background: white; font-size: 12px;" class="fixed-bottom">
+                    &nbsp;
+                    &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+                </div>
+            </div>
+
+        </div>
+
+        <script>
+const {createApp} = Vue;
+createApp({
+
+    data() {
+        return {
+            loading: false,
+            error: null,
+            user: null,
+            components: [],
+            editingComponent: null,
+            saveError: null,
+            deleteError: null,
+            saving: false,
+            isNewComponent: false,
+            activeTab: 'bridges',
+            // Ace editors
+            aceEditors: {},
+            // Track which tabs have been shown (lazy init)
+            aceEditorInitialized: {bridges: false, script: false, template: false, style: false},
+            // Auto-save state
+            autoSaveTimer: null,
+            autoSaveState: {text: '', icon: 'fa fa-clock', class: 'text-muted'},
+            // Track original bridges JSON for re-parsing
+            originalBridges: null,
+            // True while the auto-save spinner (Saving...) is visible
+            isSaving: false,
+            // True while a setValue() call is in flight (e.g. component switch)
+            $suppressEditorChange: false,
+            // True while loadComponent is running — prevents auto-save during component switch
+            _suppressAutoSave: false
+        };
+    },
+    computed: {
+        canEdit() {
+            return !this.saving && !this.isSaving;
+        }
+    },
+    created() {
+        axios.interceptors.response.use(
+                response => response,
+                error => {
+                    if (!error.config?.skipErrorModal) {
+                        const errorMsg = error.response?.data || error.message || "Unknown error";
+                        this.open_error_modal(errorMsg);
+                    }
+                    return Promise.reject(error);
+                }
+        );
+        this.getAuthMe();
+        this.loadComponents();
+    },
+    updated() {
+        // Initialize the editor for the currently active tab
+        if (this.editingComponent) {
+            this.showTab(this.activeTab);
+        }
+    },
+    watch: {
+        // Resize all editors when the active tab changes
+        activeTab() {
+            // The currently active tab will be initialized by updated() if needed
+            this.resizeAllEditors();
+        },
+        // Push new component content into editors when component switches
+        editingComponent(newVal) {
+            if (!newVal) return;
+            Object.keys(this.aceEditors).forEach(name => {
+                const textMap = {
+                    bridges:  'bridgesText',
+                    script:   'scriptText',
+                    template: 'templateText',
+                    style:    'styleText'
+                };
+                const editor = this.aceEditors[name];
+                if (editor && newVal[textMap[name]] !== undefined) {
+                    // Suppress change events during setValue — this prevents
+                    // the auto-save timer from starting when switching components.
+                    this.$suppressEditorChange = true;
+                    editor.setValue(newVal[textMap[name]], -1);
+                    this.$nextTick(() => {
+                        this.$suppressEditorChange = false;
+                    });
+                }
+            });
+        }
+    },
+    beforeUnmount() {
+        Object.values(this.aceEditors).forEach(editor => {
+            editor.destroy();
+        });
+        this.aceEditors = {};
+    },
+    methods: {
+
+        // ---- Load all components ----
+        async loadComponents() {
+            this.loading = true;
+            try {
+                const response = await axios.get('/vue-components');
+                this.components = response.data || [];
+                // If we were editing, ensure the component is still in the list
+                if (this.editingComponent && !this.isNewComponent) {
+                    const found = this.components.find(c => c.name === this.editingComponent.name && c.path === this.editingComponent.path);
+                    if (!found) {
+                        this.editingComponent = null;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load Vue components:', error);
+                this.components = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+        // ---- Open new component form ----
+        openNewComponent() {
+            if (!this.canEdit) return;
+            this.openNewComponentInternal();
+        },
+
+        // ---- Open new component form (internal) ----
+        openNewComponentInternal() {
+            const defaultBridges = JSON.stringify([], null, 4);
+            const defaultScript = [
+                "{",
+                "",
+                "  // Input properties from parent components",
+                "  props: {",
+                "    uri: {",
+                "      type: String,",
+                "      required: false,",
+                "      default: ''",
+                "    }",
+                "  },",
+                "",
+                "  // Events this component can emit",
+                "  emits: ['todo'],",
+                "",
+                "  // Reactive local state",
+                "  data() {",
+                "    return {",
+                "",
+                "    };",
+                "  },",
+                "",
+                "  // Computed reactive properties",
+                "  computed: {",
+                "",
+                "  },",
+                "",
+                "  // Methods",
+                "  methods: {",
+                "     ",
+                "  },",
+                "",
+                "  // Watch reactive properties",
+                "  watch: {",
+                "",
+                "  },",
+                "",
+                "  // Lifecycle hooks",
+                "  created() {",
+                "",
+                "  },",
+                "  mounted() {",
+                "",
+                "",
+                "  }",
+                "",
+                "",
+                "}"
+            ].join("\n");
+
+            const defaultTemplate = [
+                '<div class="container">',
+                '  <div class="row">',
+                '    <div class="col-12">',
+                '      <div class="card">',
+                '        <div class="card-header">',
+                '          <h5 class="card-title mb-0">',
+                '              New Component',
+                '          </h5>',
+                '        </div>',
+                '',
+                '        <div class="card-body">',
+                '          <h6 class="card-subtitle mb-3 text-muted">Content Heading</h6>',
+                '          <p class="card-text">',
+                '              Add your component content here.',
+                '          </p>',
+                '        </div>',
+                '',
+                '        <div class="card-footer text-muted">',
+                '          Footer content',
+                '        </div>',
+                '      </div>',
+                '    </div>',
+                '  </div>',
+                '</div>'
+            ].join("\n");
+
+            const defaultStyle = "";
+
+            this.editingComponent = {
+                path: '/',
+                name: 'NewComponent',
+                bridges: defaultBridges,
+                bridgesText: defaultBridges,
+                script: defaultScript,
+                scriptText: defaultScript,
+                template: defaultTemplate,
+                templateText: defaultTemplate,
+                style: defaultStyle,
+                styleText: defaultStyle
+            };
+
+            this.originalBridges = JSON.parse(defaultBridges);
+            this.isNewComponent = true;
+            //this.activeTab = 'bridges';
+            this.clearAutoSaveIndicator();
+        },
+
+        // ---- Edit a component from the list (fetch latest data from server) ----
+        async editComponent(comp) {
+            await this.loadComponent(comp.path, comp.name);
+        },
+
+        // ---- Load a single component from server and open it for editing ----
+        async loadComponent(path, name) {
+            this._suppressAutoSave = true;
+            try {
+                const response = await axios.get('/vue-components', {
+                    params: {path: path, name: name}
+                });
+                const comp = response.data;
+                const bridgesArray = Array.isArray(comp.bridges) ? comp.bridges : [];
+                const bridgesJson = bridgesArray.length > 0
+                        ? JSON.stringify(bridgesArray, null, 4)
+                        : '[]';
+
+                this.editingComponent = {
+                    path: comp.path || '',
+                    name: comp.name || '',
+                    bridges: bridgesJson,
+                    bridgesText: bridgesJson,
+                    script: comp.script || '',
+                    scriptText: comp.script || '',
+                    template: comp.template || '',
+                    templateText: comp.template || '',
+                    style: comp.style || '',
+                    styleText: comp.style || ''
+                };
+                this.originalBridges = bridgesArray;
+                this.isNewComponent = false;
+                this.$nextTick(() => {
+                    this._suppressAutoSave = false;
+                });
+                this.clearAutoSaveIndicator();
+            } catch (error) {
+                console.error('Failed to load component for editing:', error);
+                this.saveError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+            }
+        },
+
+        // ---- Delete a component (native confirm dialog) ----
+        async deleteComponent(comp) {
+            if (!this.canEdit) return;
+            if (!confirm(`Delete component "${comp.name}" at "${comp.path}"?`)) {
+                return;
+            }
+            try {
+                await axios.delete('/vue-components', {
+                    params: {
+                        path: comp.path,
+                        name: comp.name
+                    }
+                });
+                // If we were editing this component, clear it
+                if (this.editingComponent &&
+                        this.editingComponent.name === comp.name &&
+                        this.editingComponent.path === comp.path) {
+                    this.editingComponent = null;
+                    this.isNewComponent = false;
+                }
+                await this.loadComponents();
+            } catch (error) {
+                console.error('Failed to delete Vue component:', error);
+                this.deleteError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+            }
+        },
+
+        // ---- Auto-save handler triggered on input ----
+        onAutoSaveInput() {
+            this.clearAutoSaveIndicator();
+            this.isSaving = true;
+            this.autoSaveState = {text: 'Saving...', icon: 'fa fa-spinner fa-spin', class: 'text-primary'};
+
+            // Debounce: save after user stops typing for 1 second
+            clearTimeout(this.autoSaveTimer);
+            this.autoSaveTimer = setTimeout(() => {
+                this.performAutoSave();
+            }, 1000);
+        },
+
+        // ---- Perform the actual save ----
+        async performAutoSave() {
+            this.saveError = null;
+            try {
+                const component = this.buildComponentPayload();
+                await axios.post('/vue-components', component);
+                this.isSaving = false;
+                this.autoSaveState = {text: 'Saved', icon: 'fa fa-check-circle', class: 'text-success'};
+                // Clear the indicator after 2 seconds
+                setTimeout(() => {
+                    this.clearAutoSaveIndicator();
+                }, 2000);
+            } catch (error) {
+                console.error('Auto-save failed:', error);
+                this.autoSaveState = {text: 'Save failed', icon: 'fa fa-exclamation-circle', class: 'text-danger'};
+                this.saveError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+                this.isSaving = false;
+            }
+        },
+
+        // ---- Build component payload from current editing state ----
+        buildComponentPayload() {
+            const comp = this.editingComponent;
+            // Parse bridges JSON
+            let bridgesArray = [];
+            try {
+                bridgesArray = JSON.parse(comp.bridgesText);
+            } catch (e) {
+                //console.log(e);
+                throw e;
+            }
+
+            return {
+                path: comp.path || '',
+                name: comp.name || '',
+                bridges: bridgesArray,
+                script: comp.scriptText || '',
+                template: comp.templateText || '',
+                style: comp.styleText || ''
+            };
+        },
+
+        // ---- Manual save ----
+        async saveCurrent() {
+            if (!this.editingComponent)
+                return;
+            this.saving = true;
+            this.saveError = null;
+            try {
+                const component = this.buildComponentPayload();
+                await axios.post('/vue-components', component);
+                this.clearAutoSaveIndicator();
+                await this.loadComponents();
+            } catch (error) {
+                console.error('Failed to save Vue component:', error);
+                this.saveError =
+                        error.response?.data
+                        ? (typeof error.response.data === 'string'
+                                ? error.response.data
+                                : JSON.stringify(error.response.data))
+                        : error.message || 'An unexpected error occurred.';
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        // ---- Clear auto-save indicator ----
+        clearAutoSaveIndicator() {
+            clearTimeout(this.autoSaveTimer);
+            this.isSaving = false;
+            this.autoSaveState = {text: '', icon: '', class: ''};
+        },
+
+        // ---- Initialize a single Ace editor (lazy, only when tab is shown) ----
+        initAceEditor(name) {
+            if (this.aceEditorInitialized[name]) {
+                // Already initialized, just resize
+                if (this.aceEditors[name]) {
+                    this.aceEditors[name].resize(true);
+                }
+                return;
+            }
+
+            if (!this.editingComponent) return;
+
+            const modeMap = {
+                bridges:  'ace/mode/json',
+                script:   'ace/mode/javascript',
+                template: 'ace/mode/html',
+                style:    'ace/mode/css'
+            };
+            const textMap = {
+                bridges:  'bridgesText',
+                script:   'scriptText',
+                template: 'templateText',
+                style:    'styleText'
+            };
+
+            const containerId = 'editor-' + name;
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const editor = ace.edit(containerId);
+            editor.setValue(this.editingComponent[textMap[name]], -1);
+            editor.setTheme('ace/theme/github');
+            editor.session.setMode(modeMap[name]);
+            editor.setOptions({
+                useWorker: false,
+                fontSize: '13px',
+                tabSize: 2,
+                useSoftTabs: true,
+                showPrintMargin: false,
+                wrap: true,
+                highlightActiveLine: true,
+                behavioursEnabled: true
+            });
+
+            editor.session.on('change', () => {
+                if (this._suppressAutoSave) return;
+                const content = editor.getValue();
+                this.editingComponent[textMap[name]] = content;
+                this.onAutoSaveInput();
+            });
+
+            this.aceEditors[name] = editor;
+            this.aceEditorInitialized[name] = true;
+        },
+
+        // ---- Show a tab: initialize its editor if needed ----
+        showTab(tabName) {
+            if (!this.aceEditorInitialized[tabName]) {
+                this.initAceEditor(tabName);
+            }
+        },
+
+        // ---- Resize all initialized editors (called on tab switch) ----
+        resizeAllEditors() {
+            Object.values(this.aceEditors).forEach(editor => {
+                editor.resize(true);
+            });
+        },
+
+        // ---- Auth ----
+        getAuthMe() {
+            axios.get('/auth/me').then(response => {
+                this.user = response.data;
+            }).catch(error => {
+                if (error.response && error.response.status === 401) {
+                    window.location.href = '/app/unauthorized.html';
+                }
+            });
+        },
+        postLogout() {
+            axios.post('/auth/logout').then(response => {
+                window.location.href = response.data.redirect;
+            });
+        },
+        downloadZip() {
+            window.open('/vue-components/zip', '_blank');
+        },
+        open_error_modal(msg) {
+            this.error = msg;
+            this.loading = false;
+            const modalInstance = new window.bootstrap.Modal(document.getElementById('errorModal'));
+            modalInstance.show();
+        }
+    }
+}).mount("#app");
+        </script>
+    </body>
+</html>
