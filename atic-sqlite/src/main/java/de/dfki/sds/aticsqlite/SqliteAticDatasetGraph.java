@@ -147,6 +147,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     private User adminUser;
 
     private SystemAticGraph systemGraph;
+    
+    private BlobGraph blobGraph;
 
     private Capabilities capabilities;
 
@@ -176,6 +178,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         this.agentSessionManager = new AgentSessionManager();
         this.capabilities = capabilities;
         this.systemGraph = new SystemAticGraph(this);
+        this.blobGraph = new BlobGraph(this);
         if (mainListener != null) {
             this.rdfPatchEmitter.addListener(mainListener);
         }
@@ -235,6 +238,14 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         this.executeWrite(() -> {
             try {
                 fragmentStorage.bootstrap();
+            } catch (SQLException ex) {
+                throw new RuntimeException("Failed to bootstrap fragment storage", ex);
+            }
+        });
+        
+        this.executeWrite(() -> {
+            try {
+                blobGraph.bootstrap();
             } catch (SQLException ex) {
                 throw new RuntimeException("Failed to bootstrap fragment storage", ex);
             }
@@ -2972,6 +2983,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         return getGraph(SystemAticGraph.node, false, InvocationContext.EMPTY);
     }
 
+    public BlobGraph getBlobGraph() {
+        return blobGraph;
+    }
+
     /**
      * Returns an {@link AticGraph} for the given node. Creates the graph if it does not exist. Handles virtual graphs and the union graph. Performs a READ
      * access control check.
@@ -2991,6 +3006,11 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         //special system graph name
         if (graphNode.equals(SystemAticGraph.node)) {
             return systemGraph;
+        }
+        
+        //special system graph name
+        if (graphNode.equals(BlobGraph.node)) {
+            return blobGraph;
         }
 
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
@@ -3242,6 +3262,8 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         graphMap.put(key, sqliteAticGraph);
 
+        //TODO add blobgraph somewhere here
+        
         //in-memory union to allow to get a union of database-backed graphs and special system graph
         if (requested.contains(SystemAticGraph.node)) {
             return new UnionAticGraph(sqliteAticGraph, systemGraph);
