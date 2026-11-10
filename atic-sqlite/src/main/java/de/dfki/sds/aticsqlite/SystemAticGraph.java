@@ -43,7 +43,7 @@ public class SystemAticGraph implements AticGraph {
 
     public SystemAticGraph(SqliteAticDatasetGraph datasetGraph) {
         this.datasetGraph = datasetGraph;
-
+        
         user2trans = new HashMap<>();
 
         SystemAticGraph thisGraph = this;
