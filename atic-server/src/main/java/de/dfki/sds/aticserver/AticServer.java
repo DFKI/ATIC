@@ -38,6 +38,7 @@ import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph.OntologyFormat;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
 import de.dfki.sds.aticsqlite.VueComponent;
+import de.dfki.sds.aticsqlite.BlobGraph;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import de.dfki.sds.rdfpatchsqlite.Converter;
 import io.javalin.Javalin;
@@ -405,6 +406,14 @@ public class AticServer {
         routes.put("/session/{agentUsername}/{sessionId}/title", this::putSessionTitle);
 
         routes.post("/upload", this::postUpload);
+
+        // =========================================================================
+        //  BlobGraph endpoints
+        // =========================================================================
+        routes.post("/blob", this::postBlobUpload);
+        routes.get("/blob", this::getBlobList);
+        routes.get("/blob/{path}", this::getBlobUri);
+        routes.delete("/blob", this::deleteBlobs);
 
         routes.get("/user", this::getQueryUser);
         routes.get("/users", this::getUsers);
@@ -1758,6 +1767,253 @@ public class AticServer {
         }
 
         ctx.status(200).result("Upload successful");
+    }
+
+    // =========================================================================
+    //  BlobGraph REST endpoints
+    // =========================================================================
+
+    /**
+     * POST /blob — upload one or more files.
+     *
+     * <p>Accepts multipart form data with the following fields:
+     * <ul>
+     *   <li>file — one or more uploaded files</li>
+     *   <li>path (optional) — logical path prefix for stored files; if absent the
+     *       original filename is used directly</li>
+     * </ul>
+     *
+     * <p>Each uploaded file is stored in the BlobGraph with a content-addressed
+     * identity (SHA-256).  The response returns the blob URIs.
+     */
+    private void postBlobUpload(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        BlobGraph blobGraph = datasetGraph.getBlobGraph();
+
+        // Resolve the logical path prefix (may contain wildcards for directories)
+        String pathPrefix = ctx.formParam("path");
+
+        List<UploadedFile> files = ctx.uploadedFiles("file");
+        if (files.isEmpty()) {
+            ctx.status(400).json(Map.of(
+                    "success", false,
+                    "error", "No files uploaded. Send a 'file' multipart field."
+            ));
+            return;
+        }
+
+        List<Map<String, String>> results = new ArrayList<>();
+
+        for (UploadedFile uploadedFile : files) {
+            String originalFilename = uploadedFile.filename();
+            // Build logical filepath: pathPrefix + "/" + filename, or just filename
+            String logicalPath;
+            if (pathPrefix != null && !pathPrefix.isBlank()) {
+                logicalPath = pathPrefix.endsWith("/")
+                        ? pathPrefix + originalFilename
+                        : pathPrefix + "/" + originalFilename;
+            } else {
+                logicalPath = originalFilename;
+            }
+
+            try {
+                InputStream content = uploadedFile.content();
+                String mimeType = uploadedFile.contentType();
+                if (mimeType == null || mimeType.isBlank()) {
+                    mimeType = "application/octet-stream";
+                }
+
+                blobGraph.save(logicalPath, originalFilename, mimeType, content, ictx);
+
+                Map<String, String> entry = new LinkedHashMap<>();
+                entry.put("filepath", logicalPath);
+                entry.put("filename", originalFilename);
+                entry.put("mimeType", mimeType);
+                entry.put("blobUri", blobGraph.getURI(logicalPath, ictx));
+                entry.put("sha256", blobGraph.getSHA256(logicalPath, ictx));
+                results.add(entry);
+            } catch (Exception e) {
+                Map<String, String> entry = new LinkedHashMap<>();
+                entry.put("filename", originalFilename);
+                entry.put("error", e.getMessage());
+                results.add(entry);
+            }
+        }
+
+        ctx.status(201).json(Map.of(
+                "success", true,
+                "count", results.size(),
+                "blobs", results
+        ));
+    }
+
+    /**
+     * GET /blob — list blobs, optionally filtered by a folder prefix.
+     *
+     * <p>Query parameters:
+     * <ul>
+     *   <li>path (optional) — list only files under this directory prefix</li>
+     * </ul>
+     *
+     * <p>Returns a JSON object with a "blobs" array; each entry contains
+     * {@code filepath}, {@code filename}, {@code mimeType}, {@code blobUri},
+     * and {@code sha256}.
+     */
+    private void getBlobList(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        BlobGraph blobGraph = datasetGraph.getBlobGraph();
+
+        String folder = ctx.queryParam("path");
+        if (folder == null || folder.isBlank()) {
+            folder = "";
+        }
+
+        List<String> filepaths = blobGraph.list(folder, ictx);
+
+        JSONArray blobs = new JSONArray();
+        for (String filepath : filepaths) {
+            JSONObject entry = new JSONObject();
+            entry.put("filepath", filepath);
+            entry.put("filename", new File(filepath).getName());
+            entry.put("blobUri", blobGraph.getURI(filepath, ictx));
+            entry.put("sha256", blobGraph.getSHA256(filepath, ictx));
+
+            // Try to get mimeType from metadata
+            try {
+                org.apache.jena.rdf.model.Model meta = blobGraph.loadMetadata(filepath, ictx);
+                String ns = "urn:atic:ontology:";
+                String mimeType = meta.getProperty(
+                        meta.getResource(blobGraph.getURI(filepath, ictx)),
+                        meta.createProperty(ns + "mimeType")
+                ).getString();
+                if (mimeType != null) {
+                    entry.put("mimeType", mimeType);
+                }
+            } catch (Exception ignored) {
+                // metadata not available — skip
+            }
+
+            blobs.put(entry);
+        }
+
+        ctx.json(Map.of(
+                "path", folder,
+                "count", blobs.length(),
+                "blobs", blobs.toList()
+        ));
+    }
+
+    /**
+     * GET /blob/{path} — return the blob URI (and sha256) for a logical filepath.
+     */
+    private void getBlobUri(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        BlobGraph blobGraph = datasetGraph.getBlobGraph();
+
+        String filepath = ctx.pathParam("path");
+
+        try {
+            String uri = blobGraph.getURI(filepath, ictx);
+            String sha256 = blobGraph.getSHA256(filepath, ictx);
+
+            ctx.json(Map.of(
+                    "filepath", filepath,
+                    "blobUri", uri,
+                    "sha256", sha256
+            ));
+        } catch (IllegalStateException e) {
+            ctx.status(404).json(Map.of(
+                    "success", false,
+                    "error", "File not found: " + filepath
+            ));
+        }
+    }
+
+    /**
+     * DELETE /blob — delete one or more blobs by URI.
+     *
+     * <p>Accepts a JSON body with either:
+     * <ul>
+     *   <li>{@code "uris": ["urn:atic:blob:...", ...]} — delete by blob URI</li>
+     *   <li>{@code "paths": ["/some/path", ...]} — delete by logical filepath</li>
+     * </ul>
+     *
+     * <p>Returns a JSON summary of deleted files.
+     */
+    private void deleteBlobs(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        BlobGraph blobGraph = datasetGraph.getBlobGraph();
+
+        JSONObject body;
+        try {
+            body = new JSONObject(ctx.body());
+        } catch (JSONException e) {
+            ctx.status(400).json(Map.of(
+                    "success", false,
+                    "error", "Invalid JSON body"
+            ));
+            return;
+        }
+
+        List<String> deleted = new ArrayList<>();
+        List<Map<String, String>> errors = new ArrayList<>();
+
+        // Delete by blob URI: resolve filepath from sha256 lookup
+        if (body.has("uris")) {
+            JSONArray uriArray = body.getJSONArray("uris");
+            for (int i = 0; i < uriArray.length(); i++) {
+                String blobUri = uriArray.getString(i);
+                try {
+                    // Extract sha256 from urn:atic:blob:{sha256}
+                    String sha256;
+                    if (blobUri.startsWith(BlobGraph.NS_BLOB)) {
+                        sha256 = blobUri.substring(BlobGraph.NS_BLOB.length());
+                    } else {
+                        sha256 = blobUri;
+                    }
+                    // Look up any filepath for this sha256
+                    String filepath = blobGraph.getPath(sha256, ictx);
+                    if (filepath != null) {
+                        blobGraph.delete(filepath, ictx);
+                        deleted.add(filepath);
+                    }
+                } catch (IllegalStateException e) {
+                    Map<String, String> err = new LinkedHashMap<>();
+                    err.put("uri", blobUri);
+                    err.put("error", "Not found: " + blobUri);
+                    errors.add(err);
+                } catch (Exception e) {
+                    Map<String, String> err = new LinkedHashMap<>();
+                    err.put("uri", blobUri);
+                    err.put("error", e.getMessage());
+                    errors.add(err);
+                }
+            }
+        }
+
+        // Delete by logical filepath
+        if (body.has("paths")) {
+            JSONArray pathArray = body.getJSONArray("paths");
+            for (int i = 0; i < pathArray.length(); i++) {
+                String filepath = pathArray.getString(i);
+                try {
+                    blobGraph.delete(filepath, ictx);
+                    deleted.add(filepath);
+                } catch (Exception e) {
+                    Map<String, String> err = new LinkedHashMap<>();
+                    err.put("path", filepath);
+                    err.put("error", e.getMessage());
+                    errors.add(err);
+                }
+            }
+        }
+
+        ctx.json(Map.of(
+                "success", true,
+                "deleted", deleted.size(),
+                "deletedPaths", deleted,
+                "errors", errors
+        ));
     }
 
     //------------------------------------
