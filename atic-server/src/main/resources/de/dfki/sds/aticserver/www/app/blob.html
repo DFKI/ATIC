@@ -3,30 +3,57 @@
     <head>
         <meta charset="utf-8">
 
-        <link href="css/bootstrap.min.css" rel="stylesheet" />
-        <link href="css/all.min.css" rel="stylesheet" />
-        <link href="css/loader.css" rel="stylesheet" />
-        <link href="css/link.css" rel="stylesheet" />
+        <link href="/app/css/bootstrap.min.css" rel="stylesheet" />
+        <link href="/app/css/all.min.css" rel="stylesheet" />
+        <link href="/app/css/loader.css" rel="stylesheet" />
+        <link href="/app/css/link.css" rel="stylesheet" />
 
-        <script src="js/bootstrap.bundle.min.js"></script>
-        <script src="js/vue.global.prod.js"></script>
-        <script src="js/axios.min.js"></script>
+        <script src="/app/js/bootstrap.bundle.min.js"></script>
+        <script src="/app/js/vue.global.prod.js"></script>
+        <script src="/app/js/axios.min.js"></script>
 
         <link rel="shortcut icon" href="favicon.ico">
         <title>Blob Explorer | Atic</title>
         <style>
-            .tab-content { min-height: 400px; }
-            .folder-entry { background: #fff8e1; }
-            .progress { height: 1.5rem; }
-            .progress-bar { font-size: 0.8rem; }
-            .breadcrumb-item a { color: #0d6efd; text-decoration: none; }
-            .breadcrumb-item.active { color: #6c757d; }
+            .tab-content {
+                min-height: 400px;
+            }
+            .folder-entry {
+                background: #fff8e1;
+                cursor: pointer;
+            }
+            .table tbody tr {
+                cursor: pointer;
+            }
+            .table tbody tr:hover {
+                background-color: #f8f9fa;
+            }
+            .table tbody tr .btn-group,
+            .table tbody tr .btn-group button {
+                cursor: default;
+            }
+            .progress {
+                height: 1.5rem;
+            }
+            .progress-bar {
+                font-size: 0.8rem;
+            }
+            .breadcrumb-item a {
+                color: #0d6efd;
+                text-decoration: none;
+            }
+            .breadcrumb-item.active {
+                color: #6c757d;
+            }
             .context-menu {
                 position: absolute;
                 z-index: 9999;
                 min-width: 180px;
             }
-            .file-icon { width: 24px; text-align: center; }
+            .file-icon {
+                width: 24px;
+                text-align: center;
+            }
         </style>
     </head>
     <body>
@@ -58,13 +85,7 @@
                             <label class="form-label mb-0">Files:</label>
                         </div>
                         <div class="col-auto">
-                            <input type="file" multiple @change="onFileSelect" class="form-control form-control-sm" style="max-width: 400px;">
-                        </div>
-                        <div class="col-auto">
-                            <label class="form-label mb-0">To:</label>
-                        </div>
-                        <div class="col">
-                            <input type="text" v-model="uploadPath" class="form-control form-control-sm" placeholder="Current folder (auto-resolved)">
+                            <input type="file" ref="fileInput" multiple @change="onFileSelect" class="form-control form-control-sm" style="max-width: 400px;">
                         </div>
                         <div class="col-auto">
                             <button class="btn btn-sm btn-primary" @click="uploadFiles" :disabled="selectedFiles.length === 0 || uploading">
@@ -76,8 +97,17 @@
 
                     <!-- Upload progress bars -->
                     <div v-if="uploadTasks.length > 0" class="mt-2">
-                        <div v-for="task in uploadTasks" :key="task.name" class="mb-2">
+                        <div class="d-flex align-items-center mb-1">
+                            <span class="fw-semibold me-2" style="font-size: 0.85rem;">Upload Progress:</span>
+                            <button v-if="hasCompletedTasks" class="btn btn-sm btn-outline-secondary ms-auto" @click="clearCompletedTasks" title="Clear all">
+                                <i class="fa fa-times"></i> Clear all
+                            </button>
+                        </div>
+                        <div v-for="(task, idx) in uploadTasks" :key="task.name + idx" class="mb-2">
                             <div class="d-flex align-items-center">
+                                <button class="btn btn-sm btn-link text-muted p-0 me-2" title="Remove" @click="removeUploadTask(idx)">
+                                    <i class="fa fa-times"></i>
+                                </button>
                                 <span class="me-2" style="width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" :title="task.name">{{ task.name }}</span>
                                 <div class="progress flex-grow-1" style="height: 1.2rem;">
                                     <div class="progress-bar"
@@ -117,9 +147,18 @@
                             <i class="fa fa-home"></i>
                         </button>
                         <!-- Back button (..) -->
-                        <button v-if="tab.path !== '/'" class="btn btn-sm btn-outline-secondary me-2" @click="navigateBack(tab)" title="Go up">
-                            <i class="fa fa-level-up"></i> ..
+                        <button v-if="tab.path !== '/'" class="btn btn-sm btn-outline-secondary me-2" @click="navigateBack(tab)" title="Go up" style="white-space: nowrap">
+                            <i class="fa fa-level-up-alt"></i> ..
                         </button>
+                        <!-- Path input for direct navigation -->
+                        <div class="input-group input-group-sm me-2" style="min-width: 220px;">
+                            <input type="text" v-model="tab.pathInput" class="form-control form-control-sm"
+                                   placeholder="Type path and press Enter, e.g. /a/b/c"
+                                   @keyup.enter="navigateToPath(tab)">
+                            <button class="btn btn-outline-secondary" @click="navigateToPath(tab)" title="Navigate">
+                                <i class="fa fa-arrow-right"></i>
+                            </button>
+                        </div>
                         <!-- Breadcrumb -->
                         <nav aria-label="breadcrumb" class="ms-2 flex-grow-1">
                             <ol class="breadcrumb mb-0">
@@ -138,9 +177,9 @@
                             </ol>
                         </nav>
                     </div>
-
+                    
                     <!-- Loading -->
-                    <div v-if="tab.loading" class="text-center py-5">
+                    <div v-if="tab && tab.loading" class="text-center py-5">
                         <div class="spinner-border text-primary" role="status"></div>
                         <p class="mt-2 text-muted">Loading...</p>
                     </div>
@@ -151,8 +190,8 @@
                             <thead class="table-light">
                                 <tr>
                                     <th style="width: 40px;"></th>
-                                    <th style="cursor:pointer" @click="sortTab(tab, 'name')">
-                                        Name <i v-if="tab.sortBy === 'name'" :class="tab.sortDir === 'asc' ? 'fa fa-sort-up' : 'fa fa-sort-down'"></i>
+                                    <th style="cursor:pointer"> <!-- @click="sortTab(tab, 'name')" -->
+                                        Name <!-- i v-if="tab.sortBy === 'name'" :class="tab.sortDir === 'asc' ? 'fa fa-sort-up' : 'fa fa-sort-down'"></i -->
                                     </th>
                                     <th style="cursor:pointer" @click="sortTab(tab, 'type')">Type</th>
                                     <th style="width: 120px;">Actions</th>
@@ -161,7 +200,7 @@
                             <tbody>
                                 <tr v-for="item in sortedEntries(tab)" :key="item.path"
                                     :class="{ 'folder-entry': item.isFolder }"
-                                    @dblclick="handleDoubleClick(tab, item)">
+                                    @click="handleClick(tab, item)">
                                     <td class="file-icon">
                                         <i v-if="item.isFolder" class="fa fa-folder text-warning fs-5"></i>
                                         <i v-else-if="isImage(item)" class="fa fa-file-image text-info fs-5"></i>
@@ -174,18 +213,21 @@
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm" v-if="!item.isFolder">
-                                            <button class="btn btn-outline-secondary" @click="copyFile(item)" title="Copy">
+                                            <button class="btn btn-outline-secondary" @click.stop="copyFileUri(item)" title="Copy URI">
+                                                <i class="fa fa-link"></i>
+                                            </button>
+                                            <button class="btn btn-outline-secondary" @click.stop="copyFile(item)" title="Copy to clipboard">
                                                 <i class="fa fa-copy"></i>
                                             </button>
-                                            <button class="btn btn-outline-secondary" @click="startRename(tab, item)" title="Rename">
+                                            <button class="btn btn-outline-secondary" @click.stop="startRename(tab, item)" title="Rename">
                                                 <i class="fa fa-edit"></i>
                                             </button>
-                                            <button class="btn btn-outline-danger" @click="deleteFiles([item.path])" title="Delete">
+                                            <button class="btn btn-outline-danger" @click.stop="deleteFiles([item.path])" title="Delete">
                                                 <i class="fa fa-trash"></i>
                                             </button>
                                         </div>
                                         <div class="btn-group btn-group-sm" v-else>
-                                            <button class="btn btn-outline-secondary" @click="navigateTo(tab, item.path)" title="Open">
+                                            <button class="btn btn-outline-secondary" @click.stop="navigateTo(tab, item.path)" title="Open">
                                                 <i class="fa fa-folder-open"></i>
                                             </button>
                                         </div>
@@ -259,26 +301,20 @@
         </div>
 
         <script>
-const { createApp } = Vue;
-
+const {createApp} = Vue;
 createApp({
     data() {
         return {
-            loading: false,
             user: null,
             error: null,
             errorMsg: '',
-
             // Upload state
             selectedFiles: [],
-            uploadPath: '',
             uploadTasks: [],
-
             // Tabs
             tabCounter: 0,
             tabs: [],
             activeTabId: null,
-
             // Clipboard
             clipboardPath: null,
             clipboardOp: null, // 'copy' or 'move'
@@ -287,7 +323,6 @@ createApp({
             renameTab: null,
             renameItem: null,
             renameNewName: '',
-
             // Context menu
             showContextMenu: false,
             contextMenuX: 0,
@@ -295,40 +330,49 @@ createApp({
             contextMenuPath: null,
         };
     },
-
     created() {
         axios.interceptors.response.use(
-            response => response,
-            error => {
-                if (error.response && error.response.status === 401) {
-                    window.location.href = '/app/unauthorized.html';
+                response => response,
+                error => {
+                    if (error.response && error.response.status === 401) {
+                        window.location.href = '/app/unauthorized.html';
+                    }
+                    return Promise.reject(error);
                 }
-                return Promise.reject(error);
-            }
         );
         this.getAuthMe();
-        this.addTab();
     },
-
+    mounted() {
+// Wait for the DOM so modal refs are available
+        this.$nextTick(() => {
+            this.addTab();
+        });
+    },
     computed: {
         uploading() {
             return this.uploadTasks.some(t => !t.done);
+        },
+        hasCompletedTasks() {
+            return this.uploadTasks.some(t => t.done);
         }
     },
-
     methods: {
         // ── Auth ──
         getAuthMe() {
             axios.get('/auth/me')
-                .then(response => { this.user = response.data; })
-                .catch(() => { window.location.href = '/app/unauthorized.html'; });
+                    .then(response => {
+                        this.user = response.data;
+                    })
+                    .catch(() => {
+                        window.location.href = '/app/unauthorized.html';
+                    });
         },
-
         postLogout() {
             axios.post('/auth/logout')
-                .then(response => { window.location.href = response.data.redirect; });
+                    .then(response => {
+                        window.location.href = response.data.redirect;
+                    });
         },
-
         // ── Tabs ──
         addTab() {
             const id = ++this.tabCounter;
@@ -341,12 +385,25 @@ createApp({
                 loading: false,
                 sortBy: 'name',
                 sortDir: 'asc',
+                pathInput: '',
             };
-            this.tabs.push(tab);
             this.activeTabId = id;
+            this.loadTab(tab).then(_ => {
+                this.tabs.push(tab);
+            });
+        },
+        // ── Navigation ──
+        navigateTo(tab, newPath) {
+            tab.path = newPath === '/' ? '/' : (newPath.endsWith('/') ? newPath : newPath + '/');
+            tab.segments = tab.path === '/' ? [] : tab.path.split('/').filter(Boolean);
+            tab.pathInput = tab.path;
+            if (tab.path === '/') {
+                tab.name = 'Root';
+            } else {
+                tab.name = tab.segments[tab.segments.length - 1];
+            }
             this.loadTab(tab);
         },
-
         closeTab(idx) {
             const tab = this.tabs[idx];
             this.tabs.splice(idx, 1);
@@ -354,19 +411,21 @@ createApp({
                 this.activeTabId = this.tabs[0].id;
             }
         },
-
         // ── Folder Loading ──
         loadTab(tab) {
             tab.loading = true;
-            axios.get('/blob', { params: { path: tab.path } })
+            return axios.get('/blob', {
+                params: {path: tab.path}
+            })
                 .then(response => {
                     tab.entries = response.data.blobs || [];
                 })
                 .catch(err => {
-                    this.showError('Failed to load folder: ' + (err.response?.data?.error || err.message));
                     tab.entries = [];
                 })
-                .finally(() => { tab.loading = false; });
+                .finally(() => {
+                    tab.loading = false;
+                });
         },
 
         sortTab(tab, sortBy) {
@@ -377,7 +436,6 @@ createApp({
                 tab.sortDir = 'asc';
             }
         },
-
         sortedEntries(tab) {
             const entries = [...tab.entries];
             const cmp = (a, b) => {
@@ -388,57 +446,56 @@ createApp({
             };
             // Folders always first
             entries.sort((a, b) => {
-                if (a.isFolder && !b.isFolder) return -1;
-                if (!a.isFolder && b.isFolder) return 1;
+                if (a.isFolder && !b.isFolder)
+                    return -1;
+                if (!a.isFolder && b.isFolder)
+                    return 1;
                 return cmp(a, b);
             });
             return entries;
         },
-
-        // ── Navigation ──
-        navigateTo(tab, newPath) {
-            tab.path = newPath === '/' ? '/' : (newPath.endsWith('/') ? newPath : newPath + '/');
-            tab.segments = tab.path === '/' ? [] : tab.path.split('/').filter(Boolean);
-            if (tab.path === '/') {
-                tab.name = 'Root';
-            } else {
-                tab.name = tab.segments[tab.segments.length - 1];
-            }
-            this.loadTab(tab);
-        },
-
         navigateBack(tab) {
             const segments = tab.path.split('/').filter(Boolean);
             segments.pop();
-            const newPath = segments.length > 0 ? segments.join('/') + '/' : '/';
+            const newPath = segments.length > 0 ? '/' + segments.join('/') + '/' : '/';
             this.navigateTo(tab, newPath);
         },
-
         navigateToSegment(tab, segIndex) {
             const segments = tab.path.split('/').filter(Boolean);
             const newPath = segments.slice(0, segIndex + 1).join('/') + '/';
             this.navigateTo(tab, newPath);
         },
-
-        handleDoubleClick(tab, item) {
+        handleClick(tab, item) {
             if (item.isFolder) {
                 this.navigateTo(tab, item.path);
+            } else {
+                // Open file content in a new tab
+                window.open('/blob/serve' + item.path, '_blank');
             }
         },
-
+        navigateToPath(tab) {
+            const raw = (tab.pathInput || '').trim();
+            if (!raw)
+                return;
+            // Normalize to absolute path
+            let path = raw.startsWith('/') ? raw : '/' + raw;
+            // Collapse slashes, remove trailing slash (except root)
+            while (path.includes('//'))
+                path = path.replace('//', '/');
+            if (path.length > 1 && path.endsWith('/'))
+                path = path.slice(0, -1);
+            this.navigateTo(tab, path);
+        },
         // ── Upload ──
         onFileSelect(e) {
             this.selectedFiles = Array.from(e.target.files);
         },
-
         async uploadFiles() {
-            if (this.selectedFiles.length === 0) return;
-
-            // Resolve upload path to the current folder
+            if (this.selectedFiles.length === 0)
+                return;
             const activeTab = this.tabs.find(t => t.id === this.activeTabId);
             const folderPath = activeTab ? activeTab.path : '/';
             const uploadTarget = folderPath === '/' ? '' : folderPath;
-
             this.selectedFiles.forEach(file => {
                 this.uploadTasks.push({
                     name: file.name,
@@ -448,7 +505,6 @@ createApp({
                     error: null,
                 });
             });
-
             const formData = new FormData();
             this.selectedFiles.forEach(file => {
                 formData.append('file', file, file.name);
@@ -459,14 +515,13 @@ createApp({
 
             try {
                 const response = await axios.post('/blob', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' },
+                    headers: {'Content-Type': 'multipart/form-data'},
                     onUploadProgress: (e) => {
                         // This is for the overall request progress
                         const idx = this.selectedFiles.findIndex(f => f.name === this.uploadTasks[0]?.name);
                         // Simplified: we just mark overall
                     }
                 });
-
                 if (response.data.success) {
                     this.uploadTasks.forEach(task => {
                         task.percent = 100;
@@ -474,75 +529,106 @@ createApp({
                         task.success = true;
                     });
                     // Refresh current folder
-                    if (activeTab) this.loadTab(activeTab);
+                    if (activeTab)
+                        this.loadTab(activeTab);
                 }
             } catch (err) {
                 this.uploadTasks.forEach(task => {
                     task.done = true;
                     task.error = err.response?.data?.error || err.message;
                 });
+            } finally {
+                // Clear selected files and file input
+                this.selectedFiles = [];
+                if (this.$refs.fileInput) {
+                    this.$refs.fileInput.value = '';
+                }
             }
         },
-
+        removeUploadTask(idx) {
+            this.uploadTasks.splice(idx, 1);
+        },
+        clearCompletedTasks() {
+            this.uploadTasks = this.uploadTasks.filter(t => !t.done);
+        },
         // ── Copy ──
+        copyFileUri(item) {
+            const uri = item.blobUri;
+            if (!uri) {
+                this.showError('No URI available for this file');
+                return;
+            }
+            navigator.clipboard.writeText(uri).then(() => {
+                this.showToast('URI copied: ' + uri);
+            }).catch(() => {
+                this.showError('Failed to copy URI');
+            });
+        },
+        // ── Copy to server ──
         copyFile(item) {
             const filepath = item.path || item.filename;
-            if (!filepath) return;
-            axios.post('/blob/copy', { path: filepath })
-                .then(response => {
-                    if (response.data.success) {
-                        this.clipboardPath = response.data.clipboard;
-                        this.clipboardOp = 'copy';
-                        this.showToast('File copied: ' + response.data.clipboard);
-                    } else {
-                        this.showError(response.data.error);
-                    }
-                })
-                .catch(err => this.showError(err.message));
+            if (!filepath)
+                return;
+            axios.post('/blob/copy', {path: filepath})
+                    .then(response => {
+                        if (response.data.success) {
+                            this.clipboardPath = response.data.clipboard;
+                            this.clipboardOp = 'copy';
+                            this.showToast('File copied: ' + response.data.clipboard);
+                        } else {
+                            this.showError(response.data.error);
+                        }
+                    })
+                    .catch(err => this.showError(err.message));
         },
-
         // ── Paste ──
         pasteHere() {
             const activeTab = this.tabs.find(t => t.id === this.activeTabId);
-            if (!activeTab || !this.clipboardPath) return;
-
-            axios.post('/blob/paste', { destFolder: activeTab.path })
-                .then(response => {
-                    if (response.data.success) {
-                        this.showToast('Pasted: ' + response.data.target);
-                        this.loadTab(activeTab);
-                    } else {
-                        this.showError(response.data.error);
-                    }
-                })
-                .catch(err => this.showError(err.message))
-                .finally(() => { this.showContextMenu = false; });
+            if (!activeTab || !this.clipboardPath)
+                return;
+            axios.post('/blob/paste', {destFolder: activeTab.path})
+                    .then(response => {
+                        if (response.data.success) {
+                            this.showToast('Pasted: ' + response.data.target);
+                            this.loadTab(activeTab);
+                        } else {
+                            this.showError(response.data.error);
+                        }
+                    })
+                    .catch(err => this.showError(err.message))
+                    .finally(() => {
+                        this.showContextMenu = false;
+                    });
         },
-
         // ── Move ──
         moveToFolder() {
             const activeTab = this.tabs.find(t => t.id === this.activeTabId);
-            if (!activeTab || !this.contextMenuPath) return;
-
+            if (!activeTab || !this.contextMenuPath)
+                return;
             axios.post('/blob/move', {
                 sourcePath: this.contextMenuPath,
                 destFolder: activeTab.path,
             })
-                .then(response => {
-                    if (response.data.success) {
-                        this.showToast('Moved to: ' + response.data.targetPath);
-                        // Refresh the active tab
-                        if (activeTab) this.loadTab(activeTab);
-                        // If source is in a different tab, refresh that too
-                        this.tabs.forEach(t => { if (t.path !== activeTab.path) this.loadTab(t); });
-                    } else {
-                        this.showError(response.data.error);
-                    }
-                })
-                .catch(err => this.showError(err.message))
-                .finally(() => { this.showContextMenu = false; });
+                    .then(response => {
+                        if (response.data.success) {
+                            this.showToast('Moved to: ' + response.data.targetPath);
+                            // Refresh the active tab
+                            if (activeTab)
+                                this.loadTab(activeTab);
+                            // If source is in a different tab, refresh that too
+                            this.tabs.forEach(t => {
+                                if (t.path !== activeTab.path)
+                                    this.loadTab(t);
+                            });
+                        } else {
+                            this.showError(response.data.error);
+                        }
+                    })
+                    .catch(err => this.showError(err.message))
+                    .finally(() => {
+                        this.showContextMenu = false;
+                    });
         },
-
         // ── Rename ──
         startRename(tab, item) {
             this.renameTab = tab;
@@ -557,56 +643,52 @@ createApp({
                 }
             });
         },
-
         confirmRename() {
-            if (!this.renameItem || !this.renameNewName.trim()) return;
-
+            if (!this.renameItem || !this.renameNewName.trim())
+                return;
             const sourcePath = this.renameItem.path || this.renameItem.filename;
             const targetPath = this.renameNewName.trim();
-
-            axios.put('/blob/rename', { sourcePath, targetPath })
-                .then(response => {
-                    if (response.data.success) {
-                        const modal = bootstrap.Modal.getInstance(this.$refs.renameModal);
-                        modal.hide();
-                        this.showToast('Renamed successfully');
-                        this.tabs.forEach(t => this.loadTab(t));
-                    } else {
-                        this.showError(response.data.error);
-                    }
-                })
-                .catch(err => this.showError(err.message));
+            axios.put('/blob/rename', {sourcePath, targetPath})
+                    .then(response => {
+                        if (response.data.success) {
+                            const modal = bootstrap.Modal.getInstance(this.$refs.renameModal);
+                            modal.hide();
+                            this.showToast('Renamed successfully');
+                            this.tabs.forEach(t => this.loadTab(t));
+                        } else {
+                            this.showError(response.data.error);
+                        }
+                    })
+                    .catch(err => this.showError(err.message));
         },
-
         // ── Delete ──
         deleteFiles(paths) {
             const selected = Array.isArray(paths) ? paths : [paths];
-            if (!confirm('Delete ' + selected.length + ' file(s)?')) return;
-
-            axios.delete('/blob', { data: { paths: selected } })
-                .then(response => {
-                    if (response.data.success) {
-                        this.showToast(response.data.deleted + ' file(s) deleted');
-                        this.tabs.forEach(t => this.loadTab(t));
-                    } else {
-                        this.showError(response.data.error);
-                    }
-                })
-                .catch(err => this.showError(err.message));
+            if (!confirm('Delete ' + selected.length + ' file(s)?'))
+                return;
+            axios.delete('/blob', {data: {paths: selected}})
+                    .then(response => {
+                        if (response.data.success) {
+                            this.showToast(response.data.deleted + ' file(s) deleted');
+                            this.tabs.forEach(t => this.loadTab(t));
+                        } else {
+                            this.showError(response.data.error);
+                        }
+                    })
+                    .catch(err => this.showError(err.message));
         },
-
         // ── Helpers ──
         isImage(item) {
             const mime = (item.mimeType || '').toLowerCase();
             return mime.startsWith('image/');
         },
-
         showError(msg) {
             this.errorMsg = msg;
-            const modal = new bootstrap.Modal(this.$refs.errorModal);
-            modal.show();
+            if (this.$refs?.errorModal) {
+                const modal = new bootstrap.Modal(this.$refs.errorModal);
+                modal.show();
+            }
         },
-
         showToast(msg) {
             // Simple alert for now; can be improved with a toast component
             const div = document.createElement('div');

@@ -353,7 +353,7 @@ public class AticServer {
         routes.get("/auth/me", this::getAuthMe);
         routes.post("/auth/logout", this::postLogout);
         routes.put("/auth/password", this::putPassword);
-        if(config.isAdminsecretEnabled() || config.isSwitchuserEnabled()) {
+        if (config.isAdminsecretEnabled() || config.isSwitchuserEnabled()) {
             routes.post("/auth/su/{username}", this::postSwitchUser);
         }
 
@@ -412,6 +412,7 @@ public class AticServer {
         // =========================================================================
         routes.post("/blob", this::postBlobUpload);
         routes.get("/blob", this::getBlobList);
+        routes.get("/blob/serve/*", this::serveBlob);
         routes.get("/blob/{path*}", this::getBlobUri);
         routes.delete("/blob", this::deleteBlobs);
         routes.put("/blob/rename", this::putBlobRename);
@@ -1776,19 +1777,18 @@ public class AticServer {
     // =========================================================================
     //  BlobGraph REST endpoints
     // =========================================================================
-
     /**
      * POST /blob — upload one or more files.
      *
-     * <p>Accepts multipart form data with the following fields:
+     * <p>
+     * Accepts multipart form data with the following fields:
      * <ul>
-     *   <li>file — one or more uploaded files</li>
-     *   <li>path (optional) — logical path prefix for stored files; if absent the
-     *       original filename is used directly</li>
+     * <li>file — one or more uploaded files</li>
+     * <li>path (optional) — logical path prefix for stored files; if absent the original filename is used directly</li>
      * </ul>
      *
-     * <p>Each uploaded file is stored in the BlobGraph with a content-addressed
-     * identity (SHA-256).  The response returns the blob URIs.
+     * <p>
+     * Each uploaded file is stored in the BlobGraph with a content-addressed identity (SHA-256). The response returns the blob URIs.
      */
     private void postBlobUpload(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
@@ -1847,8 +1847,8 @@ public class AticServer {
                 final String fp = finalLogicalPath;
                 String[] info = datasetGraph.calculateRead(() -> {
                     return new String[]{
-                            blobGraph.getURI(fp, ictx),
-                            blobGraph.getSHA256(fp, ictx)
+                        blobGraph.getURI(fp, ictx),
+                        blobGraph.getSHA256(fp, ictx)
                     };
                 });
 
@@ -1877,16 +1877,36 @@ public class AticServer {
     /**
      * GET /blob — list blobs, optionally filtered by a folder prefix.
      *
-     * <p>Query parameters:
+     * <p>
+     * Query parameters:
      * <ul>
-     *   <li>path (optional) — list only files under this directory prefix</li>
+     * <li>path (optional) — list only files under this directory prefix</li>
      * </ul>
      *
-     * <p>Returns a JSON object with a "blobs" array; each entry contains
-     * {@code filepath}, {@code filename}, {@code mimeType}, {@code blobUri},
-     * and {@code sha256}.
+     * <p>
+     * Returns a JSON object with a "blobs" array; each entry contains {@code filepath}, {@code filename}, {@code mimeType}, {@code blobUri}, and
+     * {@code sha256}.
      */
     private void getBlobList(Context ctx) {
+        String accept = ctx.header("Accept");
+        HandlerType method = ctx.method();
+
+        //HTML version for human
+        if (HandlerType.GET.equals(method) && accept != null && accept.contains("text/html")) {
+            try (InputStream is = AticServer.class.getResourceAsStream(
+                    "/de/dfki/sds/aticserver/www/app/blob.html")) {
+                if (is == null) {
+                    ctx.status(404).result("blob.html not found");
+                    return;
+                }
+                String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                ctx.html(html);
+                return;
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+        
         InvocationContext ictx = fromJavalinContext(ctx);
         BlobGraph blobGraph = datasetGraph.getBlobGraph();
 
@@ -1913,7 +1933,7 @@ public class AticServer {
             }
             return result;
         });
-        
+
         JSONObject result = new JSONObject();
         result.put("path", fp);
         result.put("count", blobs.size());
@@ -1935,8 +1955,8 @@ public class AticServer {
             // All reads inside a single read transaction
             String[] info = datasetGraph.calculateRead(() -> {
                 return new String[]{
-                        blobGraph.getURI(filepath, ictx),
-                        blobGraph.getSHA256(filepath, ictx)
+                    blobGraph.getURI(filepath, ictx),
+                    blobGraph.getSHA256(filepath, ictx)
                 };
             });
 
@@ -1954,15 +1974,74 @@ public class AticServer {
     }
 
     /**
+     * GET /blob/serve/* — stream blob content with the correct MIME type.
+     */
+    private void serveBlob(Context ctx) throws IOException {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        BlobGraph blobGraph = datasetGraph.getBlobGraph();
+
+        String path = ctx.path();
+        String filepath = path.startsWith("/blob/serve")
+                ? path.substring("/blob/serve".length())
+                : path;
+
+        filepath = "/" + filepath.replaceFirst("^/+", "");
+
+        final String finalPath = filepath;
+
+        try {
+            String[] info = datasetGraph.calculateRead(() -> new String[]{
+                blobGraph.getSHA256(finalPath, ictx),
+                blobGraph.getMimeType(finalPath, ictx)
+            });
+
+            String sha256 = info[0];
+            String mimeType = info[1] != null
+                    ? info[1]
+                    : "application/octet-stream";
+
+            if (sha256 == null || sha256.isBlank()) {
+                ctx.status(404).result("File not found: " + finalPath);
+                return;
+            }
+
+            InputStream is = blobGraph.readBlob(sha256);
+
+            if (is == null) {
+                ctx.status(404).result("Blob not found: " + finalPath);
+                return;
+            }
+
+            String filename = new File(finalPath).getName();
+
+            ctx.status(200);
+            ctx.contentType(mimeType);
+            ctx.header(
+                    "Content-Disposition",
+                    "inline; filename=\"" + filename + "\""
+            );
+
+            // Do NOT close the stream here.
+            // Javalin consumes and closes it while writing the response.
+            ctx.result(is);
+
+        } catch (IllegalStateException e) {
+            ctx.status(404).result("File not found: " + finalPath);
+        }
+    }
+
+    /**
      * DELETE /blob — delete one or more blobs by URI.
      *
-     * <p>Accepts a JSON body with either:
+     * <p>
+     * Accepts a JSON body with either:
      * <ul>
-     *   <li>{@code "uris": ["urn:atic:blob:...", ...]} — delete by blob URI</li>
-     *   <li>{@code "paths": ["/some/path", ...]} — delete by logical filepath</li>
+     * <li>{@code "uris": ["urn:atic:blob:...", ...]} — delete by blob URI</li>
+     * <li>{@code "paths": ["/some/path", ...]} — delete by logical filepath</li>
      * </ul>
      *
-     * <p>Returns a JSON summary of deleted files.
+     * <p>
+     * Returns a JSON summary of deleted files.
      */
     private void deleteBlobs(Context ctx) {
         InvocationContext ictx = fromJavalinContext(ctx);
@@ -1992,9 +2071,13 @@ public class AticServer {
                 JSONArray uriArray = body.optJSONArray("uris");
                 if (uriArray != null) {
                     for (int i = 0; i < uriArray.length(); i++) {
-                        if (uriArray.isNull(i)) continue;
+                        if (uriArray.isNull(i)) {
+                            continue;
+                        }
                         String blobUri = uriArray.optString(i);
-                        if (blobUri == null || blobUri.isEmpty()) continue;
+                        if (blobUri == null || blobUri.isEmpty()) {
+                            continue;
+                        }
                         try {
                             String sha256;
                             if (blobUri.startsWith(BlobGraph.NS_BLOB)) {
@@ -2019,9 +2102,13 @@ public class AticServer {
                 JSONArray pathArray = body.optJSONArray("paths");
                 if (pathArray != null) {
                     for (int i = 0; i < pathArray.length(); i++) {
-                        if (pathArray.isNull(i)) continue;
+                        if (pathArray.isNull(i)) {
+                            continue;
+                        }
                         String filepath = pathArray.optString(i);
-                        if (filepath == null || filepath.isEmpty()) continue;
+                        if (filepath == null || filepath.isEmpty()) {
+                            continue;
+                        }
                         try {
                             blobGraph.delete(filepath, ictx);
                             deleted.add(filepath);
@@ -2053,14 +2140,14 @@ public class AticServer {
     // =========================================================================
     //  Additional BlobGraph REST endpoints: rename, copy, paste, move
     // =========================================================================
-
     /**
      * PUT /blob/rename — rename (move) a single file.
      *
-     * <p>JSON body:
+     * <p>
+     * JSON body:
      * <ul>
-     *   <li>{@code "sourcePath"} — current logical filepath</li>
-     *   <li>{@code "targetPath"} — new logical filepath</li>
+     * <li>{@code "sourcePath"} — current logical filepath</li>
+     * <li>{@code "targetPath"} — new logical filepath</li>
      * </ul>
      */
     private void putBlobRename(Context ctx) {
@@ -2106,9 +2193,10 @@ public class AticServer {
     /**
      * POST /blob/copy — copy a file, saving the source path into the session clipboard.
      *
-     * <p>JSON body:
+     * <p>
+     * JSON body:
      * <ul>
-     *   <li>{@code "path"} — logical filepath to copy</li>
+     * <li>{@code "path"} — logical filepath to copy</li>
      * </ul>
      */
     private void postBlobCopy(Context ctx) {
@@ -2133,8 +2221,8 @@ public class AticServer {
         String[] info;
         try {
             info = datasetGraph.calculateRead(() -> new String[]{
-                    blobGraph.getURI(sourcePath, ictx),
-                    blobGraph.getSHA256(sourcePath, ictx)
+                blobGraph.getURI(sourcePath, ictx),
+                blobGraph.getSHA256(sourcePath, ictx)
             });
         } catch (Exception e) {
             ctx.status(404).json(Map.of(
@@ -2157,9 +2245,10 @@ public class AticServer {
     /**
      * POST /blob/paste — paste the clipboard path under a destination folder.
      *
-     * <p>JSON body:
+     * <p>
+     * JSON body:
      * <ul>
-     *   <li>{@code "destFolder"} — destination folder path (e.g. "photos" or "/")</li>
+     * <li>{@code "destFolder"} — destination folder path (e.g. "photos" or "/")</li>
      * </ul>
      */
     private void postBlobPaste(Context ctx) {
@@ -2216,10 +2305,11 @@ public class AticServer {
     /**
      * POST /blob/move — move a file to a different folder or rename it.
      *
-     * <p>JSON body:
+     * <p>
+     * JSON body:
      * <ul>
-     *   <li>{@code "sourcePath"} — current logical filepath</li>
-     *   <li>{@code "destFolder"} — destination folder path</li>
+     * <li>{@code "sourcePath"} — current logical filepath</li>
+     * <li>{@code "destFolder"} — destination folder path</li>
      * </ul>
      */
     private void postBlobMove(Context ctx) {
@@ -2274,8 +2364,7 @@ public class AticServer {
     }
 
     /**
-     * Normalize a filepath so it always starts with "/".
-     * Collapses multiple slashes and removes a trailing slash (unless it's just "/").
+     * Normalize a filepath so it always starts with "/". Collapses multiple slashes and removes a trailing slash (unless it's just "/").
      */
     private static String normalizePath(String path) {
         if (path == null || path.isEmpty()) {

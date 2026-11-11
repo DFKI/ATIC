@@ -2980,6 +2980,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     public AticGraph getSystemGraph() {
+        //TODO maybe just return systemGraph;
         return getGraph(SystemAticGraph.node, false, InvocationContext.EMPTY);
     }
 
@@ -3347,6 +3348,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
             //always the system graph
             nodes.add(SystemAticGraph.node);
+            nodes.add(BlobGraph.node);
 
             return nodes.iterator();
 
@@ -3365,6 +3367,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     @Override
     public boolean containsGraph(Node graphNode, InvocationContext ctx) {
         if (graphNode.equals(SystemAticGraph.node)) {
+            return true;
+        }
+        
+        if (graphNode.equals(BlobGraph.node)) {
             return true;
         }
 
@@ -3435,6 +3441,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     public void addGraph(Node graphName, Graph graph, InvocationContext ctx) {
 
         if (graphName.equals(SystemAticGraph.node)) {
+            throw new IllegalStateException("Graph already exists: " + graphName);
+        }
+        
+        if (graphName.equals(BlobGraph.node)) {
             throw new IllegalStateException("Graph already exists: " + graphName);
         }
 
@@ -3512,6 +3522,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
      */
     public void addVirtualGraph(Node graphName, String factoryMethodPath, JSONObject config, InvocationContext ctx) {
         if (graphName.equals(SystemAticGraph.node)) {
+            throw new IllegalStateException("Graph already exists: " + graphName);
+        }
+        
+        if (graphName.equals(BlobGraph.node)) {
             throw new IllegalStateException("Graph already exists: " + graphName);
         }
 
@@ -3660,6 +3674,10 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     public void removeGraph(Node graphName, InvocationContext ctx) {
         if (graphName.equals(SystemAticGraph.node)) {
             throw new IllegalArgumentException("Cannot delete system graph");
+        }
+        
+        if (graphName.equals(BlobGraph.node)) {
+            throw new IllegalArgumentException("Cannot delete blob graph");
         }
 
         ctx = InvocationContext.fromContextIfEmpty(ctx, context);
