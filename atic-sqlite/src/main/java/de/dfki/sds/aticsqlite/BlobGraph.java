@@ -238,7 +238,7 @@ public class BlobGraph implements AticGraph {
     // =========================================================================
 
     /**
-     * Insert or update the pointer: filepath → uri (+ sha256).
+     * Insert or update the pointer: filepath → uri (+ sha256, mimeType).
      *
      * <p>Uses a single SQL statement with {@code ON CONFLICT ... DO UPDATE} so the
      * upsert is atomic — no race condition between SELECT and INSERT/UPDATE.
@@ -246,17 +246,25 @@ public class BlobGraph implements AticGraph {
      * triggers the conflict handler when the insert duplicates a row.
      */
     private void upsertPointer(String filepath, String uri, String sha256, InvocationContext ctx) {
+        upsertPointer(filepath, uri, sha256, null, ctx);
+    }
+
+    /**
+     * Insert or update the pointer with mimeType.
+     */
+    private void upsertPointer(String filepath, String uri, String sha256, String mimeType, InvocationContext ctx) {
         long userId = ctx.getUserId();
         try {
             db.write(
-                "INSERT INTO blobgraph (filepath, uri, sha256, creator) "
-                + "VALUES (?, ?, ?, ?) "
+                "INSERT INTO blobgraph (filepath, uri, sha256, mimeType, creator) "
+                + "VALUES (?, ?, ?, ?, ?) "
                 + "ON CONFLICT(filepath) DO UPDATE SET "
                 + "uri = excluded.uri, "
                 + "sha256 = excluded.sha256, "
+                + "mimeType = excluded.mimeType, "
                 + "creator = excluded.creator, "
                 + "created_at = unixepoch()",
-                filepath, uri, sha256, userId
+                filepath, uri, sha256, mimeType, userId
             );
         } catch (SQLException e) {
             throw new RuntimeException("Failed to upsert pointer for " + filepath, e);
@@ -328,6 +336,23 @@ public class BlobGraph implements AticGraph {
             );
         } catch (SQLException e) {
             throw new RuntimeException("DB error looking up sha256 for uri " + uri, e);
+        }
+    }
+
+    /**
+     * Look up the MIME type for a filepath.
+     *
+     * @return MIME type, or {@code null} if not set
+     */
+    private String lookupMimeTypeByPath(String filepath) {
+        try {
+            return db.read(
+                "SELECT mimeType FROM blobgraph WHERE filepath = ?",
+                rs -> rs.next() ? rs.getString("mimeType") : null,
+                filepath
+            );
+        } catch (SQLException e) {
+            throw new RuntimeException("DB error looking up mimeType for " + filepath, e);
         }
     }
 
@@ -484,7 +509,7 @@ public class BlobGraph implements AticGraph {
             saveDefaultMetadata(filepath, sha256, mimeType);
 
             // Register in pointer table
-            upsertPointer(filepath, uri, sha256, ctx);
+            upsertPointer(filepath, uri, sha256, mimeType, ctx);
 
             log.debug("Saved blob {} -> {} ({})", sha256, filepath, data.length);
         } catch (IOException e) {
@@ -494,17 +519,32 @@ public class BlobGraph implements AticGraph {
 
     /**
      * Delete a blob by its logical filepath.
-     * Removes the pointer entry, the .ttl metadata, and the on-disk file.
+     * Removes the pointer entry.  The underlying blob file and .ttl metadata
+     * are only deleted when no other pointer references the same SHA-256.
      */
     public void delete(String filepath, InvocationContext ctx) {
         String sha256 = lookupSha256ByPath(filepath);
         if (sha256 == null) {
             return; // nothing to delete
         }
-        deleteBlobFile(sha256);
-        File metaFile = metadataFile(sha256);
-        if (metaFile.isFile()) {
-            metaFile.delete();
+        // Count remaining pointers to this SHA-256 (excluding the one we're about to remove)
+        int refCount;
+        try {
+            refCount = db.read(
+                "SELECT COUNT(*) AS cnt FROM blobgraph WHERE sha256 = ? AND filepath != ?",
+                rs -> rs.next() ? rs.getInt("cnt") : 0,
+                sha256, filepath
+            );
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to count pointers for " + sha256, e);
+        }
+        // Only delete underlying file/metadata when last pointer
+        if (refCount == 0) {
+            deleteBlobFile(sha256);
+            File metaFile = metadataFile(sha256);
+            if (metaFile.isFile()) {
+                metaFile.delete();
+            }
         }
         deletePointer(filepath);
         log.debug("Deleted blob {} -> {}", sha256, filepath);
@@ -564,6 +604,15 @@ public class BlobGraph implements AticGraph {
             throw new IllegalStateException("Hash not found: " + sha256);
         }
         return path;
+    }
+
+    /**
+     * Get the MIME type for a given filepath from the pointer table.
+     *
+     * @return MIME type, or {@code null} if not set
+     */
+    public String getMimeType(String filepath, InvocationContext ctx) {
+        return lookupMimeTypeByPath(filepath);
     }
 
     // =========================================================================
@@ -817,12 +866,46 @@ public class BlobGraph implements AticGraph {
     // =========================================================================
 
     /**
-     * List blob files in a given folder path.
-     * Searches the pointer table for entries whose filepath starts with the given prefix.
+     * Record representing a directory entry (file or subfolder).
      */
-    public List<String> list(String folderpath, InvocationContext ctx) {
+    public static class DirEntry implements Comparable<DirEntry> {
+        public final String path;
+        public final boolean isFolder;
+
+        public DirEntry(String path, boolean isFolder) {
+            this.path = path;
+            this.isFolder = isFolder;
+        }
+
+        @Override
+        public int compareTo(DirEntry other) {
+            // Folders first, then files, both alphabetically
+            if (this.isFolder != other.isFolder) {
+                return this.isFolder ? -1 : 1;
+            }
+            return this.path.compareTo(other.path);
+        }
+    }
+
+    /**
+     * List direct children (files and subfolders) of a given folder path.
+     * Searches the pointer table for entries whose filepath falls directly under
+     * the given folder — does NOT recurse into subdirectories.
+     *
+     * @param folderpath folder to list; empty string means root
+     * @return sorted list of {@link DirEntry} objects
+     */
+    public List<DirEntry> list(String folderpath, InvocationContext ctx) {
+        // Normalize: strip trailing slashes, but keep leading "/"
+        String fp = folderpath;
+        while (fp.length() > 1 && fp.endsWith("/")) {
+            fp = fp.substring(0, fp.length() - 1);
+        }
+
+        // Gather all matching paths first
+        List<String> allPaths;
         try {
-            return db.read(
+            allPaths = db.read(
                 "SELECT filepath FROM blobgraph WHERE filepath LIKE ? ORDER BY filepath",
                 rs -> {
                     List<String> result = new ArrayList<>();
@@ -831,11 +914,30 @@ public class BlobGraph implements AticGraph {
                     }
                     return result;
                 },
-                folderpath + "%"
+                fp.isEmpty() ? "%" : fp + "/%"
             );
         } catch (SQLException e) {
             throw new RuntimeException("Failed to list blobs under " + folderpath, e);
         }
+
+        // Filter to direct children only
+        List<DirEntry> children = new ArrayList<>(allPaths.size());
+        String prefix = fp.isEmpty() ? "" : fp + "/";
+
+        for (String p : allPaths) {
+            String remainder = p.substring(prefix.length());
+            int slash = remainder.indexOf('/');
+            if (slash < 0) {
+                // Direct child (file or folder)
+                boolean isFolder = p.endsWith("/");
+                children.add(new DirEntry(p, isFolder));
+            }
+            // else: deeper descendant — skip
+        }
+
+        // Sort: folders first, then files, both alphabetically
+        children.sort(null);
+        return children;
     }
 
     // =========================================================================

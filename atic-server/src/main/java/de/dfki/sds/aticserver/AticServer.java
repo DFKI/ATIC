@@ -26,6 +26,7 @@ import de.dfki.sds.atic.jenatic.AticVirtualGraphResponse;
 import de.dfki.sds.atic.jenatic.Fragment;
 import de.dfki.sds.atic.jenatic.FragmentSettings;
 import de.dfki.sds.atic.jenatic.InvocationContext;
+import de.dfki.sds.aticsqlite.BlobGraph;
 import de.dfki.sds.aticsqlite.Capabilities;
 import de.dfki.sds.aticsqlite.Database;
 import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
@@ -38,7 +39,6 @@ import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph.OntologyFormat;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
 import de.dfki.sds.aticsqlite.VueComponent;
-import de.dfki.sds.aticsqlite.BlobGraph;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
 import de.dfki.sds.rdfpatchsqlite.Converter;
 import io.javalin.Javalin;
@@ -412,8 +412,12 @@ public class AticServer {
         // =========================================================================
         routes.post("/blob", this::postBlobUpload);
         routes.get("/blob", this::getBlobList);
-        routes.get("/blob/{path}", this::getBlobUri);
+        routes.get("/blob/{path*}", this::getBlobUri);
         routes.delete("/blob", this::deleteBlobs);
+        routes.put("/blob/rename", this::putBlobRename);
+        routes.post("/blob/copy", this::postBlobCopy);
+        routes.post("/blob/paste", this::postBlobPaste);
+        routes.post("/blob/move", this::postBlobMove);
 
         routes.get("/user", this::getQueryUser);
         routes.get("/users", this::getUsers);
@@ -1868,31 +1872,26 @@ public class AticServer {
             folder = "";
         }
 
-        List<String> filepaths = blobGraph.list(folder, ictx);
+        String finalFolder = folder;
+        List<BlobGraph.DirEntry> entries = datasetGraph.calculateRead(() -> blobGraph.list(finalFolder, ictx));
 
         JSONArray blobs = new JSONArray();
-        for (String filepath : filepaths) {
+        for (BlobGraph.DirEntry e : entries) {
             JSONObject entry = new JSONObject();
-            entry.put("filepath", filepath);
-            entry.put("filename", new File(filepath).getName());
-            entry.put("blobUri", blobGraph.getURI(filepath, ictx));
-            entry.put("sha256", blobGraph.getSHA256(filepath, ictx));
-
-            // Try to get mimeType from metadata
-            try {
-                org.apache.jena.rdf.model.Model meta = blobGraph.loadMetadata(filepath, ictx);
-                String ns = "urn:atic:ontology:";
-                String mimeType = meta.getProperty(
-                        meta.getResource(blobGraph.getURI(filepath, ictx)),
-                        meta.createProperty(ns + "mimeType")
-                ).getString();
+            entry.put("path", e.path);
+            entry.put("isFolder", e.isFolder);
+            if (!e.isFolder) {
+                entry.put("filename", new File(e.path).getName());
+                entry.put("blobUri", blobGraph.getURI(e.path, ictx));
+                entry.put("sha256", blobGraph.getSHA256(e.path, ictx));
+                // mimeType is now stored in the pointer table
+                String mimeType = blobGraph.getMimeType(e.path, ictx);
                 if (mimeType != null) {
                     entry.put("mimeType", mimeType);
                 }
-            } catch (Exception ignored) {
-                // metadata not available — skip
+            } else {
+                entry.put("name", new File(e.path).getName());
             }
-
             blobs.put(entry);
         }
 
@@ -2014,6 +2013,188 @@ public class AticServer {
                 "deletedPaths", deleted,
                 "errors", errors
         ));
+    }
+
+    // =========================================================================
+    //  Additional BlobGraph REST endpoints: rename, copy, paste, move
+    // =========================================================================
+
+    /**
+     * PUT /blob/rename — rename (move) a single file.
+     *
+     * <p>JSON body:
+     * <ul>
+     *   <li>{@code "sourcePath"} — current logical filepath</li>
+     *   <li>{@code "targetPath"} — new logical filepath</li>
+     * </ul>
+     */
+    private void putBlobRename(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        BlobGraph blobGraph = datasetGraph.getBlobGraph();
+
+        JSONObject body;
+        try {
+            body = new JSONObject(ctx.body());
+        } catch (JSONException e) {
+            ctx.status(400).json(Map.of("success", false, "error", "Invalid JSON body"));
+            return;
+        }
+
+        String sourcePath = body.getString("sourcePath");
+        String targetPath = body.getString("targetPath");
+
+        try {
+            blobGraph.move(sourcePath, targetPath, ictx);
+            ctx.json(Map.of(
+                    "success", true,
+                    "sourcePath", sourcePath,
+                    "targetPath", targetPath
+            ));
+        } catch (Exception e) {
+            ctx.status(400).json(Map.of(
+                    "success", false,
+                    "error", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * POST /blob/copy — copy a file, saving the source path into the session clipboard.
+     *
+     * <p>JSON body:
+     * <ul>
+     *   <li>{@code "path"} — logical filepath to copy</li>
+     * </ul>
+     */
+    private void postBlobCopy(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        BlobGraph blobGraph = datasetGraph.getBlobGraph();
+
+        JSONObject body;
+        try {
+            body = new JSONObject(ctx.body());
+        } catch (JSONException e) {
+            ctx.status(400).json(Map.of("success", false, "error", "Invalid JSON body"));
+            return;
+        }
+
+        String sourcePath = body.getString("path");
+
+        // Validate source exists
+        try {
+            String uri = blobGraph.getURI(sourcePath, ictx);
+            String sha256 = blobGraph.getSHA256(sourcePath, ictx);
+            // Save clipboard in session
+            ctx.sessionAttribute("blobClipboard", sourcePath);
+            ctx.json(Map.of(
+                    "success", true,
+                    "clipboard", sourcePath,
+                    "blobUri", uri,
+                    "sha256", sha256
+            ));
+        } catch (Exception e) {
+            ctx.status(404).json(Map.of(
+                    "success", false,
+                    "error", "File not found: " + sourcePath
+            ));
+        }
+    }
+
+    /**
+     * POST /blob/paste — paste the clipboard path under a destination folder.
+     *
+     * <p>JSON body:
+     * <ul>
+     *   <li>{@code "destFolder"} — destination folder path (e.g. "photos" or "/")</li>
+     * </ul>
+     */
+    private void postBlobPaste(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        BlobGraph blobGraph = datasetGraph.getBlobGraph();
+
+        JSONObject body;
+        try {
+            body = new JSONObject(ctx.body());
+        } catch (JSONException e) {
+            ctx.status(400).json(Map.of("success", false, "error", "Invalid JSON body"));
+            return;
+        }
+
+        String clipboardPath = ctx.sessionAttribute("blobClipboard");
+        String destFolder = body.getString("destFolder");
+        if (clipboardPath == null || clipboardPath.isBlank()) {
+            ctx.status(400).json(Map.of("success", false, "error", "Clipboard is empty. Copy a file first."));
+            return;
+        }
+        if (destFolder == null) {
+            destFolder = "";
+        }
+
+        String baseName = new File(clipboardPath).getName();
+        String targetPath = destFolder.endsWith("/")
+                ? destFolder + baseName
+                : destFolder + "/" + baseName;
+
+        try {
+            blobGraph.copy(clipboardPath, targetPath, ictx);
+            ctx.json(Map.of(
+                    "success", true,
+                    "source", clipboardPath,
+                    "target", targetPath
+            ));
+        } catch (Exception e) {
+            ctx.status(400).json(Map.of(
+                    "success", false,
+                    "error", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * POST /blob/move — move a file to a different folder or rename it.
+     *
+     * <p>JSON body:
+     * <ul>
+     *   <li>{@code "sourcePath"} — current logical filepath</li>
+     *   <li>{@code "destFolder"} — destination folder path</li>
+     * </ul>
+     */
+    private void postBlobMove(Context ctx) {
+        InvocationContext ictx = fromJavalinContext(ctx);
+        BlobGraph blobGraph = datasetGraph.getBlobGraph();
+
+        JSONObject body;
+        try {
+            body = new JSONObject(ctx.body());
+        } catch (JSONException e) {
+            ctx.status(400).json(Map.of("success", false, "error", "Invalid JSON body"));
+            return;
+        }
+
+        String sourcePath = body.getString("sourcePath");
+        String destFolder = body.getString("destFolder");
+        if (destFolder == null) {
+            destFolder = "";
+        }
+
+        String baseName = new File(sourcePath).getName();
+        String targetPath = destFolder.endsWith("/")
+                ? destFolder + baseName
+                : destFolder + "/" + baseName;
+
+        try {
+            blobGraph.move(sourcePath, targetPath, ictx);
+            ctx.json(Map.of(
+                    "success", true,
+                    "sourcePath", sourcePath,
+                    "targetPath", targetPath
+            ));
+        } catch (Exception e) {
+            ctx.status(400).json(Map.of(
+                    "success", false,
+                    "error", e.getMessage()
+            ));
+        }
     }
 
     //------------------------------------

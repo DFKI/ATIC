@@ -357,12 +357,12 @@ class BlobGraphUnitTest {
             blobGraph.save("docs/d.txt", "d.txt", "text/plain",
                 new ByteArrayInputStream("d".getBytes()), adminCtx);
 
-            List<String> photos = blobGraph.list("photos/", adminCtx);
+            List<BlobGraph.DirEntry> photos = blobGraph.list("photos/", adminCtx);
             assertEquals(2, photos.size());
-            assertTrue(photos.contains("photos/a.jpg"));
-            assertTrue(photos.contains("photos/b.png"));
+            assertTrue(photos.stream().anyMatch(e -> e.path.equals("photos/a.jpg")));
+            assertTrue(photos.stream().anyMatch(e -> e.path.equals("photos/b.png")));
 
-            List<String> docs = blobGraph.list("docs/", adminCtx);
+            List<BlobGraph.DirEntry> docs = blobGraph.list("docs/", adminCtx);
             assertEquals(1, docs.size());
         });
     }
@@ -370,7 +370,7 @@ class BlobGraphUnitTest {
     @Test
     @DisplayName("list returns empty for non-existent folder")
     void listEmpty() {
-        List<String> result = dataset.calculateRead(() -> blobGraph.list("/no/such/", adminCtx));
+        List<BlobGraph.DirEntry> result = dataset.calculateRead(() -> blobGraph.list("/no/such/", adminCtx));
         assertTrue(result.isEmpty());
     }
 
