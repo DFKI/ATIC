@@ -39,6 +39,7 @@ import org.apache.jena.util.iterator.ExtendedIterator;
 import org.apache.jena.util.iterator.NiceIterator;
 import org.apache.jena.vocabulary.RDF;
 import org.apache.jena.vocabulary.RDFS;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -866,40 +867,22 @@ public class BlobGraph implements AticGraph {
     // =========================================================================
 
     /**
-     * Record representing a directory entry (file or subfolder).
-     */
-    public static class DirEntry implements Comparable<DirEntry> {
-        public final String path;
-        public final boolean isFolder;
-
-        public DirEntry(String path, boolean isFolder) {
-            this.path = path;
-            this.isFolder = isFolder;
-        }
-
-        @Override
-        public int compareTo(DirEntry other) {
-            // Folders first, then files, both alphabetically
-            if (this.isFolder != other.isFolder) {
-                return this.isFolder ? -1 : 1;
-            }
-            return this.path.compareTo(other.path);
-        }
-    }
-
-    /**
      * List direct children (files and subfolders) of a given folder path.
      * Searches the pointer table for entries whose filepath falls directly under
      * the given folder — does NOT recurse into subdirectories.
      *
-     * @param folderpath folder to list; empty string means root
-     * @return sorted list of {@link DirEntry} objects
+     * @param folderpath folder to list; empty string or "/" means root
+     * @return sorted list of {@link JSONObject}, each with keys:
+     *         {@code path}, {@code filename}, {@code isFolder}
      */
-    public List<DirEntry> list(String folderpath, InvocationContext ctx) {
-        // Normalize: strip trailing slashes, but keep leading "/"
+    public List<JSONObject> list(String folderpath, InvocationContext ctx) {
+        // Normalize: strip trailing slashes, treat "/" as root (same as "")
         String fp = folderpath;
         while (fp.length() > 1 && fp.endsWith("/")) {
             fp = fp.substring(0, fp.length() - 1);
+        }
+        if (fp.equals("/")) {
+            fp = "";
         }
 
         // Gather all matching paths first
@@ -920,23 +903,50 @@ public class BlobGraph implements AticGraph {
             throw new RuntimeException("Failed to list blobs under " + folderpath, e);
         }
 
-        // Filter to direct children only
-        List<DirEntry> children = new ArrayList<>(allPaths.size());
-        String prefix = fp.isEmpty() ? "" : fp + "/";
+        // Collect unique direct child names and determine if they're folders or files.
+        // Paths are stored like "/photos/a.jpg" or "/readme.md", so strip leading "/".
+        java.util.LinkedHashMap<String, JSONObject> childMap = new java.util.LinkedHashMap<>();
+        String prefix = fp.isEmpty() ? "/" : fp + "/";
 
         for (String p : allPaths) {
-            String remainder = p.substring(prefix.length());
+            // p is like "/photos/a.jpg" or "/readme.md"
+            String remainder = p.startsWith(prefix) ? p.substring(prefix.length()) : p.substring(prefix.length() - 1);
+            // Remove leading "/" from remainder if it survived (shouldn't, but be safe)
+            if (remainder.startsWith("/")) {
+                remainder = remainder.substring(1);
+            }
             int slash = remainder.indexOf('/');
             if (slash < 0) {
-                // Direct child (file or folder)
-                boolean isFolder = p.endsWith("/");
-                children.add(new DirEntry(p, isFolder));
+                // Direct file child — remainder is the filename
+                String filename = remainder;
+                String childPath = fp.isEmpty() ? "/" + filename : fp + "/" + filename;
+                JSONObject entry = new JSONObject();
+                entry.put("path", childPath);
+                entry.put("filename", filename);
+                entry.put("isFolder", false);
+                childMap.put(filename, entry);
+            } else {
+                // First segment is an implicit folder
+                String folderName = remainder.substring(0, slash);
+                String childPath = fp.isEmpty() ? "/" + folderName : fp + "/" + folderName;
+                JSONObject entry = new JSONObject();
+                entry.put("path", childPath);
+                entry.put("filename", folderName);
+                entry.put("isFolder", true);
+                childMap.merge(folderName, entry, (old, nw) -> nw); // folders always win
             }
-            // else: deeper descendant — skip
         }
 
-        // Sort: folders first, then files, both alphabetically
-        children.sort(null);
+        // Build sorted list: folders first, then files, both alphabetically by filename
+        List<JSONObject> children = new ArrayList<>(childMap.values());
+        children.sort((a, b) -> {
+            boolean aFolder = a.optBoolean("isFolder");
+            boolean bFolder = b.optBoolean("isFolder");
+            if (aFolder != bFolder) {
+                return aFolder ? -1 : 1;
+            }
+            return a.getString("filename").compareTo(b.getString("filename"));
+        });
         return children;
     }
 

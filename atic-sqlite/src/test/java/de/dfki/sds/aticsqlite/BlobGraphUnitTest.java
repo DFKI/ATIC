@@ -15,6 +15,7 @@ import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.util.iterator.ExtendedIterator;
+import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -350,28 +351,87 @@ class BlobGraphUnitTest {
     @DisplayName("list returns files matching folder prefix")
     void listFiles() {
         dataset.executeWrite(() -> {
-            blobGraph.save("photos/a.jpg", "a.jpg", "image/jpeg",
+            blobGraph.save("/photos/a.jpg", "a.jpg", "image/jpeg",
                 new ByteArrayInputStream("a".getBytes()), adminCtx);
-            blobGraph.save("photos/b.png", "b.png", "image/png",
+            blobGraph.save("/photos/b.png", "b.png", "image/png",
                 new ByteArrayInputStream("b".getBytes()), adminCtx);
-            blobGraph.save("docs/d.txt", "d.txt", "text/plain",
+            blobGraph.save("/docs/d.txt", "d.txt", "text/plain",
                 new ByteArrayInputStream("d".getBytes()), adminCtx);
 
-            List<BlobGraph.DirEntry> photos = blobGraph.list("photos/", adminCtx);
+            List<JSONObject> photos = blobGraph.list("/photos/", adminCtx);
             assertEquals(2, photos.size());
-            assertTrue(photos.stream().anyMatch(e -> e.path.equals("photos/a.jpg")));
-            assertTrue(photos.stream().anyMatch(e -> e.path.equals("photos/b.png")));
+            assertTrue(photos.stream().anyMatch(e -> e.getString("path").equals("/photos/a.jpg")));
+            assertTrue(photos.stream().anyMatch(e -> e.getString("path").equals("/photos/b.png")));
 
-            List<BlobGraph.DirEntry> docs = blobGraph.list("docs/", adminCtx);
+            // Verify filenames are extracted correctly
+            List<String> filenames = photos.stream().map(e -> e.getString("filename")).toList();
+            assertTrue(filenames.contains("a.jpg"));
+            assertTrue(filenames.contains("b.png"));
+
+            List<JSONObject> docs = blobGraph.list("/docs/", adminCtx);
             assertEquals(1, docs.size());
+            assertEquals("d.txt", docs.get(0).getString("filename"));
         });
     }
 
     @Test
     @DisplayName("list returns empty for non-existent folder")
     void listEmpty() {
-        List<BlobGraph.DirEntry> result = dataset.calculateRead(() -> blobGraph.list("/no/such/", adminCtx));
+        List<JSONObject> result = dataset.calculateRead(() -> blobGraph.list("/no/such/", adminCtx));
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("list with '/' returns root-level files and subfolders")
+    void listRoot() {
+        dataset.executeWrite(() -> {
+            blobGraph.save("/photos/a.jpg", "a.jpg", "image/jpeg",
+                new ByteArrayInputStream("a".getBytes()), adminCtx);
+            blobGraph.save("/photos/b.png", "b.png", "image/png",
+                new ByteArrayInputStream("b".getBytes()), adminCtx);
+            blobGraph.save("/docs/d.txt", "d.txt", "text/plain",
+                new ByteArrayInputStream("d".getBytes()), adminCtx);
+            blobGraph.save("/readme.md", "readme.md", "text/markdown",
+                new ByteArrayInputStream("x".getBytes()), adminCtx);
+
+            List<JSONObject> root = blobGraph.list("/", adminCtx);
+            // Should return 2 folders (docs, photos) + 1 file (readme.md) = 3 entries
+            assertEquals(3, root.size());
+
+            // Folders come first
+            assertTrue(root.get(0).optBoolean("isFolder"));
+            assertTrue(root.get(1).optBoolean("isFolder"));
+            assertFalse(root.get(2).optBoolean("isFolder"));
+
+            // Verify filenames are correct
+            String[] folderNames = root.stream()
+                .filter(e -> e.optBoolean("isFolder"))
+                .map(e -> e.getString("filename"))
+                .sorted()
+                .toArray(String[]::new);
+            assertArrayEquals(new String[]{"docs", "photos"}, folderNames);
+
+            String[] fileNames = root.stream()
+                .filter(e -> !e.optBoolean("isFolder"))
+                .map(e -> e.getString("filename"))
+                .toArray(String[]::new);
+            assertArrayEquals(new String[]{"readme.md"}, fileNames);
+        });
+    }
+
+    @Test
+    @DisplayName("list with empty string '' also returns root")
+    void listEmptyStringReturnsRoot() {
+        dataset.executeWrite(() -> {
+            blobGraph.save("root-file.txt", "root-file.txt", "text/plain",
+                new ByteArrayInputStream("data".getBytes()), adminCtx);
+
+            List<JSONObject> result1 = blobGraph.list("", adminCtx);
+            List<JSONObject> result2 = blobGraph.list("/", adminCtx);
+
+            assertEquals(result1.size(), result2.size());
+            assertTrue(result1.stream().anyMatch(e -> e.getString("path").equals("/root-file.txt")));
+        });
     }
 
     // =========================================================================

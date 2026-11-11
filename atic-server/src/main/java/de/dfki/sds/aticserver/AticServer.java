@@ -1810,15 +1810,23 @@ public class AticServer {
 
         for (UploadedFile uploadedFile : files) {
             String originalFilename = uploadedFile.filename();
-            // Build logical filepath: pathPrefix + "/" + filename, or just filename
+            // Build logical filepath, normalized to always start with "/"
             String logicalPath;
             if (pathPrefix != null && !pathPrefix.isBlank()) {
+                // Ensure prefix starts with "/"
+                if (!pathPrefix.startsWith("/")) {
+                    pathPrefix = "/" + pathPrefix;
+                }
                 logicalPath = pathPrefix.endsWith("/")
                         ? pathPrefix + originalFilename
                         : pathPrefix + "/" + originalFilename;
             } else {
-                logicalPath = originalFilename;
+                logicalPath = "/" + originalFilename;
             }
+            // Normalize: collapse double slashes, remove trailing slash
+            logicalPath = normalizePath(logicalPath);
+            // Make effectively final for lambda capture
+            final String finalLogicalPath = logicalPath;
 
             try {
                 InputStream content = uploadedFile.content();
@@ -1826,15 +1834,30 @@ public class AticServer {
                 if (mimeType == null || mimeType.isBlank()) {
                     mimeType = "application/octet-stream";
                 }
+                // Make captured vars effectively final for lambda
+                final InputStream fileContent = content;
+                final String finalMimeType = mimeType;
 
-                blobGraph.save(logicalPath, originalFilename, mimeType, content, ictx);
+                // Write operations wrapped in transaction
+                datasetGraph.executeWrite(() -> {
+                    blobGraph.save(finalLogicalPath, originalFilename, finalMimeType, fileContent, ictx);
+                });
+
+                // Read operations wrapped in transaction
+                final String fp = finalLogicalPath;
+                String[] info = datasetGraph.calculateRead(() -> {
+                    return new String[]{
+                            blobGraph.getURI(fp, ictx),
+                            blobGraph.getSHA256(fp, ictx)
+                    };
+                });
 
                 Map<String, String> entry = new LinkedHashMap<>();
                 entry.put("filepath", logicalPath);
                 entry.put("filename", originalFilename);
                 entry.put("mimeType", mimeType);
-                entry.put("blobUri", blobGraph.getURI(logicalPath, ictx));
-                entry.put("sha256", blobGraph.getSHA256(logicalPath, ictx));
+                entry.put("blobUri", info[0]);
+                entry.put("sha256", info[1]);
                 results.add(entry);
             } catch (Exception e) {
                 Map<String, String> entry = new LinkedHashMap<>();
@@ -1872,34 +1895,31 @@ public class AticServer {
             folder = "";
         }
 
-        String finalFolder = folder;
-        List<BlobGraph.DirEntry> entries = datasetGraph.calculateRead(() -> blobGraph.list(finalFolder, ictx));
-
-        JSONArray blobs = new JSONArray();
-        for (BlobGraph.DirEntry e : entries) {
-            JSONObject entry = new JSONObject();
-            entry.put("path", e.path);
-            entry.put("isFolder", e.isFolder);
-            if (!e.isFolder) {
-                entry.put("filename", new File(e.path).getName());
-                entry.put("blobUri", blobGraph.getURI(e.path, ictx));
-                entry.put("sha256", blobGraph.getSHA256(e.path, ictx));
-                // mimeType is now stored in the pointer table
-                String mimeType = blobGraph.getMimeType(e.path, ictx);
-                if (mimeType != null) {
-                    entry.put("mimeType", mimeType);
+        final String fp = folder;
+        // All DB access inside a single read transaction
+        List<JSONObject> blobs = datasetGraph.calculateRead(() -> {
+            List<JSONObject> entries = blobGraph.list(fp, ictx);
+            List<JSONObject> result = new ArrayList<>();
+            for (JSONObject entry : entries) {
+                if (!entry.optBoolean("isFolder")) {
+                    entry.put("blobUri", blobGraph.getURI(entry.getString("path"), ictx));
+                    entry.put("sha256", blobGraph.getSHA256(entry.getString("path"), ictx));
+                    String mimeType = blobGraph.getMimeType(entry.getString("path"), ictx);
+                    if (mimeType != null) {
+                        entry.put("mimeType", mimeType);
+                    }
                 }
-            } else {
-                entry.put("name", new File(e.path).getName());
+                result.add(entry);
             }
-            blobs.put(entry);
-        }
+            return result;
+        });
+        
+        JSONObject result = new JSONObject();
+        result.put("path", fp);
+        result.put("count", blobs.size());
+        result.put("blobs", new JSONArray(blobs));
 
-        ctx.json(Map.of(
-                "path", folder,
-                "count", blobs.length(),
-                "blobs", blobs.toList()
-        ));
+        ctx.json(result.toString());
     }
 
     /**
@@ -1912,13 +1932,18 @@ public class AticServer {
         String filepath = ctx.pathParam("path");
 
         try {
-            String uri = blobGraph.getURI(filepath, ictx);
-            String sha256 = blobGraph.getSHA256(filepath, ictx);
+            // All reads inside a single read transaction
+            String[] info = datasetGraph.calculateRead(() -> {
+                return new String[]{
+                        blobGraph.getURI(filepath, ictx),
+                        blobGraph.getSHA256(filepath, ictx)
+                };
+            });
 
             ctx.json(Map.of(
                     "filepath", filepath,
-                    "blobUri", uri,
-                    "sha256", sha256
+                    "blobUri", info[0],
+                    "sha256", info[1]
             ));
         } catch (IllegalStateException e) {
             ctx.status(404).json(Map.of(
@@ -1954,58 +1979,68 @@ public class AticServer {
             return;
         }
 
-        List<String> deleted = new ArrayList<>();
-        List<Map<String, String>> errors = new ArrayList<>();
+        // Holder: effectively final, set inside executeWrite
+        Object[] resultHolder = new Object[1];
 
-        // Delete by blob URI: resolve filepath from sha256 lookup
-        if (body.has("uris")) {
-            JSONArray uriArray = body.getJSONArray("uris");
-            for (int i = 0; i < uriArray.length(); i++) {
-                String blobUri = uriArray.getString(i);
-                try {
-                    // Extract sha256 from urn:atic:blob:{sha256}
-                    String sha256;
-                    if (blobUri.startsWith(BlobGraph.NS_BLOB)) {
-                        sha256 = blobUri.substring(BlobGraph.NS_BLOB.length());
-                    } else {
-                        sha256 = blobUri;
+        // All operations inside a single write transaction
+        datasetGraph.executeWrite(() -> {
+            List<String> deleted = new ArrayList<>();
+            List<Map<String, String>> errors = new ArrayList<>();
+
+            // Delete by blob URI
+            if (body.has("uris")) {
+                JSONArray uriArray = body.optJSONArray("uris");
+                if (uriArray != null) {
+                    for (int i = 0; i < uriArray.length(); i++) {
+                        if (uriArray.isNull(i)) continue;
+                        String blobUri = uriArray.optString(i);
+                        if (blobUri == null || blobUri.isEmpty()) continue;
+                        try {
+                            String sha256;
+                            if (blobUri.startsWith(BlobGraph.NS_BLOB)) {
+                                sha256 = blobUri.substring(BlobGraph.NS_BLOB.length());
+                            } else {
+                                sha256 = blobUri;
+                            }
+                            String filepath = blobGraph.getPath(sha256, ictx);
+                            if (filepath != null) {
+                                blobGraph.delete(filepath, ictx);
+                                deleted.add(filepath);
+                            }
+                        } catch (Exception e) {
+                            errors.add(Map.of("uri", blobUri, "error", e.getMessage()));
+                        }
                     }
-                    // Look up any filepath for this sha256
-                    String filepath = blobGraph.getPath(sha256, ictx);
-                    if (filepath != null) {
-                        blobGraph.delete(filepath, ictx);
-                        deleted.add(filepath);
-                    }
-                } catch (IllegalStateException e) {
-                    Map<String, String> err = new LinkedHashMap<>();
-                    err.put("uri", blobUri);
-                    err.put("error", "Not found: " + blobUri);
-                    errors.add(err);
-                } catch (Exception e) {
-                    Map<String, String> err = new LinkedHashMap<>();
-                    err.put("uri", blobUri);
-                    err.put("error", e.getMessage());
-                    errors.add(err);
                 }
             }
-        }
 
-        // Delete by logical filepath
-        if (body.has("paths")) {
-            JSONArray pathArray = body.getJSONArray("paths");
-            for (int i = 0; i < pathArray.length(); i++) {
-                String filepath = pathArray.getString(i);
-                try {
-                    blobGraph.delete(filepath, ictx);
-                    deleted.add(filepath);
-                } catch (Exception e) {
-                    Map<String, String> err = new LinkedHashMap<>();
-                    err.put("path", filepath);
-                    err.put("error", e.getMessage());
-                    errors.add(err);
+            // Delete by logical filepath
+            if (body.has("paths")) {
+                JSONArray pathArray = body.optJSONArray("paths");
+                if (pathArray != null) {
+                    for (int i = 0; i < pathArray.length(); i++) {
+                        if (pathArray.isNull(i)) continue;
+                        String filepath = pathArray.optString(i);
+                        if (filepath == null || filepath.isEmpty()) continue;
+                        try {
+                            blobGraph.delete(filepath, ictx);
+                            deleted.add(filepath);
+                        } catch (Exception e) {
+                            errors.add(Map.of("path", filepath, "error", e.getMessage()));
+                        }
+                    }
                 }
             }
-        }
+
+            // Capture results (array index 0=deleted list, 1=errors list)
+            resultHolder[0] = new Object[]{deleted, errors};
+        });
+
+        // Extract results
+        @SuppressWarnings("unchecked")
+        Object[] result = (Object[]) resultHolder[0];
+        List<String> deleted = result != null ? (List<String>) result[0] : new ArrayList<>();
+        List<Map<String, String>> errors = result != null ? (List<Map<String, String>>) result[1] : new ArrayList<>();
 
         ctx.json(Map.of(
                 "success", true,
@@ -2040,11 +2075,21 @@ public class AticServer {
             return;
         }
 
-        String sourcePath = body.getString("sourcePath");
-        String targetPath = body.getString("targetPath");
+        String sourcePath = body.optString("sourcePath");
+        String targetPath = body.optString("targetPath");
+        if (sourcePath == null || targetPath == null) {
+            ctx.status(400).json(Map.of("success", false, "error", "Missing required field: sourcePath and targetPath"));
+            return;
+        }
+        // Normalize to absolute paths starting with "/"
+        sourcePath = normalizePath(sourcePath);
+        targetPath = normalizePath(targetPath);
 
         try {
-            blobGraph.move(sourcePath, targetPath, ictx);
+            // Move is a write operation
+            final String sp = sourcePath;
+            final String tp = targetPath;
+            datasetGraph.executeWrite(() -> blobGraph.move(sp, tp, ictx));
             ctx.json(Map.of(
                     "success", true,
                     "sourcePath", sourcePath,
@@ -2078,26 +2123,35 @@ public class AticServer {
             return;
         }
 
-        String sourcePath = body.getString("path");
+        String sourcePath = body.optString("path");
+        if (sourcePath == null) {
+            ctx.status(400).json(Map.of("success", false, "error", "Missing required field: path"));
+            return;
+        }
 
-        // Validate source exists
+        // Validate source exists — read operation
+        String[] info;
         try {
-            String uri = blobGraph.getURI(sourcePath, ictx);
-            String sha256 = blobGraph.getSHA256(sourcePath, ictx);
-            // Save clipboard in session
-            ctx.sessionAttribute("blobClipboard", sourcePath);
-            ctx.json(Map.of(
-                    "success", true,
-                    "clipboard", sourcePath,
-                    "blobUri", uri,
-                    "sha256", sha256
-            ));
+            info = datasetGraph.calculateRead(() -> new String[]{
+                    blobGraph.getURI(sourcePath, ictx),
+                    blobGraph.getSHA256(sourcePath, ictx)
+            });
         } catch (Exception e) {
             ctx.status(404).json(Map.of(
                     "success", false,
                     "error", "File not found: " + sourcePath
             ));
+            return;
         }
+
+        // Save clipboard in session
+        ctx.sessionAttribute("blobClipboard", sourcePath);
+        ctx.json(Map.of(
+                "success", true,
+                "clipboard", sourcePath,
+                "blobUri", info[0],
+                "sha256", info[1]
+        ));
     }
 
     /**
@@ -2121,7 +2175,7 @@ public class AticServer {
         }
 
         String clipboardPath = ctx.sessionAttribute("blobClipboard");
-        String destFolder = body.getString("destFolder");
+        String destFolder = body.optString("destFolder");
         if (clipboardPath == null || clipboardPath.isBlank()) {
             ctx.status(400).json(Map.of("success", false, "error", "Clipboard is empty. Copy a file first."));
             return;
@@ -2129,14 +2183,23 @@ public class AticServer {
         if (destFolder == null) {
             destFolder = "";
         }
+        // Normalize destFolder
+        if (!destFolder.startsWith("/")) {
+            destFolder = "/" + destFolder;
+        }
+        destFolder = normalizePath(destFolder);
 
         String baseName = new File(clipboardPath).getName();
-        String targetPath = destFolder.endsWith("/")
-                ? destFolder + baseName
+        String targetPath = destFolder.equals("/")
+                ? "/" + baseName
                 : destFolder + "/" + baseName;
+        targetPath = normalizePath(targetPath);
+        // Make effectively final for lambda capture
+        final String finalTargetPath = targetPath;
 
         try {
-            blobGraph.copy(clipboardPath, targetPath, ictx);
+            // Copy is a write operation
+            datasetGraph.executeWrite(() -> blobGraph.copy(clipboardPath, finalTargetPath, ictx));
             ctx.json(Map.of(
                     "success", true,
                     "source", clipboardPath,
@@ -2171,19 +2234,32 @@ public class AticServer {
             return;
         }
 
-        String sourcePath = body.getString("sourcePath");
-        String destFolder = body.getString("destFolder");
+        String sourcePath = body.optString("sourcePath");
+        String destFolder = body.optString("destFolder");
+        if (sourcePath == null) {
+            ctx.status(400).json(Map.of("success", false, "error", "Missing required field: sourcePath"));
+            return;
+        }
         if (destFolder == null) {
             destFolder = "";
         }
+        // Normalize destFolder
+        if (!destFolder.startsWith("/")) {
+            destFolder = "/" + destFolder;
+        }
+        destFolder = normalizePath(destFolder);
 
         String baseName = new File(sourcePath).getName();
-        String targetPath = destFolder.endsWith("/")
-                ? destFolder + baseName
+        String targetPath = destFolder.equals("/")
+                ? "/" + baseName
                 : destFolder + "/" + baseName;
+        targetPath = normalizePath(targetPath);
+        // Make effectively final for lambda capture
+        final String finalTargetPath = targetPath;
 
         try {
-            blobGraph.move(sourcePath, targetPath, ictx);
+            // Move is a write operation
+            datasetGraph.executeWrite(() -> blobGraph.move(sourcePath, finalTargetPath, ictx));
             ctx.json(Map.of(
                     "success", true,
                     "sourcePath", sourcePath,
@@ -2195,6 +2271,29 @@ public class AticServer {
                     "error", e.getMessage()
             ));
         }
+    }
+
+    /**
+     * Normalize a filepath so it always starts with "/".
+     * Collapses multiple slashes and removes a trailing slash (unless it's just "/").
+     */
+    private static String normalizePath(String path) {
+        if (path == null || path.isEmpty()) {
+            return "/";
+        }
+        // Ensure leading slash
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        // Collapse multiple slashes
+        while (path.contains("//")) {
+            path = path.replace("//", "/");
+        }
+        // Remove trailing slash (except root)
+        if (path.length() > 1 && path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return path;
     }
 
     //------------------------------------
