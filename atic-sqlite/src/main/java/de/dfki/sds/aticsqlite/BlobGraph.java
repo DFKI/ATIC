@@ -3,6 +3,7 @@ package de.dfki.sds.aticsqlite;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.atic.vocab.NFO;
+import de.dfki.sds.atic.vocab.PROV;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -10,14 +11,11 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.GraphEventManager;
 import org.apache.jena.graph.Node;
@@ -30,11 +28,13 @@ import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdf.model.Resource;
 import org.apache.jena.shared.PrefixMapping;
+import org.apache.jena.sparql.graph.GraphFactory;
 import org.apache.jena.sparql.graph.PrefixMappingAdapter;
 import org.apache.jena.sparql.graph.TransactionHandlerNull;
 import org.apache.jena.util.iterator.ExtendedIterator;
 import org.apache.jena.util.iterator.NiceIterator;
-import org.apache.jena.sparql.graph.GraphFactory;
+import org.apache.jena.vocabulary.RDF;
+import org.apache.jena.vocabulary.RDFS;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,11 +68,9 @@ public class BlobGraph implements AticGraph {
      */
     public static final String NS_BLOB = "urn:atic:blob:";
 
-    private static final String NS_ATIC = "http://www.atic.org/ns#";
+    //TODO later better way
+    private static final String NS_ATIC = "urn:atic:ontology:";
     public static final String PREFIX_ATIC = "atic";
-
-    private static final String NS_PROV = "http://www.w3.org/ns/prov#";
-    public static final String PREFIX_PROV = "prov";
 
     /** Standard transformation parameters with defaults */
     public static final String DEFAULT_FORMAT = "webp";
@@ -408,11 +406,11 @@ public class BlobGraph implements AticGraph {
     public Model loadMetadata(String blobFilepath, InvocationContext ctx) {
         String sha256 = lookupSha256ByPath(blobFilepath);
         if (sha256 == null) {
-            return ModelFactory.createDefaultModel();
+            throw new IllegalStateException("File not found: " + blobFilepath);
         }
         File metaFile = metadataFile(sha256);
         if (!metaFile.isFile()) {
-            return ModelFactory.createDefaultModel();
+            throw new IllegalStateException("Metadata not found for sha256: " + sha256);
         }
         try {
             Model model = ModelFactory.createDefaultModel();
@@ -420,9 +418,11 @@ public class BlobGraph implements AticGraph {
                 model.read(fis, null, "TTL");
             }
             return model;
-        } catch (Exception e) {
+        } catch (IOException e) {
             log.warn("Failed to load metadata from {}", metaFile, e);
-            return ModelFactory.createDefaultModel();
+            throw new RuntimeException("Failed to load metadata from " + metaFile, e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load metadata from " + metaFile, e);
         }
     }
 
@@ -448,16 +448,23 @@ public class BlobGraph implements AticGraph {
     }
 
     /**
+     * Set common namespace prefixes on a model (ATIC, PROV, NFO, RDFS, RDF).
+     */
+    private void setupPrefixes(Model model) {
+        model.setNsPrefix(PREFIX_ATIC, NS_ATIC);
+        model.setNsPrefix("prov", PROV.uri);
+        model.setNsPrefix("nfo", NFO.NS);
+        model.setNsPrefix("rdfs", RDFS.uri);
+        model.setNsPrefix("rdf", RDF.uri);
+    }
+
+    /**
      * Build and save default RDF metadata for a newly uploaded blob.
      */
     public void saveDefaultMetadata(String blobFilepath, String sha256, String mimeType) {
         Model model = ModelFactory.createDefaultModel();
+        setupPrefixes(model);
         String uri = blobUri(sha256);
-
-        // Namespace declarations
-        model.setNsPrefix(PREFIX_ATIC, NS_ATIC);
-        model.setNsPrefix(PREFIX_PROV, NS_PROV);
-        model.setNsPrefix("nfo", NFO.NS);
 
         // The blob resource
         Resource blobRes = model.getResource(uri);
@@ -669,11 +676,7 @@ public class BlobGraph implements AticGraph {
                                       Integer width, Integer height, String format,
                                       Integer quality, String mode) {
         Model model = ModelFactory.createDefaultModel();
-
-        // Namespace declarations
-        model.setNsPrefix(PREFIX_ATIC, NS_ATIC);
-        model.setNsPrefix(PREFIX_PROV, NS_PROV);
-        model.setNsPrefix("nfo", NFO.NS);
+        setupPrefixes(model);
 
         String derivedUri = blobUri(derivedSha256);
         String sourceUri = blobUri(sourceSha256);
@@ -712,7 +715,7 @@ public class BlobGraph implements AticGraph {
         );
         // PROV-O: wasDerivedFrom
         derivedRes.addProperty(
-            model.createProperty(NS_PROV + "wasDerivedFrom"),
+            PROV.wasDerivedFrom,
             model.getResource(sourceUri)
         );
 
@@ -965,9 +968,28 @@ public class BlobGraph implements AticGraph {
     public ExtendedIterator<Triple> find(Node s, Node p, Node o, InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, datasetGraph.getContext());
 
+        // Resolve path-based subject URI to SHA256-based URI for filtering
+        Node filterSubject = s;
+        if (s != null && !s.equals(Node.ANY)) {
+            String uri = s.getURI();
+            if (uri != null && uri.startsWith(NS_BLOB) && uri.length() > NS_BLOB.length()) {
+                String path = uri.substring(NS_BLOB.length());
+                // Not a hash (64 hex chars) and not a glob pattern — treat as path
+                if (path.length() != 64 && !uri.startsWith(NS_BLOB + "path:")) {
+                    String filepath = decodePathUri(uri);
+                    if (filepath != null) {
+                        String sha256 = lookupSha256ByPath(filepath);
+                        if (sha256 != null) {
+                            filterSubject = NodeFactory.createURI(blobUri(sha256));
+                        }
+                    }
+                }
+            }
+        }
+
         // Combine all matching .ttl graphs into a single graph
         Graph combined = GraphFactory.createDefaultGraph();
-        List<Graph> graphs = findMatchingGraphs(s);
+        List<Graph> graphs = findMatchingGraphs(filterSubject);
         for (Graph g : graphs) {
             ExtendedIterator<Triple> iter = g.find(Node.ANY, Node.ANY, Node.ANY);
             try {
@@ -982,7 +1004,25 @@ public class BlobGraph implements AticGraph {
         if (combined.isEmpty()) {
             return NiceIterator.emptyIterator();
         }
-        return combined.find(s, p, o);
+        return combined.find(filterSubject, p, o);
+    }
+
+    /**
+     * Load metadata for a given SHA-256 hash and add its triples to the graph list.
+     * Skips silently if no metadata file exists (graceful degradation).
+     */
+    private void addMetadataForHash(List<Graph> graphs, String sha256) {
+        File metaFile = metadataFile(sha256);
+        if (!metaFile.isFile()) {
+            return;
+        }
+        try (FileInputStream fis = new FileInputStream(metaFile)) {
+            Model model = ModelFactory.createDefaultModel();
+            model.read(fis, null, "TTL");
+            graphs.add(model.getGraph());
+        } catch (IOException e) {
+            log.warn("Failed to read metadata for {}", sha256, e);
+        }
     }
 
     /**
@@ -1010,11 +1050,7 @@ public class BlobGraph implements AticGraph {
             }
             for (String uri : uris) {
                 String hash = uri.substring(NS_BLOB.length());
-                String filepath = lookupPathBySha256(hash);
-                if (filepath != null) {
-                    Model model = loadMetadata(filepath, InvocationContext.EMPTY);
-                    graphs.add(model.getGraph());
-                }
+                addMetadataForHash(graphs, hash);
             }
         } else {
             String subjectUri = s.getURI();
@@ -1023,10 +1059,16 @@ public class BlobGraph implements AticGraph {
             if (subjectUri.startsWith(NS_BLOB) && subjectUri.length() > NS_BLOB.length()) {
                 String hash = subjectUri.substring(NS_BLOB.length());
                 if (hash.length() == 64) {
-                    String filepath = lookupPathBySha256(hash);
+                    addMetadataForHash(graphs, hash);
+                } else {
+                    // Path-based URI: urn:atic:blob:{filepath}
+                    // Look up the filepath in the pointer table
+                    String filepath = decodePathUri(subjectUri);
                     if (filepath != null) {
-                        Model model = loadMetadata(filepath, InvocationContext.EMPTY);
-                        graphs.add(model.getGraph());
+                        String sha256 = lookupSha256ByPath(filepath);
+                        if (sha256 != null) {
+                            addMetadataForHash(graphs, sha256);
+                        }
                     }
                 }
             }
@@ -1053,14 +1095,33 @@ public class BlobGraph implements AticGraph {
                     String hash = uri.substring(NS_BLOB.length());
                     String filepath = lookupPathBySha256(hash);
                     if (filepath != null && filepathMatchesGlob(filepath, globPattern)) {
-                        Model model = loadMetadata(filepath, InvocationContext.EMPTY);
-                        graphs.add(model.getGraph());
+                        addMetadataForHash(graphs, hash);
                     }
                 }
             }
         }
 
         return graphs;
+    }
+
+    /**
+     * Decode a path-based URI to a filepath.
+     *
+     * <p>URIs like {@code urn:atic:blob:graph/f.jpg} are decoded by taking everything
+     * after the {@code NS_BLOB} prefix and URL-decoding the path component.
+     */
+    private String decodePathUri(String uri) {
+        if (!uri.startsWith(NS_BLOB) || uri.length() <= NS_BLOB.length()) {
+            return null;
+        }
+        // Extract path part and URL-decode it
+        String encodedPath = uri.substring(NS_BLOB.length());
+        try {
+            return java.net.URLDecoder.decode(encodedPath, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.warn("Failed to decode path URI: {}", uri, e);
+            return null;
+        }
     }
 
     /**

@@ -265,11 +265,10 @@ class BlobGraphUnitTest {
     }
 
     @Test
-    @DisplayName("loadMetadata returns empty model for non-existent file")
-    void emptyModelMissing() {
-        Model model = dataset.calculateRead(() -> blobGraph.loadMetadata("/no/such/file.jpg", adminCtx));
-        assertNotNull(model);
-        assertEquals(0, model.size());
+    @DisplayName("loadMetadata throws for unregistered file")
+    void loadMetadataThrows() {
+        assertThrows(IllegalStateException.class, () ->
+            dataset.calculateRead(() -> blobGraph.loadMetadata("/no/such/file.jpg", adminCtx)));
     }
 
     // =========================================================================
@@ -465,6 +464,34 @@ class BlobGraphUnitTest {
 
             // Non-matching subject
             Node other = NodeFactory.createURI("http://no.such.blob/");
+            ExtendedIterator<Triple> iter2 = blobGraph.find(other, Node.ANY, Node.ANY, adminCtx);
+            try {
+                assertFalse(iter2.hasNext());
+            } finally {
+                iter2.close();
+            }
+        });
+    }
+
+    @Test
+    @DisplayName("find with path-based subject URI")
+    void findWithSubjectPathUri() {
+        dataset.executeWrite(() -> {
+            blobGraph.save("graph/g.jpg", "g.jpg", "image/jpeg",
+                new ByteArrayInputStream("pathsubj".getBytes()), adminCtx);
+
+            // Use the filepath as the subject URI directly (path version)
+            Node subj = NodeFactory.createURI("urn:atic:blob:graph/g.jpg");
+
+            ExtendedIterator<Triple> iter = blobGraph.find(subj, Node.ANY, Node.ANY, adminCtx);
+            try {
+                assertTrue(iter.hasNext());
+            } finally {
+                iter.close();
+            }
+
+            // Non-matching path
+            Node other = NodeFactory.createURI("urn:atic:blob:no/such.jpg");
             ExtendedIterator<Triple> iter2 = blobGraph.find(other, Node.ANY, Node.ANY, adminCtx);
             try {
                 assertFalse(iter2.hasNext());
