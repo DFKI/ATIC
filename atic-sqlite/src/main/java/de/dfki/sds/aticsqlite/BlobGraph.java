@@ -4,6 +4,9 @@ import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.atic.vocab.NFO;
 import de.dfki.sds.atic.vocab.PROV;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -16,6 +19,7 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import javax.imageio.ImageIO;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.GraphEventManager;
 import org.apache.jena.graph.Node;
@@ -47,8 +51,8 @@ import org.slf4j.LoggerFactory;
  *   <li><b>Storage</b>: Bytes are stored on disk under {@code blob/{sha256[0:2]}/{sha256[2:4]}/{sha256[4:6]}/{sha256}}.</li>
  *   <li><b>Pointer table</b>: {@code blobgraph} maps {@code filepath → uri} (with optional {@code sha256}).</li>
  *   <li><b>Metadata</b>: RDF metadata lives in {@code .ttl} files alongside the blob file.</li>
- *   <li><b>Transformations</b>: Derived representations (e.g. resized images) are
- *       deterministically keyed by source hash + transformation parameters.</li>
+ *   <li><b>Transformations</b>: Derived representations (e.g. resized or reformatted images) are
+ *       stored with their own content-addressed SHA-256 identity.</li>
  * </ul>
  *
  * <p>URI convention: every blob gets a stable URI of the form
@@ -72,10 +76,7 @@ public class BlobGraph implements AticGraph {
     private static final String NS_ATIC = "urn:atic:ontology:";
     public static final String PREFIX_ATIC = "atic";
 
-    /** Standard transformation parameters with defaults */
-    public static final String DEFAULT_FORMAT = "webp";
-    public static final int DEFAULT_QUALITY = 85;
-    public static final String DEFAULT_MODE = "fit";
+
 
     private final SqliteAticDatasetGraph datasetGraph;
     private final TransactionHandler transactionHandler;
@@ -142,52 +143,6 @@ public class BlobGraph implements AticGraph {
             sb.append(String.format("%02x", b));
         }
         return sb.toString();
-    }
-
-    /**
-     * Compute a deterministic transformation key.
-     *
-     * <p>The key is SHA-256 of a canonical JSON object containing source hash
-     * and transformation parameters. This is <em>not</em> the content hash of
-     * the resulting image — it is a lookup key that lets the system detect
-     * when the same transformation has already been generated.
-     *
-     * @param sourceHash  SHA-256 of the original blob
-     * @param width       target width (0 = auto)
-     * @param height      target height (0 = auto)
-     * @param format      output format (e.g. "webp", "jpeg", "png")
-     * @param quality     quality factor (1-100)
-     * @param mode        resize mode ("fit", "cover", "crop", "pad")
-     * @return hex SHA-256 of the canonical transformation description
-     */
-    public static String computeTransformationKey(String sourceHash,
-                                                    Integer width,
-                                                    Integer height,
-                                                    String format,
-                                                    Integer quality,
-                                                    String mode) {
-        // Build canonical JSON: sorted keys, compact separators
-        StringBuilder json = new StringBuilder();
-        json.append("{");
-        json.append("\"format\":\"").append(escapeJson(format)).append("\",");
-        json.append("\"height\":").append(height == null ? 0 : height).append(",");
-        json.append("\"mode\":\"").append(escapeJson(mode)).append("\",");
-        json.append("\"quality\":").append(quality == null ? DEFAULT_QUALITY : quality).append(",");
-        json.append("\"source\":\"").append(escapeJson(sourceHash)).append("\",");
-        json.append("\"width\":").append(width == null ? 0 : width);
-        json.append("}");
-
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return bytesToHex(md.digest(json.toString().getBytes("UTF-8")));
-        } catch (NoSuchAlgorithmException | java.io.UnsupportedEncodingException e) {
-            throw new IllegalStateException("Hashing failure", e);
-        }
-    }
-
-    private static String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     // =========================================================================
@@ -612,69 +567,214 @@ public class BlobGraph implements AticGraph {
     }
 
     // =========================================================================
-    //  Transformation / derived representations
+    //  Image operations: resize, reformat
     // =========================================================================
 
     /**
-     * Check whether a derived representation already exists in the blob store.
+     * Resize an image to the given dimensions.
+     * If only width is set, height is derived to maintain aspect ratio.
+     * If only height is set, width is derived to maintain aspect ratio.
+     * If neither is set, a copy is returned with no resizing.
      *
-     * @param sourceSha256 the source blob's hash
-     * @param width        target width (nullable)
-     * @param height       target height (nullable)
-     * @param format       output format
-     * @param quality      quality factor
-     * @param mode         resize mode
-     * @return the derived blob's SHA-256 if it exists, or {@code null}
-     */
-    public String getDerivedBlobExists(String sourceSha256, Integer width, Integer height,
-                                        String format, Integer quality, String mode) {
-        // Derived blobs are stored with a synthetic URI that encodes the
-        // transformation key.  We use the same urn:atic:blob: scheme.
-        String transformKey = computeTransformationKey(sourceSha256, width, height, format, quality, mode);
-        String derivedUri = NS_BLOB + transformKey;
-        return lookupSha256ByUri(derivedUri);
-    }
-
-    /**
-     * Register a derived representation in the pointer table.
-     *
-     * <p>The pointer maps a synthetic filepath (derived from the transformation key)
-     * to the derived blob's URI. The RDF metadata (.ttl) records the derivation
-     * relationship using PROV-O.
-     *
-     * @param sourceSha256  the source blob's SHA-256
-     * @param derivedSha256 the derived blob's SHA-256 (actual content hash)
-     * @param width         target width
-     * @param height        target height
-     * @param format        output format
-     * @param quality       quality factor
-     * @param mode          resize mode
-     * @param filepath      logical filepath for the derived representation
+     * @param srcFilepath   logical filepath of the source image
+     * @param targetWidth   target width (nullable)
+     * @param targetHeight  target height (nullable)
+     * @param trgFilepath   logical filepath for the resized representation
      * @param ctx           invocation context
+     * @return SHA-256 of the resized blob
+     * @throws IllegalStateException if the source blob is not found or is not a valid image
      */
-    public void registerDerived(String sourceSha256, String derivedSha256,
-                                 Integer width, Integer height,
-                                 String format, Integer quality, String mode,
-                                 String filepath, InvocationContext ctx) {
-        String transformKey = computeTransformationKey(sourceSha256, width, height, format, quality, mode);
-        String derivedUri = blobUri(derivedSha256);
+    public String resize(String srcFilepath, Integer targetWidth, Integer targetHeight,
+                         String trgFilepath, InvocationContext ctx) {
+        String sourceSha256 = lookupSha256ByPath(srcFilepath);
+        if (sourceSha256 == null) {
+            throw new IllegalStateException("Source filepath not found: " + srcFilepath);
+        }
 
-        // Store the transform relationship in the URI column so we can look it up
-        // We encode the source in the filepath so we can reverse-lookup
-        String syntheticPath = filepath + "?src=" + sourceSha256 + "&w=" + width + "&h=" + height
-                + "&fmt=" + format + "&q=" + quality + "&mode=" + mode;
-        upsertPointer(syntheticPath, derivedUri, derivedSha256, ctx);
+        BufferedImage original = readImage(sourceSha256);
+        if (original == null) {
+            throw new IllegalStateException("Source blob is not a valid image: " + srcFilepath);
+        }
 
-        // Write PROV-O metadata to the .ttl file
-        saveDerivedMetadata(filepath, sourceSha256, derivedSha256, width, height, format, quality, mode);
+        // Determine target dimensions
+        int tw = targetWidth != null ? targetWidth : original.getWidth();
+        int th = targetHeight != null ? targetHeight : original.getHeight();
+
+        // Aspect ratio: if one dimension is null, derive it
+        if (targetWidth == null && targetHeight != null) {
+            tw = (targetHeight * original.getWidth()) / original.getHeight();
+        } else if (targetHeight == null && targetWidth != null) {
+            th = (targetWidth * original.getHeight()) / original.getWidth();
+        }
+
+        BufferedImage resized = new BufferedImage(tw, th, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2 = resized.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.drawImage(original, 0, 0, tw, th, null);
+        g2.dispose();
+
+        // Encode to output format
+        String extension = getFileExtension(trgFilepath);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            if (!ImageIO.write(resized, extension, out)) {
+                throw new IllegalStateException("Unsupported output format: " + extension);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to encode image to " + extension, e);
+        }
+
+        byte[] outputBytes = out.toByteArray();
+        String derivedSha256 = sha256(outputBytes);
+        try {
+            writeBlob(derivedSha256, new java.io.ByteArrayInputStream(outputBytes));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write resized blob", e);
+        }
+
+        // Register with PROV-O metadata
+        saveDerivedMetadata(trgFilepath, sourceSha256, derivedSha256, tw, th);
+
+        log.debug("Resized {} -> {}x{} (sha256={})", srcFilepath, tw, th, derivedSha256);
+        return derivedSha256;
     }
 
     /**
-     * Write PROV-O derivation metadata to the .ttl file for a derived blob.
+     * Resize an image to the given dimensions, auto-generating the target filepath
+     * by appending {@code -WxH.png} before the extension.
+     *
+     * <p>Example: {@code photos/vacation.jpg} → {@code photos/vacation-800x600.png}
+     *
+     * @param srcFilepath  logical filepath of the source image
+     * @param targetWidth  target width in pixels
+     * @param targetHeight target height in pixels
+     * @param ctx          invocation context
+     * @return SHA-256 of the resized blob
+     * @throws IllegalStateException if the source blob is not found or is not a valid image
+     */
+    public String resize(String srcFilepath, Integer targetWidth, Integer targetHeight, InvocationContext ctx) {
+        int tw = targetWidth != null ? targetWidth : 0;
+        int th = targetHeight != null ? targetHeight : 0;
+        String trgFilepath = deriveResizePath(srcFilepath, tw, th);
+        return resize(srcFilepath, targetWidth, targetHeight, trgFilepath, ctx);
+    }
+
+    /**
+     * Reformat an image to a different format (JPEG or PNG).
+     * The image dimensions are preserved.
+     *
+     * @param srcFilepath  logical filepath of the source image
+     * @param format       target format ("jpg" or "png")
+     * @param trgFilepath  logical filepath for the reformatted representation
+     * @param ctx          invocation context
+     * @return SHA-256 of the reformatted blob
+     * @throws IllegalStateException if the source blob is not found or is not a valid image
+     */
+    public String reformat(String srcFilepath, String format, String trgFilepath, InvocationContext ctx) {
+        String sourceSha256 = lookupSha256ByPath(srcFilepath);
+        if (sourceSha256 == null) {
+            throw new IllegalStateException("Source filepath not found: " + srcFilepath);
+        }
+
+        BufferedImage original = readImage(sourceSha256);
+        if (original == null) {
+            throw new IllegalStateException("Source blob is not a valid image: " + srcFilepath);
+        }
+
+        // Convert to RGB if needed (e.g. for JPEG which doesn't support alpha)
+        BufferedImage image = original;
+        if (format.equals("jpg") && original.getType() != BufferedImage.TYPE_INT_RGB) {
+            image = new BufferedImage(original.getWidth(), original.getHeight(), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2 = image.createGraphics();
+            g2.drawImage(original, 0, 0, null);
+            g2.dispose();
+        }
+
+        // Encode to output format
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            if (!ImageIO.write(image, format, out)) {
+                throw new IllegalStateException("Unsupported output format: " + format);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to encode image to " + format, e);
+        }
+
+        byte[] outputBytes = out.toByteArray();
+        String derivedSha256 = sha256(outputBytes);
+        try {
+            writeBlob(derivedSha256, new java.io.ByteArrayInputStream(outputBytes));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write reformatted blob", e);
+        }
+
+        // Register with PROV-O metadata
+        saveDerivedMetadata(trgFilepath, sourceSha256, derivedSha256, original.getWidth(), original.getHeight());
+
+        log.debug("Reformatted {} -> {} (sha256={})", srcFilepath, format, derivedSha256);
+        return derivedSha256;
+    }
+
+    /**
+     * Reformat an image to a different format, auto-swapping the file extension.
+     *
+     * <p>Example: {@code photo.png} → {@code photo.jpg}
+     *
+     * @param srcFilepath logical filepath of the source image
+     * @param format      target format ("jpg" or "png")
+     * @param ctx         invocation context
+     * @return SHA-256 of the reformatted blob
+     * @throws IllegalStateException if the source blob is not found or is not a valid image
+     */
+    public String reformat(String srcFilepath, String format, InvocationContext ctx) {
+        String trgFilepath = swapExtension(srcFilepath, format);
+        return reformat(srcFilepath, format, trgFilepath, ctx);
+    }
+
+    /**
+     * Derive a target filepath for a resized image: {@code base-WxH.ext}.
+     */
+    private String deriveResizePath(String srcFilepath, int width, int height) {
+        int dotIdx = srcFilepath.lastIndexOf('.');
+        String base = dotIdx > 0 ? srcFilepath.substring(0, dotIdx) : srcFilepath;
+        String ext = dotIdx > 0 ? srcFilepath.substring(dotIdx) : ".png";
+        return base + "-" + width + "x" + height + ext;
+    }
+
+    /**
+     * Swap the file extension of a filepath.
+     * Example: {@code photo.png} → {@code photo.jpg}
+     */
+    private String swapExtension(String srcFilepath, String newExt) {
+        int dotIdx = srcFilepath.lastIndexOf('.');
+        return dotIdx > 0
+                ? srcFilepath.substring(0, dotIdx) + "." + newExt
+                : srcFilepath + "." + newExt;
+    }
+
+    /**
+     * Read a blob as a BufferedImage. Returns null if not found or not a valid image.
+     */
+    private BufferedImage readImage(String sha256) {
+        InputStream is = readBlob(sha256);
+        if (is == null) {
+            return null;
+        }
+        try {
+            return ImageIO.read(is);
+        } catch (IOException e) {
+            log.warn("Failed to read image for sha256 {}", sha256, e);
+            return null;
+        }
+    }
+
+    /**
+     * Write derived representation metadata to the .ttl file with PROV-O derivation info.
      */
     private void saveDerivedMetadata(String blobFilepath, String sourceSha256, String derivedSha256,
-                                      Integer width, Integer height, String format,
-                                      Integer quality, String mode) {
+                                     int width, int height) {
         Model model = ModelFactory.createDefaultModel();
         setupPrefixes(model);
 
@@ -682,37 +782,19 @@ public class BlobGraph implements AticGraph {
         String sourceUri = blobUri(sourceSha256);
 
         Resource derivedRes = model.getResource(derivedUri);
-        // Use NFO vocab resource for Image type
         derivedRes.addProperty(
             model.createProperty(NFO.FileDataObject.getURI()),
             NFO.Image
         );
-        if (width != null) {
-            derivedRes.addProperty(
-                model.createProperty(NS_ATIC + "width"),
-                model.createLiteral(String.valueOf(width))
-            );
-        }
-        if (height != null) {
-            derivedRes.addProperty(
-                model.createProperty(NS_ATIC + "height"),
-                model.createLiteral(String.valueOf(height))
-            );
-        }
         derivedRes.addProperty(
-            model.createProperty(NS_ATIC + "format"),
-            format
+            model.createProperty(NS_ATIC + "width"),
+            model.createLiteral(String.valueOf(width))
         );
-        if (quality != null) {
-            derivedRes.addProperty(
-                model.createProperty(NS_ATIC + "quality"),
-                model.createLiteral(String.valueOf(quality))
-            );
-        }
         derivedRes.addProperty(
-            model.createProperty(NS_ATIC + "resizeMode"),
-            mode
+            model.createProperty(NS_ATIC + "height"),
+            model.createLiteral(String.valueOf(height))
         );
+        derivedRes.addProperty(NFO.fileName, new File(blobFilepath).getName());
         // PROV-O: wasDerivedFrom
         derivedRes.addProperty(
             PROV.wasDerivedFrom,
@@ -723,148 +805,11 @@ public class BlobGraph implements AticGraph {
     }
 
     /**
-     * Request a derived (resized) representation of a blob.
-     *
-     * <p>Lazy generation strategy:
-     * <ol>
-     *   <li>Compute the transformation key.</li>
-     *   <li>Check if the derived blob already exists (by transform key → actual hash lookup).</li>
-     *   <li>If it exists, return its bytes immediately.</li>
-     *   <li>If not, call {@link #generateDerived} to produce it, then return the bytes.</li>
-     * </ol>
-     *
-     * <p><b>NOTE:</b> {@code generateDerived} is a no-op placeholder. In a real
-     * implementation, this is where image processing (e.g. {@code Thumbnailator},
-     * {@code Java2D}, or an external tool) would happen.
-     *
-     * @param sourceSha256 source blob hash
-     * @param width        target width (0 = preserve aspect ratio)
-     * @param height       target height (0 = preserve aspect ratio)
-     * @param format       output format (e.g. "webp")
-     * @param quality      quality (1-100, default 85)
-     * @param mode         mode ("fit", "cover", "crop", "pad")
-     * @param filepath     logical filepath for the derived representation
-     * @param ctx          invocation context
-     * @return input stream of the derived blob, or {@code null} if source not found
+     * Get the file extension from a filepath (without leading dot).
      */
-    public InputStream getDerived(String sourceSha256, Integer width, Integer height,
-                                   String format, Integer quality, String mode,
-                                   String filepath, InvocationContext ctx) {
-        // Check if derivation already exists
-        String existingDerived = getDerivedBlobExists(sourceSha256, width, height, format, quality, mode);
-        if (existingDerived != null) {
-            InputStream is = readBlob(existingDerived);
-            return is;
-        }
-
-        // Lazy generation: produce the derived representation
-        String derivedSha256;
-        try {
-            derivedSha256 = generateDerived(sourceSha256, width, height, format, quality, mode, filepath, ctx);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to generate derived blob", e);
-        }
-        if (derivedSha256 == null) {
-            return null;
-        }
-        return readBlob(derivedSha256);
-    }
-
-    /**
-     * Placeholder for the actual image derivation/generation step.
-     *
-     * <p>In production, this would read the source blob, apply the image
-     * transformation (resize, crop, format conversion), write the result
-     * to disk, compute its SHA-256, and register it.
-     *
-     * @return the derived blob's SHA-256, or {@code null} on failure
-     */
-    private String generateDerived(String sourceSha256, Integer width, Integer height,
-                                    String format, Integer quality, String mode,
-                                    String filepath, InvocationContext ctx) throws IOException {
-        // Read source (stream into bytes for processing)
-        InputStream is = readBlob(sourceSha256);
-        if (is == null) {
-            log.warn("Source blob {} not found for derivation", sourceSha256);
-            return null;
-        }
-        byte[] sourceData;
-        try {
-            sourceData = is.readAllBytes();
-        } catch (IOException e) {
-            log.warn("Failed to read source blob {}", sourceSha256, e);
-            return null;
-        }
-
-        // Compute transformation key
-        String transformKey = computeTransformationKey(sourceSha256, width, height, format, quality, mode);
-
-        // In a real implementation, image processing would happen here:
-        //   BufferedImage original = ImageIO.read(new ByteArrayInputStream(sourceData));
-        //   BufferedImage resized = transform(original, width, height, mode);
-        //   ByteArrayOutputStream out = new ByteArrayOutputStream();
-        //   ImageIO.write(resized, format, out);
-        //   byte[] derivedData = out.toByteArray();
-        // For the test suite we store a synthetic "derived" blob whose content
-        // is the concatenation of source bytes + a transformation marker.
-        // This allows us to test the full lifecycle without needing image libs.
-        byte[] derivedData = synthesizeDerived(sourceData, transformKey);
-
-        // Compute the real content hash of the derived blob
-        String derivedSha256 = sha256(derivedData);
-
-        // Store on disk
-        writeBlob(derivedSha256, new java.io.ByteArrayInputStream(derivedData));
-
-        // Register in pointer table and write PROV-O metadata
-        registerDerived(sourceSha256, derivedSha256, width, height, format, quality, mode, filepath, ctx);
-
-        log.debug("Generated derived blob {} from {} [{}x{}, {}]",
-            derivedSha256, sourceSha256, width, height, format);
-        return derivedSha256;
-    }
-
-    /**
-     * Synthesize derived blob data for testing purposes.
-     * In production, replace with actual image processing.
-     */
-    private byte[] synthesizeDerived(byte[] sourceData, String transformKey) {
-        // Create a deterministic "derived" blob by prepending the transform key
-        // and appending the source. This ensures content-addressing works.
-        try {
-            byte[] keyBytes = transformKey.getBytes("UTF-8");
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            out.write(keyBytes);
-            out.write('\n');
-            out.write(sourceData);
-            return out.toByteArray();
-        } catch (java.io.IOException e) {
-            throw new RuntimeException("Failed to synthesize derived data", e);
-        }
-    }
-
-    /**
-     * Compute the derived blob's filepath from a source filepath + transform params.
-     */
-    public String derivedFilePath(String sourceFilepath, Integer width, Integer height,
-                                   String format, Integer quality, String mode) {
-        // Derive a synthetic filepath for the pointer table
-        String extension = new File(sourceFilepath).getName();
-        int dotIdx = extension.lastIndexOf('.');
-        String base = dotIdx > 0 ? extension.substring(0, dotIdx) : extension;
-        String ext = dotIdx > 0 ? extension.substring(dotIdx) : "";
-        String fmtExt = formatToExtension(format);
-        return sourceFilepath.substring(0, sourceFilepath.lastIndexOf('/'))
-                + "/" + base + "_" + width + "x" + height + fmtExt;
-    }
-
-    private String formatToExtension(String format) {
-        return switch (format.toLowerCase()) {
-            case "jpeg" -> ".jpg";
-            case "png" -> ".png";
-            case "webp" -> ".webp";
-            default -> "." + format.toLowerCase();
-        };
+    private String getFileExtension(String filepath) {
+        int dotIdx = filepath.lastIndexOf('.');
+        return dotIdx > 0 ? filepath.substring(dotIdx + 1).toLowerCase() : "png";
     }
 
     // =========================================================================
@@ -1184,24 +1129,6 @@ public class BlobGraph implements AticGraph {
             }
         }
         return total;
-    }
-
-    /**
-     * Load RDF metadata from the .ttl file for a given SHA-256 hash.
-     */
-    private Model loadMetadataBySha256(String sha256, InvocationContext ctx) {
-        File metaFile = metadataFile(sha256);
-        if (!metaFile.isFile()) {
-            return ModelFactory.createDefaultModel();
-        }
-        try (FileInputStream fis = new FileInputStream(metaFile)) {
-            Model model = ModelFactory.createDefaultModel();
-            model.read(fis, null, "TTL");
-            return model;
-        } catch (Exception e) {
-            log.warn("Failed to load metadata for sha256 {} from {}", sha256, metaFile, e);
-            return ModelFactory.createDefaultModel();
-        }
     }
 
     @Override
