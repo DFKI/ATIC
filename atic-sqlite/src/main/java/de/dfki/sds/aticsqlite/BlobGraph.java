@@ -5,6 +5,7 @@ import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.atic.vocab.NFO;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -234,17 +235,18 @@ public class BlobGraph implements AticGraph {
     }
 
     /**
-     * Read a blob's bytes from disk by its SHA-256 hash.
+     * Read a blob from disk by its SHA-256 hash.
+     * Streams the file — does not load the full content into memory.
      *
-     * @return bytes, or {@code null} if the blob does not exist
+     * @return an InputStream over the blob file, or {@code null} if the blob does not exist
      */
-    public byte[] readBlob(String sha256) {
+    public InputStream readBlob(String sha256) {
         File f = blobPath(sha256);
         if (!f.isFile()) {
             return null;
         }
         try {
-            return Files.readAllBytes(f.toPath());
+            return new FileInputStream(f);
         } catch (IOException e) {
             log.warn("Failed to read blob {}", sha256, e);
             return null;
@@ -252,16 +254,19 @@ public class BlobGraph implements AticGraph {
     }
 
     /**
-     * Write bytes to disk under the content-addressed path.
+     * Write data to disk under the content-addressed path.
+     * Reads from the input stream — does not load the full content into memory.
      * Overwrites if the file already exists.
      */
-    private void writeBlob(String sha256, byte[] data) {
+    private void writeBlob(String sha256, InputStream in) throws IOException {
         ensureDir(sha256);
         File f = blobPath(sha256);
         try (FileOutputStream fos = new FileOutputStream(f)) {
-            fos.write(data);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to write blob " + sha256, e);
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) != -1) {
+                fos.write(buf, 0, n);
+            }
         }
     }
 
@@ -282,21 +287,23 @@ public class BlobGraph implements AticGraph {
     /**
      * Insert or update the pointer: filepath → uri (+ sha256).
      *
-     * <p>Uses a single SQL statement with {@code INSERT OR REPLACE} so the
+     * <p>Uses a single SQL statement with {@code ON CONFLICT ... DO UPDATE} so the
      * upsert is atomic — no race condition between SELECT and INSERT/UPDATE.
      * The {@code blobgraph} table has {@code UNIQUE(filepath)}, so SQLite
-     * automatically replaces the old row when the insert conflicts.
+     * triggers the conflict handler when the insert duplicates a row.
      */
-    private void upsertPointer(String filepath, String uri, String sha256) {
+    private void upsertPointer(String filepath, String uri, String sha256, InvocationContext ctx) {
+        long userId = ctx.getUserId();
         try {
-            // INSERT OR REPLACE exploits the UNIQUE(filepath) constraint:
-            // if a row with this filepath already exists it is deleted first
-            // and the new row is inserted.
             db.write(
-                "INSERT OR REPLACE INTO blobgraph (filepath, uri, sha256, creator) "
-                + "VALUES (?, ?, ?, COALESCE("
-                +   "(SELECT creator FROM blobgraph WHERE filepath = ?), 0))",
-                filepath, uri, sha256, filepath
+                "INSERT INTO blobgraph (filepath, uri, sha256, creator) "
+                + "VALUES (?, ?, ?, ?) "
+                + "ON CONFLICT(filepath) DO UPDATE SET "
+                + "uri = excluded.uri, "
+                + "sha256 = excluded.sha256, "
+                + "creator = excluded.creator, "
+                + "created_at = unixepoch()",
+                filepath, uri, sha256, userId
             );
         } catch (SQLException e) {
             throw new RuntimeException("Failed to upsert pointer for " + filepath, e);
@@ -409,7 +416,9 @@ public class BlobGraph implements AticGraph {
         }
         try {
             Model model = ModelFactory.createDefaultModel();
-            model.read(metaFile.getAbsolutePath(), null, "TTL");
+            try (FileInputStream fis = new FileInputStream(metaFile)) {
+                model.read(fis, null, "TTL");
+            }
             return model;
         } catch (Exception e) {
             log.warn("Failed to load metadata from {}", metaFile, e);
@@ -506,14 +515,14 @@ public class BlobGraph implements AticGraph {
             String sha256 = sha256(data);
             String uri = blobUri(sha256);
 
-            // Store bytes on disk
-            writeBlob(sha256, data);
+            // Store bytes on disk (stream via ByteArrayInputStream)
+            writeBlob(sha256, new java.io.ByteArrayInputStream(data));
 
             // Save default RDF metadata as .ttl beside the logical filepath
             saveDefaultMetadata(filepath, sha256, mimeType);
 
             // Register in pointer table
-            upsertPointer(filepath, uri, sha256);
+            upsertPointer(filepath, uri, sha256, ctx);
 
             log.debug("Saved blob {} -> {} ({})", sha256, filepath, data.length);
         } catch (IOException e) {
@@ -549,11 +558,11 @@ public class BlobGraph implements AticGraph {
         if (sha256 == null) {
             throw new IllegalStateException("File not found: " + filepath);
         }
-        byte[] data = readBlob(sha256);
-        if (data == null) {
+        InputStream is = readBlob(sha256);
+        if (is == null) {
             throw new IllegalStateException("Blob data missing for sha256: " + sha256);
         }
-        return new java.io.ByteArrayInputStream(data);
+        return is;
     }
 
     /**
@@ -647,7 +656,7 @@ public class BlobGraph implements AticGraph {
         // We encode the source in the filepath so we can reverse-lookup
         String syntheticPath = filepath + "?src=" + sourceSha256 + "&w=" + width + "&h=" + height
                 + "&fmt=" + format + "&q=" + quality + "&mode=" + mode;
-        upsertPointer(syntheticPath, derivedUri, derivedSha256);
+        upsertPointer(syntheticPath, derivedUri, derivedSha256, ctx);
 
         // Write PROV-O metadata to the .ttl file
         saveDerivedMetadata(filepath, sourceSha256, derivedSha256, width, height, format, quality, mode);
@@ -741,17 +750,21 @@ public class BlobGraph implements AticGraph {
         // Check if derivation already exists
         String existingDerived = getDerivedBlobExists(sourceSha256, width, height, format, quality, mode);
         if (existingDerived != null) {
-            byte[] data = readBlob(existingDerived);
-            return data != null ? new java.io.ByteArrayInputStream(data) : null;
+            InputStream is = readBlob(existingDerived);
+            return is;
         }
 
         // Lazy generation: produce the derived representation
-        String derivedSha256 = generateDerived(sourceSha256, width, height, format, quality, mode, filepath, ctx);
+        String derivedSha256;
+        try {
+            derivedSha256 = generateDerived(sourceSha256, width, height, format, quality, mode, filepath, ctx);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to generate derived blob", e);
+        }
         if (derivedSha256 == null) {
             return null;
         }
-        byte[] data = readBlob(derivedSha256);
-        return data != null ? new java.io.ByteArrayInputStream(data) : null;
+        return readBlob(derivedSha256);
     }
 
     /**
@@ -765,11 +778,18 @@ public class BlobGraph implements AticGraph {
      */
     private String generateDerived(String sourceSha256, Integer width, Integer height,
                                     String format, Integer quality, String mode,
-                                    String filepath, InvocationContext ctx) {
-        // Read source
-        byte[] sourceData = readBlob(sourceSha256);
-        if (sourceData == null) {
+                                    String filepath, InvocationContext ctx) throws IOException {
+        // Read source (stream into bytes for processing)
+        InputStream is = readBlob(sourceSha256);
+        if (is == null) {
             log.warn("Source blob {} not found for derivation", sourceSha256);
+            return null;
+        }
+        byte[] sourceData;
+        try {
+            sourceData = is.readAllBytes();
+        } catch (IOException e) {
+            log.warn("Failed to read source blob {}", sourceSha256, e);
             return null;
         }
 
@@ -791,7 +811,7 @@ public class BlobGraph implements AticGraph {
         String derivedSha256 = sha256(derivedData);
 
         // Store on disk
-        writeBlob(derivedSha256, derivedData);
+        writeBlob(derivedSha256, new java.io.ByteArrayInputStream(derivedData));
 
         // Register in pointer table and write PROV-O metadata
         registerDerived(sourceSha256, derivedSha256, width, height, format, quality, mode, filepath, ctx);
@@ -887,7 +907,7 @@ public class BlobGraph implements AticGraph {
 
         // Update pointer table only; metadata is content-addressed (shared by all pointers)
         deletePointer(srcFilepath);
-        upsertPointer(trgFilepath, uri, sha256);
+        upsertPointer(trgFilepath, uri, sha256, ctx);
     }
 
     /**
@@ -901,7 +921,7 @@ public class BlobGraph implements AticGraph {
         }
 
         // Copy pointer only; metadata is content-addressed (shared by all pointers)
-        upsertPointer(trgFilepath, uri, sha256);
+        upsertPointer(trgFilepath, uri, sha256, ctx);
     }
 
     /**
@@ -1069,14 +1089,14 @@ public class BlobGraph implements AticGraph {
     @Override
     public int size(InvocationContext ctx) {
         ctx = InvocationContext.fromContextIfEmpty(ctx, datasetGraph.getContext());
-        List<Map.Entry<String, String>> entries;
+        List<String> uris;
         try {
-            entries = db.read(
+            uris = db.read(
                 "SELECT uri FROM blobgraph WHERE uri IS NOT NULL",
                 rs -> {
-                    List<Map.Entry<String, String>> list = new ArrayList<>();
+                    List<String> list = new ArrayList<>();
                     while (rs.next()) {
-                        list.add(Map.entry(rs.getString("uri"), ""));
+                        list.add(rs.getString("uri"));
                     }
                     return list;
                 }
@@ -1085,14 +1105,42 @@ public class BlobGraph implements AticGraph {
             throw new RuntimeException("Failed to count blobs", e);
         }
         int total = 0;
-        for (Map.Entry<String, String> entry : entries) {
-            String filepath = lookupPathBySha256(entry.getValue());
-            if (filepath != null) {
-                Model model = loadMetadata(filepath, InvocationContext.EMPTY);
-                total += model.size();
+        for (String uri : uris) {
+            // URI is urn:atic:blob:{sha256}, extract the hash
+            String sha256 = uri.startsWith(NS_BLOB) ? uri.substring(NS_BLOB.length()) : null;
+            if (sha256 != null) {
+                // TTL file is content-addressed: {sha[0:2]}/{sha[2:4]}/{sha[4:6]}/{sha}.ttl
+                File metaFile = metadataFile(sha256);
+                if (metaFile.isFile()) {
+                    try (FileInputStream fis = new FileInputStream(metaFile)) {
+                        Model m = ModelFactory.createDefaultModel();
+                        m.read(fis, null, "TTL");
+                        total += m.size();
+                    } catch (IOException e) {
+                        log.warn("Failed to read metadata for {} from {}", sha256, metaFile, e);
+                    }
+                }
             }
         }
         return total;
+    }
+
+    /**
+     * Load RDF metadata from the .ttl file for a given SHA-256 hash.
+     */
+    private Model loadMetadataBySha256(String sha256, InvocationContext ctx) {
+        File metaFile = metadataFile(sha256);
+        if (!metaFile.isFile()) {
+            return ModelFactory.createDefaultModel();
+        }
+        try (FileInputStream fis = new FileInputStream(metaFile)) {
+            Model model = ModelFactory.createDefaultModel();
+            model.read(fis, null, "TTL");
+            return model;
+        } catch (Exception e) {
+            log.warn("Failed to load metadata for sha256 {} from {}", sha256, metaFile, e);
+            return ModelFactory.createDefaultModel();
+        }
     }
 
     @Override

@@ -151,14 +151,14 @@ class BlobGraphUnitTest {
     @DisplayName("loadContent throws for unregistered file")
     void loadNonExistent() {
         assertThrows(IllegalStateException.class, () ->
-            blobGraph.loadContent("/no/such/file.jpg", adminCtx));
+            dataset.calculateRead(() -> blobGraph.loadContent("/no/such/file.jpg", adminCtx)));
     }
 
     @Test
     @DisplayName("getURI throws for unregistered file")
     void getUriNotRegistered() {
         assertThrows(IllegalStateException.class, () ->
-            blobGraph.getURI("/no/such/file.jpg", adminCtx));
+            dataset.calculateRead(() -> blobGraph.getURI("/no/such/file.jpg", adminCtx)));
     }
 
     @Test
@@ -244,7 +244,8 @@ class BlobGraphUnitTest {
     @DisplayName("getPath throws for unknown hash")
     void lookupUnknownSha256() {
         assertThrows(IllegalStateException.class, () ->
-            blobGraph.getPath("nonexistent123456789012345678901234567890123456789012345678901234567890", adminCtx));
+            dataset.calculateRead(() -> blobGraph.getPath(
+                "nonexistent123456789012345678901234567890123456789012345678901234567890", adminCtx)));
     }
 
     // =========================================================================
@@ -332,14 +333,14 @@ class BlobGraphUnitTest {
     @DisplayName("move non-existent throws")
     void moveNonExistent() {
         assertThrows(IllegalArgumentException.class, () ->
-            blobGraph.move("/no/such", "/yes", adminCtx));
+            dataset.executeWrite(() -> blobGraph.move("/no/such", "/yes", adminCtx)));
     }
 
     @Test
     @DisplayName("copy non-existent throws")
     void copyNonExistent() {
         assertThrows(IllegalArgumentException.class, () ->
-            blobGraph.copy("/no/such", "/yes", adminCtx));
+            dataset.executeWrite(() -> blobGraph.copy("/no/such", "/yes", adminCtx)));
     }
 
     // =========================================================================
