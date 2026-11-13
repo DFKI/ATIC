@@ -12,7 +12,7 @@
         <script src="/app/js/vue.global.prod.js"></script>
         <script src="/app/js/axios.min.js"></script>
 
-        <link rel="shortcut icon" href="favicon.ico">
+        <link rel="shortcut icon" href="/app/favicon.ico">
         <title>Blob Explorer | Atic</title>
         <style>
             .tab-content {
@@ -159,23 +159,6 @@
                                 <i class="fa fa-arrow-right"></i>
                             </button>
                         </div>
-                        <!-- Breadcrumb -->
-                        <nav aria-label="breadcrumb" class="ms-2 flex-grow-1">
-                            <ol class="breadcrumb mb-0">
-                                <li class="breadcrumb-item" :class="{ active: tab.path === '/' }">
-                                    <a v-if="tab.path !== '/'" href="#" @click.prevent="navigateTo(tab, '/')">Root</a>
-                                    <span v-else>/</span>
-                                </li>
-                                <template v-for="(seg, i) in tab.segments" :key="i">
-                                    <li class="breadcrumb-item" :class="{ active: i === tab.segments.length - 1 }">
-                                        <a v-if="i < tab.segments.length - 1" href="#" @click.prevent="navigateToSegment(tab, i)">
-                                            {{ seg }}
-                                        </a>
-                                        <span v-else>{{ seg }}</span>
-                                    </li>
-                                </template>
-                            </ol>
-                        </nav>
                     </div>
                     
                     <!-- Loading -->
@@ -190,10 +173,10 @@
                             <thead class="table-light">
                                 <tr>
                                     <th style="width: 40px;"></th>
-                                    <th style="cursor:pointer"> <!-- @click="sortTab(tab, 'name')" -->
+                                    <th> <!-- style="cursor:pointer" @click="sortTab(tab, 'name')" -->
                                         Name <!-- i v-if="tab.sortBy === 'name'" :class="tab.sortDir === 'asc' ? 'fa fa-sort-up' : 'fa fa-sort-down'"></i -->
                                     </th>
-                                    <th style="cursor:pointer" @click="sortTab(tab, 'type')">Type</th>
+                                    <th>Type</th> <!-- style="cursor:pointer" @click="sortTab(tab, 'type')" -->
                                     <th style="width: 120px;">Actions</th>
                                 </tr>
                             </thead>

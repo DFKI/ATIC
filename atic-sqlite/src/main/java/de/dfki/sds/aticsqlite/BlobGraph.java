@@ -961,13 +961,14 @@ public class BlobGraph implements AticGraph {
     public void move(String srcFilepath, String trgFilepath, InvocationContext ctx) {
         String uri = lookupUriByPath(srcFilepath);
         String sha256 = lookupSha256ByPath(srcFilepath);
+        String mimeType = getMimeType(srcFilepath, ctx);
         if (uri == null || sha256 == null) {
             throw new IllegalArgumentException("Source filepath not found: " + srcFilepath);
         }
 
         // Update pointer table only; metadata is content-addressed (shared by all pointers)
         deletePointer(srcFilepath);
-        upsertPointer(trgFilepath, uri, sha256, ctx);
+        upsertPointer(trgFilepath, uri, sha256, mimeType, ctx);
     }
 
     /**
@@ -976,12 +977,13 @@ public class BlobGraph implements AticGraph {
     public void copy(String srcFilepath, String trgFilepath, InvocationContext ctx) {
         String uri = lookupUriByPath(srcFilepath);
         String sha256 = lookupSha256ByPath(srcFilepath);
+        String mimeType = getMimeType(srcFilepath, ctx);
         if (uri == null || sha256 == null) {
             throw new IllegalArgumentException("Source filepath not found: " + srcFilepath);
         }
 
-        // Copy pointer only; metadata is content-addressed (shared by all pointers)
-        upsertPointer(trgFilepath, uri, sha256, ctx);
+        // Copy pointer and mimeType; metadata is content-addressed (shared by all pointers)
+        upsertPointer(trgFilepath, uri, sha256, mimeType, ctx);
     }
 
     /**
