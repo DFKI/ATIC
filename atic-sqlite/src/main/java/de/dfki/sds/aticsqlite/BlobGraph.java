@@ -731,8 +731,29 @@ public class BlobGraph implements AticGraph {
      *
      * @return MIME type, or {@code null} if not set
      */
-    public String getMimeType(String filepath, InvocationContext ctx) {
+    public String getMimeTypeByPath(String filepath, InvocationContext ctx) {
         return lookupMimeTypeByPath(filepath);
+    }
+
+    /**
+     * Get the MIME type for a blob by its content-addressed URI.
+     * Resolves the URI to the underlying filepath(s) and returns the first found MIME type.
+     *
+     * @return MIME type, or {@code null} if not set
+     */
+    public String getMimeType(String uri, InvocationContext ctx) {
+        String sha256 = lookupSha256ByUri(uri);
+        if (sha256 == null) {
+            return null;
+        }
+        List<String> paths = getPaths(sha256, ctx);
+        for (String filepath : paths) {
+            String mimeType = lookupMimeTypeByPath(filepath);
+            if (mimeType != null) {
+                return mimeType;
+            }
+        }
+        return null;
     }
 
     // =========================================================================
@@ -1080,7 +1101,7 @@ public class BlobGraph implements AticGraph {
     public void move(String srcFilepath, String trgFilepath, InvocationContext ctx) {
         String uri = lookupUriByPath(srcFilepath);
         String sha256 = lookupSha256ByPath(srcFilepath);
-        String mimeType = getMimeType(srcFilepath, ctx);
+        String mimeType = getMimeTypeByPath(srcFilepath, ctx);
         if (uri == null || sha256 == null) {
             throw new IllegalArgumentException("Source filepath not found: " + srcFilepath);
         }
@@ -1096,7 +1117,7 @@ public class BlobGraph implements AticGraph {
     public void copy(String srcFilepath, String trgFilepath, InvocationContext ctx) {
         String uri = lookupUriByPath(srcFilepath);
         String sha256 = lookupSha256ByPath(srcFilepath);
-        String mimeType = getMimeType(srcFilepath, ctx);
+        String mimeType = getMimeTypeByPath(srcFilepath, ctx);
         if (uri == null || sha256 == null) {
             throw new IllegalArgumentException("Source filepath not found: " + srcFilepath);
         }

@@ -1924,7 +1924,7 @@ public class AticServer {
                 if (!entry.optBoolean("isFolder")) {
                     entry.put("blobUri", blobGraph.getURI(entry.getString("path"), ictx));
                     entry.put("sha256", blobGraph.getSHA256(entry.getString("path"), ictx));
-                    String mimeType = blobGraph.getMimeType(entry.getString("path"), ictx);
+                    String mimeType = blobGraph.getMimeTypeByPath(entry.getString("path"), ictx);
                     if (mimeType != null) {
                         entry.put("mimeType", mimeType);
                     }
@@ -1987,10 +1987,9 @@ public class AticServer {
         BlobGraph blobGraph = datasetGraph.getBlobGraph();
 
         String rawPath = ctx.path();
-        String resource = rawPath.startsWith("/blob/serve")
-                ? rawPath.substring("/blob/serve".length())
+        String resource = rawPath.startsWith("/blob/serve/")
+                ? rawPath.substring("/blob/serve/".length())
                 : rawPath;
-        resource = "/" + resource.replaceFirst("^/+", "");
 
         InputStream is;
         String mimeType;
@@ -1999,28 +1998,38 @@ public class AticServer {
             // Detect addressing mode: URI or path
             if (resource.startsWith(BlobGraph.NS_BLOB)) {
                 // URI-based: /blob/serve/urn:atic:blob:{sha256}
+                // getMimeType needs DB access (query pointer table for mimeType)
+                final String blobUri = resource;
+                mimeType = datasetGraph.calculateRead(() -> blobGraph.getMimeType(blobUri, ictx));
+                // loadContent does not need DB access (string parsing + file read only)
                 is = blobGraph.loadContent(resource, ictx);
-                mimeType = "application/octet-stream"; // URI-based has no stored MIME type
             } else {
+                resource = "/" + resource.replaceFirst("^/+", "");
+                
                 // Path-based: /blob/serve/photos/vacation.jpg
                 String pathForLookup = resource;
                 String[] info = datasetGraph.calculateRead(() -> new String[]{
                     blobGraph.getSHA256(pathForLookup, ictx),
-                    blobGraph.getMimeType(pathForLookup, ictx)
+                    blobGraph.getMimeTypeByPath(pathForLookup, ictx)
                 });
                 String sha256 = info[0];
-                mimeType = info[1] != null ? info[1] : "application/octet-stream";
+                mimeType = info[1];
 
                 if (sha256 == null || sha256.isBlank()) {
                     ctx.status(404).result("File not found: " + pathForLookup);
                     return;
                 }
 
-                is = blobGraph.loadContentByPath(pathForLookup, ictx);
+                is = datasetGraph.calculateRead(() -> blobGraph.loadContentByPath(pathForLookup, ictx));
             }
         } catch (IllegalStateException e) {
             ctx.status(404).result("Blob not found: " + resource);
             return;
+        }
+
+        // Fallback MIME type
+        if (mimeType == null) {
+            mimeType = "application/octet-stream";
         }
 
         String filename;

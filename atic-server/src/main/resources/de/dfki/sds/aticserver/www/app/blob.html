@@ -452,8 +452,10 @@ createApp({
             if (item.isFolder) {
                 this.navigateTo(tab, item.path);
             } else {
-                // Open file content in a new tab
-                window.open('/blob/serve' + item.path, '_blank');
+                // Open file content in a new tab via URI
+                if (item.blobUri) {
+                    window.open('/blob/serve/' + item.blobUri, '_blank');
+                }
             }
         },
         navigateToPath(tab) {
