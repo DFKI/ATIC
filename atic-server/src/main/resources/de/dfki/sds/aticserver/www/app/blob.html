@@ -212,18 +212,16 @@
                 <div class="card-header d-flex align-items-center">
                     <i class="fa fa-paperclip me-2"></i>
                     <strong>Blob Attachment</strong>
+                    <small v-if="spoLoading" class="ms-2 text-muted">
+                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                    </small>
                     <span class="badge bg-primary ms-2">{{ spoTriples.length }}</span>
                     <div class="ms-auto">
                         <button class="btn btn-sm btn-outline-primary me-1" @click="addSpoRow" title="Add property row">
                             <i class="fa fa-plus"></i> Add Property
                         </button>
-                        <button class="btn btn-sm btn-outline-secondary me-1" @click="clearSpoRows" title="Clear all rows">
+                        <button class="btn btn-sm btn-outline-secondary" @click="clearSpoRows" title="Clear all rows">
                             <i class="fa fa-eraser"></i> Clear
-                        </button>
-                        <button class="btn btn-sm btn-success" @click="applySpoTriples" :disabled="spoTriples.length === 0 || spoApplying">
-                            <i class="fa fa-play" v-if="!spoApplying"></i>
-                            <span class="spinner-border spinner-border-sm" v-else></span>
-                            Attach ({{ spoTriples.length }})
                         </button>
                     </div>
                 </div>
@@ -234,7 +232,8 @@
                         <div class="input-group input-group-sm">
                             <span class="input-group-text"><i class="fa fa-id-card"></i></span>
                             <input type="text" class="form-control" v-model="spoSubject"
-                                   placeholder="http://example.org/resource" spellcheck="false">
+                                   placeholder="http://example.org/resource" spellcheck="false"
+                                   @blur="queryObjects()">
                         </div>
                     </div>
 
@@ -259,7 +258,8 @@
                                             </span>
                                             <input type="text" class="form-control" v-model="row.property"
                                                    placeholder="http://example.org/prop" spellcheck="false"
-                                                   @input="onSpoInput">
+                                                   @input="onSpoInput"
+                                                   @blur="queryForObject(idx)">
                                         </div>
                                     </td>
                                     <td class="spo-object-cell">
@@ -272,11 +272,18 @@
 
                                             <div v-if="row.object">
                                                 <!-- Image preview for blob URIs -->
-                                                <img v-if="isBlobUriImage(row.object)"
-                                                     :src="'/blob/serve/' + row.object"
-                                                     class="spo-preview-img"
-                                                     :title="row.object"
-                                                     @click.stop>
+                                                <div v-if="isBlobUriImage(row.object)" class="d-flex align-items-center gap-1">
+                                                    <img :src="'/blob/serve/' + row.object"
+                                                         class="spo-preview-img"
+                                                         :title="row.object"
+                                                         @click.stop>
+                                                    <button class="btn btn-sm btn-outline-secondary py-0 px-1"
+                                                            style="font-size: 0.65rem;"
+                                                            @click="clearRowObject(idx)"
+                                                            title="Remove object">
+                                                        <i class="fa fa-times"></i>
+                                                    </button>
+                                                </div>
                                                 <!-- Text for non-image URIs -->
                                                 <div v-else class="d-flex align-items-center gap-1">
                                                     <input type="text" class="form-control form-control-sm"
@@ -286,10 +293,10 @@
                                                            @focus="spoFocusedIdx = idx"
                                                            @blur="spoFocusedIdx = null"
                                                            @input="row.object = $event.target.value; onSpoInput()">
-                                                    <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                                                    <button class="btn btn-sm btn-outline-secondary py-0 px-1"
                                                             style="font-size: 0.65rem;"
-                                                            @click="row.object = null; onSpoInput()"
-                                                            title="Clear">
+                                                            @click="clearRowObject(idx)"
+                                                            title="Remove object">
                                                         <i class="fa fa-times"></i>
                                                     </button>
                                                 </div>
@@ -303,7 +310,8 @@
                                                        spellcheck="false"
                                                        @focus="spoFocusedIdx = idx"
                                                        @blur="spoFocusedIdx = null"
-                                                       @input="onSpoInput">
+                                                       @input="onSpoInput"
+                                                       @paste="onSpoPaste($event, idx)">
                                                 <div class="d-flex gap-2 mt-1">
                                                     <span class="spo-preview-placeholder">
                                                         <i class="fa fa-paste"></i> Paste &nbsp;|&nbsp;
@@ -320,9 +328,9 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-outline-danger py-0 px-2"
-                                                @click="removeSpoRow(idx)" title="Remove row">
-                                            <i class="fa fa-times"></i>
+                                        <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                                                @click="removeSpoRow(idx)" title="Remove entire row">
+                                            <i class="fa fa-trash"></i>
                                         </button>
                                     </td>
                                 </tr>
@@ -391,7 +399,7 @@
         <div class="row">
             <div style="background: white; font-size: 12px;" class="fixed-bottom">
                 &nbsp;
-                &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
+                &copy; 2026 <a href="https://www.dfki.de/" target="_blank"><img src="/app/img/dfki_Logo_digital_black.png" style="height: 12px;"></a>
             </div>
         </div>
 
@@ -427,8 +435,8 @@ createApp({
             // Blob Attachment
             spoSubject: '',
             spoTriples: [],
-            spoApplying: false,
             spoFocusedIdx: null,
+            spoLoading: false,
         };
     },
     created() {
@@ -447,6 +455,7 @@ createApp({
         this.loadAttachmentFromStorage();
         this.$nextTick(() => {
             this.addTab();
+            this.queryObjects();
         });
         window.addEventListener('beforeunload', () => {
             this.saveAttachmentToStorage();
@@ -484,8 +493,7 @@ createApp({
                 JSON.stringify({
                     spoSubject: this.spoSubject,
                     spoTriples: this.spoTriples.map(t => ({
-                        property: t.property,
-                        object: t.object
+                        property: t.property
                     }))
                 })
             );
@@ -502,13 +510,63 @@ createApp({
                 if (state.spoTriples && state.spoTriples.length > 0) {
                     this.spoTriples = state.spoTriples.map(t => ({
                         property: t.property || '',
-                        object: t.object || null,
+                        object: null,
                         _uploading: false
                     }));
                 }
             } catch (e) {
                 console.warn('Failed to load blob attachment state from localStorage:', e);
             }
+        },
+
+        // ── SPARQL Object Query ──
+        queryObjects() {
+            const subject = this.spoSubject.trim();
+            if (!subject) return;
+
+            this.spoTriples.forEach((row, idx) => {
+                this.queryForObject(idx);
+            });
+        },
+
+        queryForObject(idx) {
+            const row = this.spoTriples[idx];
+            const subject = this.spoSubject.trim();
+            const property = (row.property || '').trim();
+
+            if (!subject || !property) return;
+
+            this.spoLoading = true;
+
+            const query = `SELECT ?object WHERE { <${subject}> <${property}> ?object . }`;
+
+            axios.get('/sparql', {
+                params: { query: query },
+                headers: { 'Accept': 'application/sparql-results+json' }
+            })
+                .then(response => {
+                    if (response.data && response.data.results && response.data.results.bindings) {
+                        const objects = response.data.results.bindings
+                            .filter(b => b.object)
+                            .map(b => b.object.value);
+
+                        if (objects.length > 0) {
+                            this.spoTriples[idx].object = objects[0];
+                        } else {
+                            this.spoTriples[idx].object = null;
+                        }
+                        this.onSpoInput();
+                    } else {
+                        this.spoTriples[idx].object = null;
+                    }
+                })
+                .catch(err => {
+                    console.warn('SPARQL query failed:', err.message);
+                    this.spoTriples[idx].object = null;
+                })
+                .finally(() => {
+                    this.spoLoading = false;
+                });
         },
 
         // ── Tabs ──
@@ -866,10 +924,44 @@ createApp({
             this.onSpoInput();
         },
         removeSpoRow(idx) {
+            const row = this.spoTriples[idx];
+            const subject = this.spoSubject.trim();
+            const property = (row.property || '').trim();
+            const object = (row.object || '').trim();
+            if (subject && property && object) {
+                this.sendDeletePatch(subject, property, object);
+            }
             this.spoTriples.splice(idx, 1);
             this.onSpoInput();
         },
+        clearRowObject(idx) {
+            const row = this.spoTriples[idx];
+            const subject = this.spoSubject.trim();
+            const property = (row.property || '').trim();
+            const object = (row.object || '').trim();
+            if (subject && property && object) {
+                this.sendDeletePatch(subject, property, object);
+            }
+            this.spoTriples[idx].object = null;
+            this.onSpoInput();
+        },
         clearSpoRows() {
+            const toDelete = this.spoTriples.filter(row => {
+                const subject = this.spoSubject.trim();
+                const property = (row.property || '').trim();
+                const object = (row.object || '').trim();
+                return subject && property && object;
+            });
+
+            if (toDelete.length > 0) {
+                const subject = this.spoSubject.trim();
+                for (const row of toDelete) {
+                    const property = (row.property || '').trim();
+                    const object = (row.object || '').trim();
+                    this.sendDeletePatch(subject, property, object);
+                }
+            }
+
             if (this.spoTriples.length === 0)
                 return;
             if (!confirm('Clear all ' + this.spoTriples.length + ' property row(s)?'))
@@ -921,9 +1013,9 @@ createApp({
                 });
                 if (response.data.success && response.data.blobs && response.data.blobs.length > 0) {
                     const blobInfo = response.data.blobs[0];
-                    // Get the blob URI
-                    this.$set(this.spoTriples[idx], 'object', blobInfo.blobUri);
+                    this.spoTriples[idx].object = blobInfo.blobUri;
                     this.showToast('Uploaded: ' + blobInfo.blobUri);
+                    this.completeAndSendAdd(this.spoTriples[idx]);
                     this.onSpoInput();
                 } else {
                     this.showError('Upload failed: ' + (response.data.error || 'unknown error'));
@@ -973,7 +1065,8 @@ createApp({
             // Check for text/URI drop from file list entries
             const text = event.dataTransfer.getData('text/plain');
             if (text) {
-                this.$set(this.spoTriples[idx], 'object', text);
+                this.spoTriples[idx].object = text;
+                this.completeAndSendAdd(this.spoTriples[idx]);
                 this.onSpoInput();
                 return;
             }
@@ -981,7 +1074,8 @@ createApp({
             // Check for dragged blob URIs from file list
             const uri = event.dataTransfer.getData('application/x-atic-blob-uri');
             if (uri) {
-                this.$set(this.spoTriples[idx], 'object', uri);
+                this.spoTriples[idx].object = uri;
+                this.completeAndSendAdd(this.spoTriples[idx]);
                 this.onSpoInput();
             }
         },
@@ -1003,55 +1097,37 @@ createApp({
             // Check for text/URI in clipboard
             const text = event.clipboardData.getData('text/plain');
             if (text) {
-                // Check if it's a blob URI
-                if (text.startsWith('urn:atic:blob:')) {
-                    this.$set(this.spoTriples[idx], 'object', text);
-                }
-                // Otherwise just use the text as-is
-                else {
-                    this.$set(this.spoTriples[idx], 'object', text);
-                }
+                this.spoTriples[idx].object = text;
+                this.completeAndSendAdd(this.spoTriples[idx]);
                 this.onSpoInput();
                 event.preventDefault();
             }
         },
-        buildRdfPatchText() {
-            const lines = [];
-            for (const row of this.spoTriples) {
-                const subject = this.spoSubject.trim();
-                const property = (row.property || '').trim();
-                const object = (row.object || '').trim();
-
-                if (!subject || !property || !object)
-                    continue;
-
-                // RDF Patch format: + ( <subject> <predicate> <object> ) .
-                lines.push(`+ ( <${subject}> <${property}> <${object}> ) .`);
-            }
-            return lines.join('\n');
+        sendAddPatch(subject, property, object) {
+            const patch = `A <${subject}> <${property}> <${object}> .\n`;
+            axios.patch('/dataset', patch, {
+                headers: {'Content-Type': 'text/turtle'},
+            }).catch(err => {
+                this.showError('Failed to add triple: ' + (err.response?.data || err.message));
+            });
         },
-        async applySpoTriples() {
-            if (this.spoTriples.length === 0)
+        sendDeletePatch(subject, property, object) {
+            const patch = `D <${subject}> <${property}> <${object}> .\n`;
+            axios.patch('/dataset', patch, {
+                headers: {'Content-Type': 'text/turtle'},
+            }).catch(err => {
+                this.showError('Failed to delete triple: ' + (err.response?.data || err.message));
+            });
+        },
+        completeAndSendAdd(row) {
+            const subject = this.spoSubject.trim();
+            const property = (row.property || '').trim();
+            const object = (row.object || '').trim();
+
+            if (!subject || !property || !object)
                 return;
 
-            const patchText = this.buildRdfPatchText();
-            if (!patchText) {
-                this.showError('No valid triples to apply. Subject, property, and object must all be set.');
-                return;
-            }
-
-            this.spoApplying = true;
-
-            try {
-                await axios.patch('/dataset', patchText, {
-                    headers: {'Content-Type': 'text/turtle'},
-                });
-                this.showToast(`Attached ${this.spoTriples.length} triple(s) to the dataset`);
-            } catch (err) {
-                this.showError('Failed to apply triples: ' + (err.response?.data || err.message));
-            } finally {
-                this.spoApplying = false;
-            }
+            this.sendAddPatch(subject, property, object);
         },
         // ── Helpers ──
         isImage(item) {
