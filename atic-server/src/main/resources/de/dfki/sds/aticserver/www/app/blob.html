@@ -7,6 +7,7 @@
         <link href="/app/css/all.min.css" rel="stylesheet" />
         <link href="/app/css/loader.css" rel="stylesheet" />
         <link href="/app/css/link.css" rel="stylesheet" />
+        <link href="/app/css/blob.css" rel="stylesheet" />
 
         <script src="/app/js/bootstrap.bundle.min.js"></script>
         <script src="/app/js/vue.global.prod.js"></script>
@@ -14,66 +15,6 @@
 
         <link rel="shortcut icon" href="/app/favicon.ico">
         <title>Blob Explorer | Atic</title>
-        <style>
-            .tab-content {
-                min-height: 400px;
-            }
-            .folder-entry {
-                background: #fff8e1;
-                cursor: pointer;
-            }
-            .table tbody tr {
-                cursor: pointer;
-            }
-            .table tbody tr:hover {
-                background-color: #f8f9fa;
-            }
-            .table tbody tr .btn-group,
-            .table tbody tr .btn-group button {
-                cursor: default;
-            }
-            .progress {
-                height: 1.5rem;
-            }
-            .progress-bar {
-                font-size: 0.8rem;
-            }
-            .breadcrumb-item a {
-                color: #0d6efd;
-                text-decoration: none;
-            }
-            .breadcrumb-item.active {
-                color: #6c757d;
-            }
-            .context-menu {
-                position: absolute;
-                z-index: 9999;
-                min-width: 180px;
-            }
-            .file-icon {
-                width: 24px;
-                text-align: center;
-            }
-            .table thead th {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                vertical-align: middle;
-            }
-            .table thead .form-check-input {
-                width: 1.75rem;
-                height: 2rem;
-                margin: 0;
-            }
-            .table tbody .form-check-input {
-                width: 1.75rem;
-                height: 1.75rem;
-                margin-top: 0.1rem;
-            }
-            .table-warning {
-                --bs-table-bg-state: #fff3cd;
-            }
-        </style>
     </head>
     <body>
         <div class="container-fluid mt-3" id="app">
@@ -157,8 +98,8 @@
                 </li>
             </ul>
 
-            <div class="tab-content card" style="height: 700px;">
-                <div class="card-body p-0 d-flex flex-column" v-for="tab in tabs" v-show="tab.id === activeTabId" :key="tab.id" style="overflow: hidden;">
+            <div class="tab-content card card-resize mb-3" style="min-height: 400px;">
+                <div class="card-body p-0 d-flex flex-column" v-for="tab in tabs" v-show="tab.id === activeTabId" :key="tab.id">
                     <!-- Toolbar -->
                     <div class="d-flex align-items-center p-2 border-bottom bg-light">
                         <!-- Home button -->
@@ -194,7 +135,7 @@
 
                     <!-- File list -->
                     <div v-else class="table-responsive flex-grow-1" style="overflow-y: auto;">
-                        <table class="table table-hover mb-0" style="font-size: 0.9rem;">
+                        <table class="table table-hover mb-0 blob-table" style="font-size: 0.9rem;">
                             <thead class="table-light sticky-top">
                                 <tr>
                                     <th style="width: 36px;">
@@ -259,6 +200,129 @@
                                 </tr>
                                 <tr v-if="tab.entries.length === 0">
                                     <td colspan="5" class="text-center text-muted py-4">This folder is empty.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Blob Attachment -->
+            <div class="card mb-5 spo-card">
+                <div class="card-header d-flex align-items-center">
+                    <i class="fa fa-paperclip me-2"></i>
+                    <strong>Blob Attachment</strong>
+                    <span class="badge bg-primary ms-2">{{ spoTriples.length }}</span>
+                    <div class="ms-auto">
+                        <button class="btn btn-sm btn-outline-primary me-1" @click="addSpoRow" title="Add property row">
+                            <i class="fa fa-plus"></i> Add Property
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary me-1" @click="clearSpoRows" title="Clear all rows">
+                            <i class="fa fa-eraser"></i> Clear
+                        </button>
+                        <button class="btn btn-sm btn-success" @click="applySpoTriples" :disabled="spoTriples.length === 0 || spoApplying">
+                            <i class="fa fa-play" v-if="!spoApplying"></i>
+                            <span class="spinner-border spinner-border-sm" v-else></span>
+                            Attach ({{ spoTriples.length }})
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Subject URI -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" style="font-size: 0.85rem;">Subject URI</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="fa fa-id-card"></i></span>
+                            <input type="text" class="form-control" v-model="spoSubject"
+                                   placeholder="http://example.org/resource" spellcheck="false">
+                        </div>
+                    </div>
+
+                    <!-- Property rows -->
+                    <div class="table-responsive">
+                        <table class="table table-sm table-borderless mb-0 align-middle">
+                            <thead>
+                                <tr style="font-size: 0.8rem;">
+                                    <th style="width: 60px;" class="text-muted">#</th>
+                                    <th style="min-width: 180px;">Property URI</th>
+                                    <th class="spo-object-cell">Object URI / Blob</th>
+                                    <th style="width: 40px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(row, idx) in spoTriples" :key="idx" class="spo-row">
+                                    <td class="text-muted small">{{ idx + 1 }}</td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text" style="width: 30px; font-size: 0.8rem;">
+                                                <i class="fa fa-arrows-h"></i>
+                                            </span>
+                                            <input type="text" class="form-control" v-model="row.property"
+                                                   placeholder="http://example.org/prop" spellcheck="false"
+                                                   @input="onSpoInput">
+                                        </div>
+                                    </td>
+                                    <td class="spo-object-cell">
+                                        <!-- Object URI input / drop zone / preview -->
+                                        <div class="spo-drop-zone"
+                                             :class="{ 'has-value': row.object }"
+                                             @dragover.prevent="onSpoDragOver($event, idx)"
+                                             @dragleave.prevent="onSpoDragLeave($event, idx)"
+                                             @drop.prevent="onSpoDrop($event, idx)"
+                                             @paste="onSpoPaste($event, idx)"
+                                             @click="triggerSpoFileInput(idx)">
+
+                                            <div v-if="row.object">
+                                                <!-- Image preview for blob URIs -->
+                                                <img v-if="isBlobUriImage(row.object)"
+                                                     :src="'/blob/serve/' + row.object"
+                                                     class="spo-preview-img"
+                                                     :title="row.object"
+                                                     @click.stop>
+                                                <!-- Text for non-image URIs -->
+                                                <div v-else class="d-flex align-items-center gap-1">
+                                                    <i class="fa fa-link text-success"></i>
+                                                    <span class="text-break" style="max-width: 180px; font-size: 0.8rem;">{{ row.object }}</span>
+                                                    <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                                                            style="font-size: 0.65rem;"
+                                                            @click.stop="row.object = null; onSpoInput()"
+                                                            title="Clear">
+                                                        <i class="fa fa-times"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- No value: show input or placeholder -->
+                                            <div v-else class="d-flex flex-column align-items-center gap-1 w-100">
+                                                <input type="text" class="form-control form-control-sm text-center"
+                                                       v-model="row.object"
+                                                       placeholder="Paste or drag here"
+                                                       style="font-size: 0.8rem; border: none; background: transparent;"
+                                                       spellcheck="false"
+                                                       @input="onSpoInput">
+                                                <div class="spo-preview-placeholder">
+                                                    <i class="fa fa-paste"></i> Paste &nbsp;|&nbsp;
+                                                    <i class="fa fa-hand-paper-o"></i> Drag &nbsp;|&nbsp;
+                                                    <i class="fa fa-folder-open"></i> File
+                                                </div>
+                                            </div>
+
+                                            <!-- Hidden file input -->
+                                            <input type="file" ref="spoFileInput" style="display:none"
+                                                   @change="onSpoFileUpload($event, idx)">
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger py-0 px-2"
+                                                @click="removeSpoRow(idx)" title="Remove row">
+                                            <i class="fa fa-times"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr v-if="spoTriples.length === 0">
+                                    <td colspan="4" class="text-center text-muted py-3" style="font-size: 0.85rem;">
+                                        No property rows. Click <strong>Add Property</strong> to start building triples.
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -352,6 +416,11 @@ createApp({
             contextMenuX: 0,
             contextMenuY: 0,
             contextMenuPath: null,
+
+            // Blob Attachment
+            spoSubject: '',
+            spoTriples: [],
+            spoApplying: false,
         };
     },
     created() {
@@ -741,6 +810,203 @@ createApp({
                         }
                     })
                     .catch(err => this.showError(err.message));
+        },
+        // ── Blob Attachment ──
+        addSpoRow() {
+            this.spoTriples.push({
+                property: '',
+                object: null,
+                _uploading: false,
+            });
+            this.onSpoInput();
+        },
+        removeSpoRow(idx) {
+            this.spoTriples.splice(idx, 1);
+            this.onSpoInput();
+        },
+        clearSpoRows() {
+            if (this.spoTriples.length === 0)
+                return;
+            if (!confirm('Clear all ' + this.spoTriples.length + ' property row(s)?'))
+                return;
+            this.spoTriples = [];
+            this.onSpoInput();
+        },
+        onSpoInput() {
+            // Reactive update signal - nothing else needed
+        },
+        isBlobUriImage(uri) {
+            if (!uri) return false;
+            // Match urn:atic:blob:{sha256} and check if it's an image type
+            // We'll use the blob list entries to determine mime type
+            // For now, check if it looks like a blob URI
+            if (!uri.startsWith('urn:atic:blob:')) return false;
+            // We can't know the mime type without querying, so assume all blob URIs could be images
+            // The preview will show them all as images; serveBlob will handle correct MIME
+            return true;
+        },
+        triggerSpoFileInput(idx) {
+            // We need to trigger a file input for this specific row
+            // Store the target index and trigger the next available hidden input
+            this._spoTargetIdx = idx;
+            const inputs = document.querySelectorAll('input[type="file"]');
+            for (const input of inputs) {
+                if (input.style.display === 'none') {
+                    input.dataset.targetIdx = idx;
+                    input.click();
+                    return;
+                }
+            }
+        },
+        onSpoFileUpload(event, idx) {
+            const file = event.target.files[0];
+            if (!file) return;
+            this.uploadSpoFileToBlob(file, idx);
+            // Reset file input
+            event.target.value = '';
+        },
+        async uploadSpoFileToBlob(file, idx) {
+            this.spoTriples[idx]._uploading = true;
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await axios.post('/blob', formData, {
+                    headers: {'Content-Type': 'multipart/form-data'},
+                });
+                if (response.data.success && response.data.blobs && response.data.blobs.length > 0) {
+                    const blobInfo = response.data.blobs[0];
+                    // Get the blob URI
+                    this.$set(this.spoTriples[idx], 'object', blobInfo.blobUri);
+                    this.showToast('Uploaded: ' + blobInfo.blobUri);
+                    this.onSpoInput();
+                } else {
+                    this.showError('Upload failed: ' + (response.data.error || 'unknown error'));
+                }
+            } catch (err) {
+                this.showError('Upload failed: ' + (err.response?.data?.error || err.message));
+            } finally {
+                this.spoTriples[idx]._uploading = false;
+            }
+        },
+        onSpoDragOver(event, idx) {
+            event.dataTransfer.dropEffect = 'copy';
+            // Highlight the drop zone
+            const zone = event.currentTarget;
+            zone.classList.add('drag-over');
+        },
+        onSpoDragLeave(event, idx) {
+            const zone = event.currentTarget;
+            zone.classList.remove('drag-over');
+        },
+        onSpoDrop(event, idx) {
+            const zone = event.currentTarget;
+            zone.classList.remove('drag-over');
+
+            // Check for DataTransferItem (file drag)
+            if (event.dataTransfer.items) {
+                for (const item of event.dataTransfer.items) {
+                    if (item.kind === 'file') {
+                        const file = item.getAsFile();
+                        if (file) {
+                            this.uploadSpoFileToBlob(file, idx);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Check for DataTransfer files
+            if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                const file = event.dataTransfer.files[0];
+                if (file) {
+                    this.uploadSpoFileToBlob(file, idx);
+                    return;
+                }
+            }
+
+            // Check for text/URI drop from file list entries
+            const text = event.dataTransfer.getData('text/plain');
+            if (text) {
+                this.$set(this.spoTriples[idx], 'object', text);
+                this.onSpoInput();
+                return;
+            }
+
+            // Check for dragged blob URIs from file list
+            const uri = event.dataTransfer.getData('application/x-atic-blob-uri');
+            if (uri) {
+                this.$set(this.spoTriples[idx], 'object', uri);
+                this.onSpoInput();
+            }
+        },
+        async onSpoPaste(event, idx) {
+            const clipboardItems = event.clipboardData.items;
+
+            // Check for files in clipboard (images)
+            for (const item of clipboardItems) {
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        this.uploadSpoFileToBlob(file, idx);
+                        event.preventDefault();
+                        return;
+                    }
+                }
+            }
+
+            // Check for text/URI in clipboard
+            const text = event.clipboardData.getData('text/plain');
+            if (text) {
+                // Check if it's a blob URI
+                if (text.startsWith('urn:atic:blob:')) {
+                    this.$set(this.spoTriples[idx], 'object', text);
+                }
+                // Otherwise just use the text as-is
+                else {
+                    this.$set(this.spoTriples[idx], 'object', text);
+                }
+                this.onSpoInput();
+                event.preventDefault();
+            }
+        },
+        buildRdfPatchText() {
+            const lines = [];
+            for (const row of this.spoTriples) {
+                const subject = this.spoSubject.trim();
+                const property = (row.property || '').trim();
+                const object = (row.object || '').trim();
+
+                if (!subject || !property || !object)
+                    continue;
+
+                // RDF Patch format: + ( <subject> <predicate> <object> ) .
+                lines.push(`+ ( <${subject}> <${property}> <${object}> ) .`);
+            }
+            return lines.join('\n');
+        },
+        async applySpoTriples() {
+            if (this.spoTriples.length === 0)
+                return;
+
+            const patchText = this.buildRdfPatchText();
+            if (!patchText) {
+                this.showError('No valid triples to apply. Subject, property, and object must all be set.');
+                return;
+            }
+
+            this.spoApplying = true;
+
+            try {
+                await axios.patch('/dataset', patchText, {
+                    headers: {'Content-Type': 'text/turtle'},
+                });
+                this.showToast(`Attached ${this.spoTriples.length} triple(s) to the dataset`);
+            } catch (err) {
+                this.showError('Failed to apply triples: ' + (err.response?.data || err.message));
+            } finally {
+                this.spoApplying = false;
+            }
         },
         // ── Helpers ──
         isImage(item) {

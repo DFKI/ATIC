@@ -1,0 +1,108 @@
+/* Blob Explorer - Blob-specific styles */
+
+.tab-content {
+    min-height: 400px;
+}
+.folder-entry {
+    background: #fff8e1;
+    cursor: pointer;
+}
+
+/* File list table — scoped to .blob-table only */
+.blob-table tbody tr {
+    cursor: pointer;
+}
+.blob-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+.blob-table tbody tr .btn-group,
+.blob-table tbody tr .btn-group button {
+    cursor: default;
+}
+
+.progress {
+    height: 1.5rem;
+}
+.progress-bar {
+    font-size: 0.8rem;
+}
+.breadcrumb-item a {
+    color: #0d6efd;
+    text-decoration: none;
+}
+.breadcrumb-item.active {
+    color: #6c757d;
+}
+.context-menu {
+    position: absolute;
+    z-index: 9999;
+    min-width: 180px;
+}
+.file-icon {
+    width: 24px;
+    text-align: center;
+}
+/* File list header — only applies to the blob-table */
+.blob-table thead .form-check-input {
+    width: 1.75rem;
+    height: 2rem;
+    margin: 0;
+}
+.blob-table tbody .form-check-input {
+    width: 1.75rem;
+    height: 1.75rem;
+    margin-top: 0.1rem;
+}
+.table-warning {
+    --bs-table-bg-state: #fff3cd;
+}
+
+/* SPO Triple Builder */
+.spo-card {
+    font-size: 0.9rem;
+}
+.spo-row {
+    transition: background-color 0.15s;
+}
+.spo-row:hover {
+    background-color: #f8f9fa;
+}
+.spo-drop-zone {
+    border: 2px dashed #dee2e6;
+    border-radius: 0.25rem;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+    position: relative;
+}
+.spo-drop-zone.drag-over {
+    border-color: #0d6efd;
+    background-color: #e7f1ff;
+}
+.spo-drop-zone.has-value {
+    border-style: solid;
+    border-color: #198754;
+}
+.spo-preview-img {
+    max-width: 100px;
+    max-height: 80px;
+    object-fit: contain;
+    border-radius: 0.25rem;
+}
+.spo-preview-placeholder {
+    color: #adb5bd;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+.spo-object-cell {
+    min-width: 250px;
+}
+
+/* Resizable file list card */
+.card-resize {
+    resize: vertical;
+    overflow: hidden;
+}
