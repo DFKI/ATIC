@@ -54,6 +54,25 @@
                 width: 24px;
                 text-align: center;
             }
+            .table thead th {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                vertical-align: middle;
+            }
+            .table thead .form-check-input {
+                width: 1.75rem;
+                height: 2rem;
+                margin: 0;
+            }
+            .table tbody .form-check-input {
+                width: 1.75rem;
+                height: 1.75rem;
+                margin-top: 0.1rem;
+            }
+            .table-warning {
+                --bs-table-bg-state: #fff3cd;
+            }
         </style>
     </head>
     <body>
@@ -138,8 +157,8 @@
                 </li>
             </ul>
 
-            <div class="tab-content card">
-                <div class="card-body p-0" v-for="tab in tabs" v-show="tab.id === activeTabId" :key="tab.id">
+            <div class="tab-content card" style="height: 700px;">
+                <div class="card-body p-0 d-flex flex-column" v-for="tab in tabs" v-show="tab.id === activeTabId" :key="tab.id" style="overflow: hidden;">
                     <!-- Toolbar -->
                     <div class="d-flex align-items-center p-2 border-bottom bg-light">
                         <!-- Home button -->
@@ -159,6 +178,12 @@
                                 <i class="fa fa-arrow-right"></i>
                             </button>
                         </div>
+                        <!-- Selection controls -->
+                        <div class="ms-auto d-flex align-items-center gap-2">
+                            <button v-if="getSelectedCount(tab) > 0" class="btn btn-sm btn-outline-danger" @click="deleteSelectedFiles(tab)" style="white-space: nowrap;">
+                                <i class="fa fa-trash"></i> Delete selected ({{ getSelectedCount(tab) }})
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Loading -->
@@ -168,10 +193,19 @@
                     </div>
 
                     <!-- File list -->
-                    <div v-else class="table-responsive">
+                    <div v-else class="table-responsive flex-grow-1" style="overflow-y: auto;">
                         <table class="table table-hover mb-0" style="font-size: 0.9rem;">
-                            <thead class="table-light">
+                            <thead class="table-light sticky-top">
                                 <tr>
+                                    <th style="width: 36px;">
+                                        <input type="checkbox"
+                                               class="form-check-input"
+                                               :checked="selectAllIsChecked(tab)"
+                                               :indeterminate.prop="selectAllIsIndeterminate(tab)"
+                                               @change="toggleSelectAll(tab, $event.target.checked)"
+                                               @click.stop
+                                               title="Select/deselect all files">
+                                    </th>
                                     <th style="width: 40px;"></th>
                                     <th> <!-- style="cursor:pointer" @click="sortTab(tab, 'name')" -->
                                         Name <!-- i v-if="tab.sortBy === 'name'" :class="tab.sortDir === 'asc' ? 'fa fa-sort-up' : 'fa fa-sort-down'"></i -->
@@ -182,8 +216,15 @@
                             </thead>
                             <tbody>
                                 <tr v-for="item in sortedEntries(tab)" :key="item.path"
-                                    :class="{ 'folder-entry': item.isFolder }"
+                                    :class="{ 'folder-entry': item.isFolder, 'table-warning': item._selected }"
                                     @click="handleClick(tab, item)">
+                                    <td>
+                                        <input v-if="!item.isFolder" type="checkbox"
+                                               class="form-check-input"
+                                               :checked="item._selected || false"
+                                               @change="toggleSelect(tab, item, $event.target.checked)"
+                                               @click.stop>
+                                    </td>
                                     <td class="file-icon">
                                         <i v-if="item.isFolder" class="fa fa-folder text-warning fs-5"></i>
                                         <i v-else-if="isImage(item)" class="fa fa-file-image text-info fs-5"></i>
@@ -217,7 +258,7 @@
                                     </td>
                                 </tr>
                                 <tr v-if="tab.entries.length === 0">
-                                    <td colspan="4" class="text-center text-muted py-4">This folder is empty.</td>
+                                    <td colspan="5" class="text-center text-muted py-4">This folder is empty.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -369,6 +410,7 @@ createApp({
                 sortBy: 'name',
                 sortDir: 'asc',
                 pathInput: '',
+                selection: {},
             };
             this.activeTabId = id;
             this.loadTab(tab).then(_ => {
@@ -457,6 +499,44 @@ createApp({
                     window.open('/blob/serve/' + item.blobUri, '_blank');
                 }
             }
+        },
+        // ── File Selection ──
+        toggleSelect(tab, item, checked) {
+            item._selected = checked;
+        },
+        toggleSelectAll(tab, checked) {
+            const files = tab.entries.filter(e => !e.isFolder);
+            files.forEach(item => { item._selected = checked; });
+        },
+        selectAllIsChecked(tab) {
+            const files = tab.entries.filter(e => !e.isFolder);
+            return files.length > 0 && files.every(e => e._selected);
+        },
+        selectAllIsIndeterminate(tab) {
+            const files = tab.entries.filter(e => !e.isFolder);
+            const selected = files.filter(e => e._selected).length;
+            return selected > 0 && selected < files.length;
+        },
+        getSelectedCount(tab) {
+            return tab.entries.filter(e => !e.isFolder && e._selected).length;
+        },
+        deleteSelectedFiles(tab) {
+            const selectedPaths = tab.entries
+                .filter(e => !e.isFolder && e._selected)
+                .map(e => e.path);
+            if (selectedPaths.length === 0) return;
+            if (!confirm('Delete ' + selectedPaths.length + ' selected file(s)?'))
+                return;
+            axios.delete('/blob', {data: {paths: selectedPaths}})
+                .then(response => {
+                    if (response.data.success) {
+                        this.showToast(response.data.deleted + ' file(s) deleted');
+                        this.loadTab(tab);
+                    } else {
+                        this.showError(response.data.error);
+                    }
+                })
+                .catch(err => this.showError(err.message));
         },
         navigateToPath(tab) {
             const raw = (tab.pathInput || '').trim();
