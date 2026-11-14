@@ -924,44 +924,14 @@ createApp({
             this.onSpoInput();
         },
         removeSpoRow(idx) {
-            const row = this.spoTriples[idx];
-            const subject = this.spoSubject.trim();
-            const property = (row.property || '').trim();
-            const object = (row.object || '').trim();
-            if (subject && property && object) {
-                this.sendDeletePatch(subject, property, object);
-            }
             this.spoTriples.splice(idx, 1);
             this.onSpoInput();
         },
         clearRowObject(idx) {
-            const row = this.spoTriples[idx];
-            const subject = this.spoSubject.trim();
-            const property = (row.property || '').trim();
-            const object = (row.object || '').trim();
-            if (subject && property && object) {
-                this.sendDeletePatch(subject, property, object);
-            }
             this.spoTriples[idx].object = null;
             this.onSpoInput();
         },
         clearSpoRows() {
-            const toDelete = this.spoTriples.filter(row => {
-                const subject = this.spoSubject.trim();
-                const property = (row.property || '').trim();
-                const object = (row.object || '').trim();
-                return subject && property && object;
-            });
-
-            if (toDelete.length > 0) {
-                const subject = this.spoSubject.trim();
-                for (const row of toDelete) {
-                    const property = (row.property || '').trim();
-                    const object = (row.object || '').trim();
-                    this.sendDeletePatch(subject, property, object);
-                }
-            }
-
             if (this.spoTriples.length === 0)
                 return;
             if (!confirm('Clear all ' + this.spoTriples.length + ' property row(s)?'))
