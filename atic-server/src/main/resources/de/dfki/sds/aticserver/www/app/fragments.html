@@ -167,6 +167,35 @@
                             <div v-if="testerResult" class="border rounded bg-light" style="max-height: 50vh; overflow: auto;">
                                 <pre class="mb-0 p-2 small" style="white-space: pre-wrap; word-break: break-word;">{{ testerResult }}</pre>
                             </div>
+
+                            <div v-if="blobRefs.length > 0" class="mt-3">
+                                <div class="small fw-semibold mb-1">
+                                    <i class="fa fa-image me-1"></i> Blob References
+                                </div>
+                                <table class="table table-sm table-borderless mb-0" style="font-size: 0.8rem;">
+                                    <tbody>
+                                        <tr v-for="ref in blobRefs" :key="ref.key">
+                                            <td class="fw-semibold text-muted" style="width: 120px;">{{ ref.key }}</td>
+                                            <td>
+                                                <div class="d-flex flex-column gap-1">
+                                                    <a :href="'/blob/serve/' + ref.uri" target="_blank" rel="noopener">
+                                                        <img :src="'/blob/serve/' + ref.uri"
+                                                             class="img-thumbnail"
+                                                             style="max-height: 60px; max-width: 120px;"
+                                                             :title="ref.uri">
+                                                    </a>
+                                                    <a :href="'/blob/serve/' + ref.uri"
+                                                       target="_blank"
+                                                       rel="noopener"
+                                                       class="text-decoration-none small">
+                                                        <i class="fa fa-external-link-alt"></i> Open
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -488,8 +517,33 @@ createApp({
             testerLang: 'en',
             testerLoading: false,
             testerResult: null,
+            testerFragment: null,
             testerError: null
         };
+    },
+    computed: {
+        blobRefs() {
+            if (!this.testerFragment || typeof this.testerFragment !== 'object') {
+                return [];
+            }
+            const refs = [];
+            const blobPrefix = 'urn:atic:blob:';
+            for (const key of Object.keys(this.testerFragment)) {
+                if (key === '@context' || key === '@id') {
+                    continue;
+                }
+                const val = this.testerFragment[key];
+                if (val && typeof val === 'object' && val['@id'] && val['@id'].startsWith(blobPrefix)) {
+                    // Check if it's an image by trying to determine the MIME type from the URI
+                    const uri = val['@id'];
+                    refs.push({
+                        key: key,
+                        uri: uri
+                    });
+                }
+            }
+            return refs;
+        }
     },
     created() {
         axios.interceptors.response.use(
@@ -845,6 +899,7 @@ createApp({
             this.testerLoading = true;
             this.testerError = null;
             this.testerResult = null;
+            this.testerFragment = null;
             try {
                 // Build Accept-Language header
                 let acceptLang = null;
@@ -857,6 +912,7 @@ createApp({
                         { ...{ skipErrorModal: true }, headers }
                 );
                 this.testerResult = JSON.stringify(response.data, null, 2);
+                this.testerFragment = response.data;
             } catch (error) {
                 this.testerError = error.response?.data?.error || error.message || 'Failed to fetch fragment';
             } finally {
