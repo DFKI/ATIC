@@ -158,7 +158,9 @@
                             <tbody>
                                 <tr v-for="item in sortedEntries(tab)" :key="item.path"
                                     :class="{ 'folder-entry': item.isFolder, 'table-warning': item._selected }"
-                                    @click="handleClick(tab, item)">
+                                    @click="handleClick(tab, item)"
+                                    :draggable="!item.isFolder"
+                                    @dragstart="onFileDragStart($event, item)">
                                     <td>
                                         <input v-if="!item.isFolder" type="checkbox"
                                                class="form-check-input"
@@ -258,6 +260,7 @@
                                             </span>
                                             <input type="text" class="form-control" v-model="row.property"
                                                    placeholder="http://example.org/prop" spellcheck="false"
+                                                   list="rdf-property-uri-suggestions"
                                                    @input="onSpoInput"
                                                    @blur="queryForObject(idx)">
                                         </div>
@@ -286,13 +289,14 @@
                                                 </div>
                                                 <!-- Text for non-image URIs -->
                                                 <div v-else class="d-flex align-items-center gap-1">
-                                                    <input type="text" class="form-control form-control-sm"
-                                                           :value="row.object"
-                                                           style="font-size: 0.8rem;"
-                                                           spellcheck="false"
-                                                           @focus="spoFocusedIdx = idx"
-                                                           @blur="spoFocusedIdx = null"
-                                                           @input="row.object = $event.target.value; onSpoInput()">
+                                                    <a :href="'/blob/serve/' + row.object"
+                                                       target="_blank"
+                                                       rel="noopener"
+                                                       :title="row.object"
+                                                       class="btn btn-sm btn-outline-secondary py-0 px-1"
+                                                       style="font-size: 0.75rem;">
+                                                        <i class="fa fa-external-link"></i>
+                                                    </a>
                                                     <button class="btn btn-sm btn-outline-secondary py-0 px-1"
                                                             style="font-size: 0.65rem;"
                                                             @click="clearRowObject(idx)"
@@ -395,6 +399,100 @@
                 </div>
             </div>
         </div>
+
+        <datalist id="rdf-property-uri-suggestions">
+            <!-- RDF / RDFS -->
+            <option value="http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                    label="rdf:type"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#label"
+                    label="rdfs:label"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#comment"
+                    label="rdfs:comment"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#seeAlso"
+                    label="rdfs:seeAlso"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#isDefinedBy"
+                    label="rdfs:isDefinedBy"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#subClassOf"
+                    label="rdfs:subClassOf"></option>
+            <option value="http://www.w3.org/2000/01/rdf-schema#subPropertyOf"
+                    label="rdfs:subPropertyOf"></option>
+
+            <!-- SKOS -->
+            <option value="http://www.w3.org/2004/02/skos/core#prefLabel"
+                    label="skos:prefLabel"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#altLabel"
+                    label="skos:altLabel"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#hiddenLabel"
+                    label="skos:hiddenLabel"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#definition"
+                    label="skos:definition"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#note"
+                    label="skos:note"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#broader"
+                    label="skos:broader"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#narrower"
+                    label="skos:narrower"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#related"
+                    label="skos:related"></option>
+            <option value="http://www.w3.org/2004/02/skos/core#exactMatch"
+                    label="skos:exactMatch"></option>
+
+            <!-- Schema.org -->
+            <option value="https://schema.org/name"
+                    label="schema:name"></option>
+            <option value="https://schema.org/description"
+                    label="schema:description"></option>
+            <option value="https://schema.org/image"
+                    label="schema:image"></option>
+            <option value="https://schema.org/identifier"
+                    label="schema:identifier"></option>
+            <option value="https://schema.org/url"
+                    label="schema:url"></option>
+            <option value="https://schema.org/additionalType"
+                    label="schema:additionalType"></option>
+            <option value="https://schema.org/alternateName"
+                    label="schema:alternateName"></option>
+            <option value="https://schema.org/keywords"
+                    label="schema:keywords"></option>
+            <option value="https://schema.org/sameAs"
+                    label="schema:sameAs"></option>
+
+            <!-- FOAF -->
+            <option value="http://xmlns.com/foaf/0.1/name"
+                    label="foaf:name"></option>
+            <option value="http://xmlns.com/foaf/0.1/depiction"
+                    label="foaf:depiction"></option>
+            <option value="http://xmlns.com/foaf/0.1/primaryTopic"
+                    label="foaf:primaryTopic"></option>
+            <option value="http://xmlns.com/foaf/0.1/homepage"
+                    label="foaf:homepage"></option>
+
+            <!-- Dublin Core Terms -->
+            <option value="http://purl.org/dc/terms/title"
+                    label="dcterms:title"></option>
+            <option value="http://purl.org/dc/terms/description"
+                    label="dcterms:description"></option>
+            <option value="http://purl.org/dc/terms/subject"
+                    label="dcterms:subject"></option>
+            <option value="http://purl.org/dc/terms/creator"
+                    label="dcterms:creator"></option>
+            <option value="http://purl.org/dc/terms/created"
+                    label="dcterms:created"></option>
+            <option value="http://purl.org/dc/terms/modified"
+                    label="dcterms:modified"></option>
+
+            <!-- PIMO -->
+            <option value="pimo:core#prefLabel"
+                    label="pimo:core#prefLabel"></option>
+            <option value="pimo:core#hiddenLabel"
+                    label="pimo:core#hiddenLabel"></option>
+            <option value="pimo:thing#plainTextContent"
+                    label="pimo:thing#plainTextContent"></option>
+            <option value="pimo:thing#wikiText"
+                    label="pimo:thing#wikiText"></option>
+            <option value="pimo:thing#hasImage"
+                    label="pimo:thing#hasImage"></option>
+        </datalist>
 
         <div class="row">
             <div style="background: white; font-size: 12px;" class="fixed-bottom">
@@ -673,6 +771,15 @@ createApp({
             }
         },
         // ── File Selection ──
+        onFileDragStart(event, item) {
+            if (item.isFolder || !item.blobUri) {
+                event.preventDefault();
+                return;
+            }
+            event.dataTransfer.setData('application/x-atic-blob-uri', item.blobUri);
+            event.dataTransfer.setData('text/plain', item.blobUri);
+            event.dataTransfer.effectAllowed = 'copy';
+        },
         toggleSelect(tab, item, checked) {
             item._selected = checked;
         },
@@ -928,6 +1035,13 @@ createApp({
             this.onSpoInput();
         },
         clearRowObject(idx) {
+            const row = this.spoTriples[idx];
+            const subject = this.spoSubject.trim();
+            const property = (row.property || '').trim();
+            const object = (row.object || '').trim();
+            if (subject && property && object) {
+                this.sendDeletePatch(subject, property, object);
+            }
             this.spoTriples[idx].object = null;
             this.onSpoInput();
         },
