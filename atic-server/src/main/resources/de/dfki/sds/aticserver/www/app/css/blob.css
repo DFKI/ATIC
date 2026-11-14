@@ -84,8 +84,7 @@
     background-color: #e7f1ff;
 }
 .spo-drop-zone.has-value {
-    border-style: solid;
-    border-color: #198754;
+    border-style: none;
     cursor: default;
 }
 .spo-drop-zone.is-focused {
@@ -98,6 +97,7 @@
     max-height: 80px;
     object-fit: contain;
     border-radius: 0.25rem;
+    display: block;
 }
 .spo-preview-placeholder {
     color: #adb5bd;

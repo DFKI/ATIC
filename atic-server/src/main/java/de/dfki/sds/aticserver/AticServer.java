@@ -1812,14 +1812,20 @@ public class AticServer {
             String originalFilename = uploadedFile.filename();
             // Build logical filepath, normalized to always start with "/"
             String logicalPath;
+            boolean fullPath = "true".equals(ctx.formParam("fullPath"));
             if (pathPrefix != null && !pathPrefix.isBlank()) {
-                // Ensure prefix starts with "/"
-                if (!pathPrefix.startsWith("/")) {
-                    pathPrefix = "/" + pathPrefix;
+                if (fullPath) {
+                    // Client provided the full logical path including filename
+                    logicalPath = pathPrefix;
+                } else {
+                    // Ensure prefix starts with "/"
+                    if (!pathPrefix.startsWith("/")) {
+                        pathPrefix = "/" + pathPrefix;
+                    }
+                    logicalPath = pathPrefix.endsWith("/")
+                            ? pathPrefix + originalFilename
+                            : pathPrefix + "/" + originalFilename;
                 }
-                logicalPath = pathPrefix.endsWith("/")
-                        ? pathPrefix + originalFilename
-                        : pathPrefix + "/" + originalFilename;
             } else {
                 logicalPath = "/" + originalFilename;
             }

@@ -275,11 +275,15 @@
 
                                             <div v-if="row.object">
                                                 <!-- Image preview for blob URIs -->
-                                                <div v-if="isBlobUriImage(row.object)" class="d-flex align-items-center gap-1">
-                                                    <img :src="'/blob/serve/' + row.object"
-                                                         class="spo-preview-img"
-                                                         :title="row.object"
-                                                         @click.stop>
+                                                <div v-if="isBlobUriImage(row)" class="d-flex align-items-center gap-1">
+                                                    <a :href="'/blob/serve/' + row.object"
+                                                       target="_blank"
+                                                       rel="noopener"
+                                                       :title="row.object">
+                                                        <img :src="'/blob/serve/' + row.object"
+                                                             class="spo-preview-img"
+                                                             :title="row.object">
+                                                    </a>
                                                     <button class="btn btn-sm btn-outline-secondary py-0 px-1"
                                                             style="font-size: 0.65rem;"
                                                             @click="clearRowObject(idx)"
@@ -287,15 +291,14 @@
                                                         <i class="fa fa-times"></i>
                                                     </button>
                                                 </div>
-                                                <!-- Text for non-image URIs -->
+                                                <!-- Non-image URIs -->
                                                 <div v-else class="d-flex align-items-center gap-1">
                                                     <a :href="'/blob/serve/' + row.object"
                                                        target="_blank"
                                                        rel="noopener"
                                                        :title="row.object"
-                                                       class="btn btn-sm btn-outline-secondary py-0 px-1"
-                                                       style="font-size: 0.75rem;">
-                                                        <i class="fa fa-external-link"></i>
+                                                       class="btn btn-sm btn-outline-secondary py-0 px-1">
+                                                        <i class="fa fa-external-link-alt"></i> Open
                                                     </a>
                                                     <button class="btn btn-sm btn-outline-secondary py-0 px-1"
                                                             style="font-size: 0.65rem;"
@@ -315,7 +318,8 @@
                                                        @focus="spoFocusedIdx = idx"
                                                        @blur="spoFocusedIdx = null"
                                                        @input="onSpoInput"
-                                                       @paste="onSpoPaste($event, idx)">
+                                                       @paste="onSpoPaste($event, idx)"
+                                                       @blur="onObjectBlur(idx)">
                                                 <div class="d-flex gap-2 mt-1">
                                                     <span class="spo-preview-placeholder">
                                                         <i class="fa fa-paste"></i> Paste &nbsp;|&nbsp;
@@ -609,6 +613,7 @@ createApp({
                     this.spoTriples = state.spoTriples.map(t => ({
                         property: t.property || '',
                         object: null,
+                        objectMimeType: null,
                         _uploading: false
                     }));
                 }
@@ -636,7 +641,14 @@ createApp({
 
             this.spoLoading = true;
 
-            const query = `SELECT ?object WHERE { <${subject}> <${property}> ?object . }`;
+            const query = `SELECT ?object ?mimeType WHERE {
+  <${subject}> <${property}> ?object .
+  OPTIONAL {
+    GRAPH <urn:atic:blob> {
+      ?object <urn:atic:ontology:mimeType> ?mimeType .
+    }
+  }
+}`;
 
             axios.get('/sparql', {
                 params: { query: query },
@@ -644,12 +656,13 @@ createApp({
             })
                 .then(response => {
                     if (response.data && response.data.results && response.data.results.bindings) {
-                        const objects = response.data.results.bindings
-                            .filter(b => b.object)
-                            .map(b => b.object.value);
-
-                        if (objects.length > 0) {
-                            this.spoTriples[idx].object = objects[0];
+                        const binding = response.data.results.bindings[0];
+                        if (binding && binding.object) {
+                            this.spoTriples[idx].object = binding.object.value;
+                            // Store mimeType from metadata if available
+                            if (binding.mimeType) {
+                                this.spoTriples[idx].objectMimeType = binding.mimeType.value;
+                            }
                         } else {
                             this.spoTriples[idx].object = null;
                         }
@@ -1026,6 +1039,7 @@ createApp({
             this.spoTriples.push({
                 property: '',
                 object: null,
+                objectMimeType: null,
                 _uploading: false,
             });
             this.onSpoInput();
@@ -1056,15 +1070,53 @@ createApp({
         onSpoInput() {
             this.saveAttachmentToStorage();
         },
-        isBlobUriImage(uri) {
+        isBlobUriImage(row) {
+            const uri = row.object;
             if (!uri) return false;
-            // Match urn:atic:blob:{sha256} and check if it's an image type
-            // We'll use the blob list entries to determine mime type
-            // For now, check if it looks like a blob URI
             if (!uri.startsWith('urn:atic:blob:')) return false;
-            // We can't know the mime type without querying, so assume all blob URIs could be images
-            // The preview will show them all as images; serveBlob will handle correct MIME
-            return true;
+            // Prefer mimeType from the row (SPARQL query or upload)
+            if (row.objectMimeType) {
+                return row.objectMimeType.toLowerCase().startsWith('image/');
+            }
+            // Fallback: look up mimeType from the active tab's entries
+            const activeTab = this.tabs.find(t => t.id === this.activeTabId);
+            if (!activeTab) return false;
+            const entry = activeTab.entries.find(e => e.blobUri === uri);
+            if (!entry) return false;
+            const mime = (entry.mimeType || '').toLowerCase();
+            return mime.startsWith('image/');
+        },
+        /**
+         * If the given URI is a blob URI, query SPARQL for its mimeType from metadata.
+         */
+        setObjectMimeTypeIfNeeded(idx, uri) {
+            if (!uri || !uri.startsWith('urn:atic:blob:')) return;
+            // Already known
+            if (this.spoTriples[idx]?.objectMimeType) return;
+            const query = `SELECT ?mimeType WHERE {
+  GRAPH <urn:atic:blob> {
+    <${uri}> <urn:atic:ontology:mimeType> ?mimeType .
+  }
+}`;
+
+            axios.get('/sparql', {
+                params: { query: query },
+                headers: { 'Accept': 'application/sparql-results+json' }
+            })
+                .then(response => {
+                    if (response.data?.results?.bindings?.[0]?.mimeType) {
+                        this.spoTriples[idx].objectMimeType = response.data.results.bindings[0].mimeType.value;
+                    }
+                })
+                .catch(err => {
+                    console.warn('Failed to resolve mimeType for', uri, err.message);
+                });
+        },
+        onObjectBlur(idx) {
+            const row = this.spoTriples[idx];
+            if (row?.object) {
+                this.setObjectMimeTypeIfNeeded(idx, row.object);
+            }
         },
         triggerSpoFileInput(idx) {
             // We need to trigger a file input for this specific row
@@ -1088,8 +1140,21 @@ createApp({
         },
         async uploadSpoFileToBlob(file, idx) {
             this.spoTriples[idx]._uploading = true;
+            const ext = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '';
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mi = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            const ms = String(now.getMilliseconds()).padStart(3, '0');
+            const logicalPath = `/${yyyy}-${mm}-${dd}/${hh}:${mi}:${ss}.${ms}${ext}`;
+
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', file, logicalPath);
+            formData.append('path', logicalPath);
+            formData.append('fullPath', 'true');
 
             try {
                 const response = await axios.post('/blob', formData, {
@@ -1098,6 +1163,7 @@ createApp({
                 if (response.data.success && response.data.blobs && response.data.blobs.length > 0) {
                     const blobInfo = response.data.blobs[0];
                     this.spoTriples[idx].object = blobInfo.blobUri;
+                    this.spoTriples[idx].objectMimeType = blobInfo.mimeType;
                     this.showToast('Uploaded: ' + blobInfo.blobUri);
                     this.completeAndSendAdd(this.spoTriples[idx]);
                     this.onSpoInput();
@@ -1150,6 +1216,7 @@ createApp({
             const text = event.dataTransfer.getData('text/plain');
             if (text) {
                 this.spoTriples[idx].object = text;
+                this.setObjectMimeTypeIfNeeded(idx, text);
                 this.completeAndSendAdd(this.spoTriples[idx]);
                 this.onSpoInput();
                 return;
@@ -1159,6 +1226,7 @@ createApp({
             const uri = event.dataTransfer.getData('application/x-atic-blob-uri');
             if (uri) {
                 this.spoTriples[idx].object = uri;
+                this.setObjectMimeTypeIfNeeded(idx, uri);
                 this.completeAndSendAdd(this.spoTriples[idx]);
                 this.onSpoInput();
             }
