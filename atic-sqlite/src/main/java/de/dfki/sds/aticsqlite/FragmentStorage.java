@@ -19,6 +19,8 @@ import java.util.Set;
 import org.apache.jena.graph.Node;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.util.iterator.ExtendedIterator;
+import org.apache.jena.vocabulary.RDF;
+import org.apache.jena.vocabulary.RDFS;
 import org.json.JSONObject;
 
 /**
@@ -101,8 +103,11 @@ public class FragmentStorage {
                             ctx
                     );
 
+                    boolean found = false;
+
                     try {
                         while (it.hasNext()) {
+                            found = true;
                             Quad q = it.next();
                             Node object = q.getObject();
 
@@ -116,11 +121,132 @@ public class FragmentStorage {
                     } finally {
                         it.close();
                     }
+
+                    // If inheritance is enabled and no direct value was found, search ancestors.
+                    if (!found && property.isPropertyInheritance()) {
+                        for (Node value : findAncestorValue(datasetGraph, node, predicate, settings, ctx)) {
+                            if (value.isURI()) {
+                                Fragment nested = buildFragment(datasetGraph, value, settings, ctx, visited);
+                                builder.add(predicate, nested);
+                            } else {
+                                builder.add(predicate, value);
+                            }
+                        }
+                    }
                 }
             }
         }
 
         return builder.build();
+    }
+
+    /**
+     * Search for values of a predicate by walking the rdfs:subClassOf hierarchy.
+     * Starts from the node's rdf:type classes and walks up the class hierarchy.
+     * Stops at the first ancestor class that has the predicate.
+     * If the node itself has no types but is a class (has rdfs:subClassOf),
+     * the search starts from the node itself.
+     *
+     * @param datasetGraph the dataset graph
+     * @param node         the subject node
+     * @param predicate    the predicate to search for
+     * @param settings     fragment settings (for nested fragment building)
+     * @param ctx          invocation context
+     * @return set of object nodes found via inheritance
+     */
+    private static Set<Node> findAncestorValue(AticDatasetGraph datasetGraph, Node node,
+                                                Node predicate, FragmentSettings settings,
+                                                InvocationContext ctx) {
+        Set<Node> results = new LinkedHashSet<>();
+        Set<Node> ancestorClasses = new LinkedHashSet<>();
+        Set<Node> currentLevel = new LinkedHashSet<>();
+
+        // Collect initial classes from rdf:type.
+        ExtendedIterator<Quad> typeIt = (ExtendedIterator<Quad>) datasetGraph.find(
+                Node.ANY, node, RDF.type.asNode(), Node.ANY, ctx
+        );
+        try {
+            while (typeIt.hasNext()) {
+                Node t = typeIt.next().getObject();
+                if (t.isURI()) {
+                    currentLevel.add(t);
+                }
+            }
+        } finally {
+            typeIt.close();
+        }
+
+        // If no types found, check if the node itself is a class with rdfs:subClassOf.
+        if (currentLevel.isEmpty()) {
+            // Check if the node has outgoing rdfs:subClassOf (meaning it IS a class).
+            ExtendedIterator<Quad> scoCheck = (ExtendedIterator<Quad>) datasetGraph.find(
+                    Node.ANY, node, RDFS.subClassOf.asNode(), Node.ANY, ctx
+            );
+            try {
+                if (scoCheck.hasNext()) {
+                    // Node itself is a class — start from it.
+                    currentLevel.add(node);
+                }
+            } finally {
+                scoCheck.close();
+            }
+        }
+
+        // If still no classes found, nothing to inherit from.
+        if (currentLevel.isEmpty()) {
+            return results;
+        }
+
+        // Walk the subClassOf hierarchy level by level.
+        while (!currentLevel.isEmpty()) {
+            Set<Node> nextLevel = new LinkedHashSet<>();
+
+            for (Node clazz : currentLevel) {
+                if (!ancestorClasses.add(clazz)) {
+                    continue;
+                }
+
+                // Check if this ancestor has the predicate.
+                ExtendedIterator<Quad> qIt = (ExtendedIterator<Quad>) datasetGraph.find(
+                        Node.ANY, clazz, predicate, Node.ANY, ctx
+                );
+                try {
+                    while (qIt.hasNext()) {
+                        results.add(qIt.next().getObject());
+                    }
+                } finally {
+                    qIt.close();
+                }
+
+                // If we found a value, stop searching further ancestors.
+                if (!results.isEmpty()) {
+                    break;
+                }
+
+                // Find subClassOf of this class for the next level.
+                ExtendedIterator<Quad> scoIt = (ExtendedIterator<Quad>) datasetGraph.find(
+                        Node.ANY, clazz, RDFS.subClassOf.asNode(), Node.ANY, ctx
+                );
+                try {
+                    while (scoIt.hasNext()) {
+                        Node parent = scoIt.next().getObject();
+                        if (parent.isURI() && !ancestorClasses.contains(parent)) {
+                            nextLevel.add(parent);
+                        }
+                    }
+                } finally {
+                    scoIt.close();
+                }
+            }
+
+            if (!results.isEmpty()) {
+                break;
+            }
+
+            currentLevel = nextLevel;
+        }
+
+        return results;
     }
 
     //===================================

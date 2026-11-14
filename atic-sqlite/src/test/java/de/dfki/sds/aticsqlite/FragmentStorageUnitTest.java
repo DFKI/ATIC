@@ -14,6 +14,7 @@ import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
+import org.apache.jena.vocabulary.SchemaDO;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -324,5 +325,356 @@ public class FragmentStorageUnitTest {
         assertEquals("Acme Corporation", fragments.get(0).getLabel());
         assertEquals("Alice Smith", fragments.get(1).getLabel());
     }
-    
+
+    @Test
+    public void buildFragmentsWithPropertyInheritanceTest() {
+        User adminUser = dataset.calculateRead(()
+                -> dataset.getUser(
+                        UserGroupManagement.ADMIN_USERNAME,
+                        InvocationContext.EMPTY
+                )
+        );
+
+        InvocationContext ctx = new InvocationContext.Builder()
+                .fromUser(adminUser)
+                .build();
+
+        ctx.transferContext(dataset.getContext());
+
+        // Class hierarchy: ex:Engineer rdfs:subClassOf ex:Person
+        // ex:Person has schema:image (icon)
+        // ex:bob is an ex:Engineer (which inherits from ex:Person) but has no direct icon
+        String ttl = """
+            @prefix ex: <http://example.org/> .
+            @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+            @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+            @prefix schema: <https://schema.org/> .
+
+            ex:Person
+                rdfs:label "Person"@en ;
+                schema:image <http://example.org/images/person.png> .
+
+            ex:Engineer
+                rdfs:subClassOf ex:Person .
+
+            ex:bob
+                rdf:type ex:Engineer .
+            """;
+
+        dataset.executeWrite(()
+                -> RDFDataMgr.read(
+                        dataset,
+                        new StringReader(ttl),
+                        null,
+                        Lang.TURTLE
+                )
+        );
+
+        FragmentSettings settings = FragmentSettings.builder()
+                .addProperty(new FragmentProperty(
+                        "icon",
+                        List.of(NodeFactory.createURI(SchemaDO.image.getURI())),
+                        false,
+                        true
+                ))
+                .build();
+
+        dataset.executeWrite(()
+                -> fragmentStorage.save(settings, ctx)
+        );
+
+        List<Fragment> fragments = dataset.calculateRead(()
+                -> fragmentStorage.buildFragments(
+                        List.of(NodeFactory.createURI(EX + "bob")),
+                        ctx
+                )
+        );
+
+        assertEquals(1, fragments.size());
+        // bob should inherit the icon URI from his parent class ex:Person
+        assertEquals(
+                "http://example.org/images/person.png",
+                fragments.get(0).getIcon().getURI()
+        );
+    }
+
+    @Test
+    public void buildFragmentsWithPropertyInheritanceDisabledTest() {
+        User adminUser = dataset.calculateRead(()
+                -> dataset.getUser(
+                        UserGroupManagement.ADMIN_USERNAME,
+                        InvocationContext.EMPTY
+                )
+        );
+
+        InvocationContext ctx = new InvocationContext.Builder()
+                .fromUser(adminUser)
+                .build();
+
+        ctx.transferContext(dataset.getContext());
+
+        String ttl = """
+            @prefix ex: <http://example.org/> .
+            @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+            @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+            @prefix schema: <https://schema.org/> .
+
+            ex:Person
+                rdfs:label "Person"@en ;
+                schema:image <http://example.org/images/person.png> .
+
+            ex:Engineer
+                rdfs:subClassOf ex:Person .
+
+            ex:bob
+                rdf:type ex:Engineer .
+            """;
+
+        dataset.executeWrite(()
+                -> RDFDataMgr.read(
+                        dataset,
+                        new StringReader(ttl),
+                        null,
+                        Lang.TURTLE
+                )
+        );
+
+        // Create settings with propertyInheritance: false (default)
+        FragmentSettings settings = FragmentSettings.builder()
+                .addProperty(new FragmentProperty(
+                        "icon",
+                        List.of(NodeFactory.createURI(SchemaDO.image.getURI())),
+                        false,
+                        false
+                ))
+                .build();
+
+        dataset.executeWrite(()
+                -> fragmentStorage.save(settings, ctx)
+        );
+
+        List<Fragment> fragments = dataset.calculateRead(()
+                -> fragmentStorage.buildFragments(
+                        List.of(NodeFactory.createURI(EX + "bob")),
+                        ctx
+                )
+        );
+
+        assertEquals(1, fragments.size());
+        // bob has no direct icon, and inheritance is disabled
+        // getIcon() throws when no icon found, so we access the subgraph directly
+        org.apache.jena.rdf.model.Model subgraph = fragments.get(0).getSubgraph();
+        assertEquals(0, subgraph.size());
+    }
+
+    @Test
+    public void buildFragmentsWithPropertyInheritanceDirectValueTest() {
+        User adminUser = dataset.calculateRead(()
+                -> dataset.getUser(
+                        UserGroupManagement.ADMIN_USERNAME,
+                        InvocationContext.EMPTY
+                )
+        );
+
+        InvocationContext ctx = new InvocationContext.Builder()
+                .fromUser(adminUser)
+                .build();
+
+        ctx.transferContext(dataset.getContext());
+
+        // ex:alice has a direct schema:image, and her class ex:Person also has schema:image
+        String ttl = """
+            @prefix ex: <http://example.org/> .
+            @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+            @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+            @prefix schema: <https://schema.org/> .
+
+            ex:Person
+                rdfs:label "Person"@en ;
+                schema:image <http://example.org/images/person.png> .
+
+            ex:alice
+                rdf:type ex:Person ;
+                schema:image <http://example.org/images/alice.png> .
+            """;
+
+        dataset.executeWrite(()
+                -> RDFDataMgr.read(
+                        dataset,
+                        new StringReader(ttl),
+                        null,
+                        Lang.TURTLE
+                )
+        );
+
+        FragmentSettings settings = FragmentSettings.builder()
+                .addProperty(new FragmentProperty(
+                        "icon",
+                        List.of(NodeFactory.createURI(SchemaDO.image.getURI())),
+                        false,
+                        true
+                ))
+                .build();
+
+        dataset.executeWrite(()
+                -> fragmentStorage.save(settings, ctx)
+        );
+
+        List<Fragment> fragments = dataset.calculateRead(()
+                -> fragmentStorage.buildFragments(
+                        List.of(NodeFactory.createURI(EX + "alice")),
+                        ctx
+                )
+        );
+
+        assertEquals(1, fragments.size());
+        // Direct value takes precedence over inherited value
+        assertEquals(
+                "http://example.org/images/alice.png",
+                fragments.get(0).getIcon().getURI()
+        );
+    }
+
+    @Test
+    public void buildFragmentsWithPropertyInheritanceDeepHierarchyTest() {
+        User adminUser = dataset.calculateRead(()
+                -> dataset.getUser(
+                        UserGroupManagement.ADMIN_USERNAME,
+                        InvocationContext.EMPTY
+                )
+        );
+
+        InvocationContext ctx = new InvocationContext.Builder()
+                .fromUser(adminUser)
+                .build();
+
+        ctx.transferContext(dataset.getContext());
+
+        // Deep hierarchy: ex:SoftwareEngineer rdfs:subClassOf ex:Engineer rdfs:subClassOf ex:Person
+        // Only ex:Person has schema:image (icon)
+        // ex:charlie is an ex:SoftwareEngineer (3 levels down)
+        String ttl = """
+            @prefix ex: <http://example.org/> .
+            @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+            @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+            @prefix schema: <https://schema.org/> .
+
+            ex:Person
+                rdfs:label "Person"@en ;
+                schema:image <http://example.org/images/person.png> .
+
+            ex:Engineer
+                rdfs:subClassOf ex:Person .
+
+            ex:SoftwareEngineer
+                rdfs:subClassOf ex:Engineer .
+
+            ex:charlie
+                rdf:type ex:SoftwareEngineer .
+            """;
+
+        dataset.executeWrite(()
+                -> RDFDataMgr.read(
+                        dataset,
+                        new StringReader(ttl),
+                        null,
+                        Lang.TURTLE
+                )
+        );
+
+        FragmentSettings settings = FragmentSettings.builder()
+                .addProperty(new FragmentProperty(
+                        "icon",
+                        List.of(NodeFactory.createURI(SchemaDO.image.getURI())),
+                        false,
+                        true
+                ))
+                .build();
+
+        dataset.executeWrite(()
+                -> fragmentStorage.save(settings, ctx)
+        );
+
+        List<Fragment> fragments = dataset.calculateRead(()
+                -> fragmentStorage.buildFragments(
+                        List.of(NodeFactory.createURI(EX + "charlie")),
+                        ctx
+                )
+        );
+
+        assertEquals(1, fragments.size());
+        // charlie should inherit the icon through 2 levels of subClassOf
+        assertEquals(
+                "http://example.org/images/person.png",
+                fragments.get(0).getIcon().getURI()
+        );
+    }
+
+    @Test
+    public void buildFragmentsForClassWithInheritanceTest() {
+        User adminUser = dataset.calculateRead(()
+                -> dataset.getUser(
+                        UserGroupManagement.ADMIN_USERNAME,
+                        InvocationContext.EMPTY
+                )
+        );
+
+        InvocationContext ctx = new InvocationContext.Builder()
+                .fromUser(adminUser)
+                .build();
+
+        ctx.transferContext(dataset.getContext());
+
+        // classA is subClassOf classB, classB has schema:image
+        // We build a fragment for classA itself (not an instance)
+        String ttl = """
+            @prefix ex: <http://example.org/> .
+            @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+            @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+            @prefix schema: <https://schema.org/> .
+
+            ex:classB
+                rdfs:label "Class B"@en ;
+                schema:image <http://example.org/images/class-b.png> .
+
+            ex:classA
+                rdfs:subClassOf ex:classB .
+            """;
+
+        dataset.executeWrite(()
+                -> RDFDataMgr.read(
+                        dataset,
+                        new StringReader(ttl),
+                        null,
+                        Lang.TURTLE
+                )
+        );
+
+        FragmentSettings settings = FragmentSettings.builder()
+                .addProperty(new FragmentProperty(
+                        "icon",
+                        List.of(NodeFactory.createURI(SchemaDO.image.getURI())),
+                        false,
+                        true
+                ))
+                .build();
+
+        dataset.executeWrite(()
+                -> fragmentStorage.save(settings, ctx)
+        );
+
+        List<Fragment> fragments = dataset.calculateRead(()
+                -> fragmentStorage.buildFragments(
+                        List.of(NodeFactory.createURI(EX + "classA")),
+                        ctx
+                )
+        );
+
+        assertEquals(1, fragments.size());
+        // classA should inherit the icon from its parent class classB
+        assertEquals(
+                "http://example.org/images/class-b.png",
+                fragments.get(0).getIcon().getURI()
+        );
+    }
 }
