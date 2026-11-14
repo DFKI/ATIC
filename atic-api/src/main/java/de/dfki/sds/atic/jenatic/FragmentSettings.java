@@ -62,6 +62,11 @@ public class FragmentSettings {
             return this;
         }
 
+        public Builder addProperty(String key, Node property, boolean languageAware, boolean propertyInheritance) {
+            this.properties.add(new FragmentProperty(key, property, languageAware, propertyInheritance));
+            return this;
+        }
+
         public Builder fromJson(JSONObject json) {
             this.properties = new ArrayList<>();
 
@@ -72,15 +77,21 @@ public class FragmentSettings {
                     JSONObject propertyJson = propertiesArray.getJSONObject(i);
                     String key = propertyJson.getString("key");
                     boolean languageAware = propertyJson.getBoolean("languageAware");
-                    JSONArray rankingArray = propertyJson.getJSONArray("properties");
+                    boolean propertyInheritance = propertyJson.optBoolean("propertyInheritance", false);
+                    // Template-based properties use "templates" key, property-based use "properties"
+                    JSONArray rankingArray = propertyJson.has("templates")
+                            ? propertyJson.getJSONArray("templates")
+                            : propertyJson.getJSONArray("properties");
 
                     List<Node> propertyRanking = new ArrayList<>();
                     for (int j = 0; j < rankingArray.length(); j++) {
                         JSONObject rankingJson = rankingArray.getJSONObject(j);
-                        propertyRanking.add(NodeFactory.createURI(rankingJson.getString("@id")));
+                        if (rankingJson.has("@id")) {
+                            propertyRanking.add(NodeFactory.createURI(rankingJson.getString("@id")));
+                        }
                     }
 
-                    this.properties.add(new FragmentProperty(key, propertyRanking, languageAware));
+                    this.properties.add(new FragmentProperty(key, propertyRanking, languageAware, propertyInheritance));
                 }
             } else if (json.has("templates")) {
                 JSONArray templatesArray = json.getJSONArray("templates");
@@ -89,6 +100,7 @@ public class FragmentSettings {
                     JSONObject templateJson = templatesArray.getJSONObject(i);
                     String key = templateJson.getString("key");
                     boolean languageAware = templateJson.getBoolean("languageAware");
+                    boolean propertyInheritance = templateJson.optBoolean("propertyInheritance", false);
                     JSONArray rankingArray = templateJson.getJSONArray("templates");
 
                     List<Template> templateRanking = new ArrayList<>();
@@ -102,7 +114,7 @@ public class FragmentSettings {
                         ));
                     }
 
-                    this.properties.add(new FragmentProperty(key, languageAware, templateRanking));
+                    this.properties.add(new FragmentProperty(key, languageAware, templateRanking, propertyInheritance));
                 }
             } else {
                 throw new IllegalArgumentException(
@@ -124,27 +136,46 @@ public class FragmentSettings {
         private final List<Node> propertyRanking;
         private final List<Template> templateRanking;
         private final boolean languageAware;
+        private final boolean propertyInheritance;
 
-        public FragmentProperty(String key, Node property, boolean languageAware) {
-            this(key, List.of(property), languageAware);
+        public FragmentProperty(String key, Node property, boolean languageAware, boolean propertyInheritance) {
+            this(key, List.of(property), languageAware, propertyInheritance);
         }
 
-        public FragmentProperty(String key, List<Node> propertyRanking, boolean languageAware) {
+        public FragmentProperty(String key, Node property, boolean languageAware) {
+            this(key, List.of(property), languageAware, false);
+        }
+
+        public FragmentProperty(String key, List<Node> propertyRanking, boolean languageAware, boolean propertyInheritance) {
             this.key = key;
             this.propertyRanking = propertyRanking;
             this.templateRanking = null;
             this.languageAware = languageAware;
+            this.propertyInheritance = propertyInheritance;
+        }
+
+        public FragmentProperty(String key, List<Node> propertyRanking, boolean languageAware) {
+            this(key, propertyRanking, languageAware, false);
+        }
+
+        public FragmentProperty(String key, boolean languageAware, Template template, boolean propertyInheritance) {
+            this(key, languageAware, List.of(template), propertyInheritance);
         }
 
         public FragmentProperty(String key, boolean languageAware, Template template) {
-            this(key, languageAware, List.of(template));
+            this(key, languageAware, List.of(template), false);
         }
 
-        public FragmentProperty(String key, boolean languageAware, List<Template> templateRanking) {
+        public FragmentProperty(String key, boolean languageAware, List<Template> templateRanking, boolean propertyInheritance) {
             this.key = key;
             this.propertyRanking = null;
             this.templateRanking = templateRanking;
             this.languageAware = languageAware;
+            this.propertyInheritance = propertyInheritance;
+        }
+
+        public FragmentProperty(String key, boolean languageAware, List<Template> templateRanking) {
+            this(key, languageAware, templateRanking, false);
         }
 
         public JSONObject toJson() {
@@ -168,7 +199,8 @@ public class FragmentSettings {
             return new JSONObject()
                     .put("key", key)
                     .put(hasTemplateRanking() ? "templates" : "properties", rankingJson)
-                    .put("languageAware", languageAware);
+                    .put("languageAware", languageAware)
+                    .put("propertyInheritance", propertyInheritance);
         }
 
         public String getKey() {
@@ -195,6 +227,10 @@ public class FragmentSettings {
             return languageAware;
         }
 
+        public boolean isPropertyInheritance() {
+            return propertyInheritance;
+        }
+
         @Override
         public String toString() {
             StringBuilder sb = new StringBuilder();
@@ -203,6 +239,7 @@ public class FragmentSettings {
             sb.append(", propertyRanking=").append(propertyRanking);
             sb.append(", templateRanking=").append(templateRanking);
             sb.append(", languageAware=").append(languageAware);
+            sb.append(", propertyInheritance=").append(propertyInheritance);
             sb.append('}');
             return sb.toString();
         }

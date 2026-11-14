@@ -226,6 +226,9 @@ public class GraphUnitTest {
 
             Node graph = iter.next();
             assertEquals(SystemAticGraph.node, graph);
+            
+            graph = iter.next();
+            assertEquals(BlobGraph.node, graph);
 
             assertFalse(iter.hasNext(), "Non-admin should not see any other graphs");
         } finally {

@@ -3223,6 +3223,9 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             if (graphNode.equals(SystemAticGraph.node)) {
                 continue;
             }
+            if (graphNode.equals(BlobGraph.node)) {
+                continue;
+            }
 
             IdAndUri idAndUri;
             try {
@@ -3264,12 +3267,23 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         graphMap.put(key, sqliteAticGraph);
 
         //TODO add blobgraph somewhere here
+        List<AticGraph> aticGraphs = new ArrayList<>();
         
         //in-memory union to allow to get a union of database-backed graphs and special system graph
         if (requested.contains(SystemAticGraph.node)) {
-            return new UnionAticGraph(sqliteAticGraph, systemGraph);
+            aticGraphs.add(systemGraph);
         }
-
+        if (requested.contains(BlobGraph.node)) {
+            aticGraphs.add(blobGraph);
+        }
+        
+        if (requested.contains(SystemAticGraph.node) || requested.contains(BlobGraph.node)) {
+            aticGraphs.add(0, sqliteAticGraph);
+            return new UnionAticGraph(aticGraphs.toArray(new AticGraph[0]));
+        }
+        
+        
+        
         return sqliteAticGraph;
     }
 

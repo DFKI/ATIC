@@ -246,11 +246,12 @@ public class DatasetGraphRdfStarDisabledUnitTest {
             dataset.listGraphNodes(ctx).forEachRemaining(graphs::add);
 
             //4 because of system graph
-            assertEquals(4, graphs.size());
+            assertEquals(5, graphs.size());
             assertTrue(graphs.contains(g1));
             assertTrue(graphs.contains(g2));
             assertTrue(graphs.contains(g3));
             assertTrue(graphs.contains(SystemAticGraph.node));
+            assertTrue(graphs.contains(BlobGraph.node));
 
         } finally {
             dataset.end();
@@ -385,11 +386,14 @@ public class DatasetGraphRdfStarDisabledUnitTest {
             List<Node> graphs = new ArrayList<>();
             dataset.listGraphNodes(ctx).forEachRemaining(graphs::add);
 
-            assertTrue(graphs.size() == 1,
+            assertTrue(graphs.size() == 2,
                     "No named graphs should remain after clear()");
             
             assertTrue(graphs.contains(SystemAticGraph.node),
                     "No system graph");
+            
+            assertTrue(graphs.contains(BlobGraph.node),
+                    "No blob graph");
 
             // 3. Default graph still exists
             AticGraph defaultGraph = dataset.getDefaultGraph(ctx);

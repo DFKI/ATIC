@@ -15,6 +15,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -193,5 +195,109 @@ public class FragmentSettingsUnitTest {
             );
         });
     }
-    
+
+    @Test
+    public void testPropertyInheritance() {
+        FragmentSettings settings = FragmentSettings.builder()
+                .addProperty("label", NodeFactory.createURI(EX + "label"), true, true)
+                .addProperty("comment", NodeFactory.createURI(EX + "comment"), true, false)
+                .build();
+
+        // Test toJson includes propertyInheritance
+        JSONObject json = settings.toJson();
+        JSONArray properties = json.getJSONArray("properties");
+
+        assertEquals(2, properties.length());
+
+        JSONObject labelProp = properties.getJSONObject(0);
+        assertEquals("label", labelProp.getString("key"));
+        assertEquals(true, labelProp.getBoolean("languageAware"));
+        assertEquals(true, labelProp.getBoolean("propertyInheritance"));
+
+        JSONObject commentProp = properties.getJSONObject(1);
+        assertEquals("comment", commentProp.getString("key"));
+        assertEquals(true, commentProp.getBoolean("languageAware"));
+        assertEquals(false, commentProp.getBoolean("propertyInheritance"));
+
+        // Test fromJson round-trip
+        FragmentSettings loaded = FragmentSettings.fromJson(json);
+        List<FragmentSettings.FragmentProperty> loadedProperties = loaded.getProperties();
+
+        assertEquals(2, loadedProperties.size());
+
+        assertEquals(true, loadedProperties.get(0).isPropertyInheritance());
+        assertEquals(false, loadedProperties.get(1).isPropertyInheritance());
+
+        // Verify backward compatibility: old JSON without propertyInheritance defaults to false
+        JSONObject legacyJson = new JSONObject()
+                .put("properties", new JSONArray()
+                        .put(new JSONObject()
+                                .put("key", "label")
+                                .put("properties", new JSONArray().put(new JSONObject().put("@id", EX + "label")))
+                                .put("languageAware", true)
+                        )
+                );
+        FragmentSettings legacySettings = FragmentSettings.fromJson(legacyJson);
+        assertEquals(false, legacySettings.getProperties().get(0).isPropertyInheritance());
+    }
+
+    @Test
+    public void testSaveLoadPropertyInheritance() {
+        User adminUser = dataset.calculateRead(()
+                -> dataset.getUser(
+                        UserGroupManagement.ADMIN_USERNAME,
+                        InvocationContext.EMPTY
+                )
+        );
+        InvocationContext ctx = new InvocationContext.Builder()
+                .fromUser(adminUser)
+                .build();
+
+        FragmentSettings settings = FragmentSettings.builder()
+                .addProperty("label", NodeFactory.createURI(EX + "label"), true, true)
+                .addProperty("comment", NodeFactory.createURI(EX + "comment"), false, false)
+                .build();
+
+        dataset.executeWrite(() -> {
+            fragmentStorage.save(null, null, settings, ctx);
+        });
+
+        dataset.executeRead(() -> {
+            FragmentSettings loaded = fragmentStorage.load(null, null, ctx);
+
+            assertNotNull(loaded);
+
+            JSONCompare.assertMatches(
+                    settings.toJson().toString(),
+                    loaded.toJson().toString(),
+                    Set.of(
+                            CompareMode.JSON_ARRAY_NON_EXTENSIBLE,
+                            CompareMode.JSON_OBJECT_NON_EXTENSIBLE
+                    )
+            );
+
+            // Verify propertyInheritance field survives serialization round-trip
+            assertEquals(true, loaded.getProperties().get(0).isPropertyInheritance());
+            assertEquals(false, loaded.getProperties().get(1).isPropertyInheritance());
+        });
+    }
+
+    @Test
+    public void testPropertyInheritanceWithTemplates() {
+        FragmentSettings settings = FragmentSettings.builder()
+                .addProperty(new FragmentSettings.FragmentProperty("summary", true, new FragmentSettings.Template("{first} {last}"), true))
+                .addProperty(new FragmentSettings.FragmentProperty("name", false, new FragmentSettings.Template("{given}"), false))
+                .build();
+
+        JSONObject json = settings.toJson();
+        JSONArray properties = json.getJSONArray("properties");
+
+        assertEquals(true, properties.getJSONObject(0).getBoolean("propertyInheritance"));
+        assertEquals(false, properties.getJSONObject(1).getBoolean("propertyInheritance"));
+
+        FragmentSettings loaded = FragmentSettings.fromJson(json);
+        assertEquals(true, loaded.getProperties().get(0).isPropertyInheritance());
+        assertEquals(false, loaded.getProperties().get(1).isPropertyInheritance());
+    }
+
 }

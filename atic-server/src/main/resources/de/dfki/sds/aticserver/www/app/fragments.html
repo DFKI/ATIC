@@ -103,6 +103,7 @@
                                             class="mb-1 ps-2">
                                             <span class="fw-semibold">{{ prop.key }}</span>
                                             <span v-if="prop.languageAware" class="badge bg-info ms-1">lang-aware</span>
+                                            <span v-if="prop.propertyInheritance" class="badge bg-success ms-1">inherit</span>
                                             <span class="text-muted ms-1">—</span>
                                             <span v-if="prop.properties && prop.properties.length > 0" class="text-muted">
                                                 {{ prop.properties.map(p => '@id=' + p['@id']).join(', ') }}
@@ -225,6 +226,14 @@
                                                    v-model="prop.languageAware" :id="'langAware_' + propIndex">
                                             <label class="form-check-label" :for="'langAware_' + propIndex">
                                                 Language Aware
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                   v-model="prop.propertyInheritance" :id="'propInherit_' + propIndex">
+                                            <label class="form-check-label" :for="'propInherit_' + propIndex">
+                                                Property Inheritance
                                             </label>
                                         </div>
                                     </div>
@@ -537,6 +546,7 @@ createApp({
             this.editForm.properties.push({
                 key: '',
                 languageAware: false,
+                propertyInheritance: false,
                 properties: []
             });
         },
@@ -555,6 +565,7 @@ createApp({
                 {
                     key: 'label',
                     languageAware: true,
+                    propertyInheritance: false,
                     properties: [
                         {
                             "@id": "http://www.w3.org/2000/01/rdf-schema#label"
@@ -564,6 +575,7 @@ createApp({
                 {
                     key: 'comment',
                     languageAware: true,
+                    propertyInheritance: false,
                     properties: [
                         {
                             "@id": "http://www.w3.org/2000/01/rdf-schema#comment"
@@ -573,6 +585,7 @@ createApp({
                 {
                     key: 'type',
                     languageAware: false,
+                    propertyInheritance: false,
                     properties: [
                         {
                             "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
@@ -582,6 +595,7 @@ createApp({
                 {
                     key: 'icon',
                     languageAware: false,
+                    propertyInheritance: true,
                     properties: [
                         {
                             "@id": "https://schema.org/image"

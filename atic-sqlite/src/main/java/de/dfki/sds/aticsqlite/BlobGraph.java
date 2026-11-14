@@ -1412,22 +1412,26 @@ public class BlobGraph implements AticGraph {
 
     @Override
     public void add(Triple t, InvocationContext ctx) {
-        throw new UnsupportedOperationException("BlobGraph is read-only for triple operations");
+        //ignore
+        //throw new UnsupportedOperationException("BlobGraph is read-only for triple operations");
     }
 
     @Override
     public void remove(Node s, Node p, Node o, InvocationContext ctx) {
-        throw new UnsupportedOperationException("BlobGraph is read-only for triple operations");
+        //ignore
+        //throw new UnsupportedOperationException("BlobGraph is read-only for triple operations");
     }
 
     @Override
     public void delete(Triple t, InvocationContext ctx) {
-        throw new UnsupportedOperationException("BlobGraph is read-only for triple operations");
+        //ignore
+        //throw new UnsupportedOperationException("BlobGraph is read-only for triple operations");
     }
 
     @Override
     public void clear(InvocationContext ctx) {
-        throw new UnsupportedOperationException("BlobGraph is read-only for triple operations");
+        //ignore
+        //throw new UnsupportedOperationException("BlobGraph is read-only for triple operations");
     }
 
     @Override
