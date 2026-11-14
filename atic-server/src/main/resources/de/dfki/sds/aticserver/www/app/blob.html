@@ -265,12 +265,10 @@
                                     <td class="spo-object-cell">
                                         <!-- Object URI input / drop zone / preview -->
                                         <div class="spo-drop-zone"
-                                             :class="{ 'has-value': row.object }"
+                                             :class="{ 'has-value': row.object, 'is-focused': idx === spoFocusedIdx }"
                                              @dragover.prevent="onSpoDragOver($event, idx)"
                                              @dragleave.prevent="onSpoDragLeave($event, idx)"
-                                             @drop.prevent="onSpoDrop($event, idx)"
-                                             @paste="onSpoPaste($event, idx)"
-                                             @click="triggerSpoFileInput(idx)">
+                                             @drop.prevent="onSpoDrop($event, idx)">
 
                                             <div v-if="row.object">
                                                 <!-- Image preview for blob URIs -->
@@ -281,11 +279,16 @@
                                                      @click.stop>
                                                 <!-- Text for non-image URIs -->
                                                 <div v-else class="d-flex align-items-center gap-1">
-                                                    <i class="fa fa-link text-success"></i>
-                                                    <span class="text-break" style="max-width: 180px; font-size: 0.8rem;">{{ row.object }}</span>
+                                                    <input type="text" class="form-control form-control-sm"
+                                                           :value="row.object"
+                                                           style="font-size: 0.8rem;"
+                                                           spellcheck="false"
+                                                           @focus="spoFocusedIdx = idx"
+                                                           @blur="spoFocusedIdx = null"
+                                                           @input="row.object = $event.target.value; onSpoInput()">
                                                     <button class="btn btn-sm btn-outline-danger py-0 px-1"
                                                             style="font-size: 0.65rem;"
-                                                            @click.stop="row.object = null; onSpoInput()"
+                                                            @click="row.object = null; onSpoInput()"
                                                             title="Clear">
                                                         <i class="fa fa-times"></i>
                                                     </button>
@@ -296,20 +299,24 @@
                                             <div v-else class="d-flex flex-column align-items-center gap-1 w-100">
                                                 <input type="text" class="form-control form-control-sm text-center"
                                                        v-model="row.object"
-                                                       placeholder="Paste or drag here"
-                                                       style="font-size: 0.8rem; border: none; background: transparent;"
+                                                       placeholder="Paste URI or drag here"
                                                        spellcheck="false"
+                                                       @focus="spoFocusedIdx = idx"
+                                                       @blur="spoFocusedIdx = null"
                                                        @input="onSpoInput">
-                                                <div class="spo-preview-placeholder">
-                                                    <i class="fa fa-paste"></i> Paste &nbsp;|&nbsp;
-                                                    <i class="fa fa-hand-paper-o"></i> Drag &nbsp;|&nbsp;
-                                                    <i class="fa fa-folder-open"></i> File
+                                                <div class="d-flex gap-2 mt-1">
+                                                    <span class="spo-preview-placeholder">
+                                                        <i class="fa fa-paste"></i> Paste &nbsp;|&nbsp;
+                                                        <i class="fa fa-hand-paper-o"></i> Drag
+                                                    </span>
+                                                    <button class="btn btn-sm btn-outline-primary py-0 px-1"
+                                                            style="font-size: 0.7rem;"
+                                                            @click.stop="triggerSpoFileInput(idx)"
+                                                            title="Browse file">
+                                                        <i class="fa fa-folder-open"></i>
+                                                    </button>
                                                 </div>
                                             </div>
-
-                                            <!-- Hidden file input -->
-                                            <input type="file" ref="spoFileInput" style="display:none"
-                                                   @change="onSpoFileUpload($event, idx)">
                                         </div>
                                     </td>
                                     <td>
@@ -421,6 +428,7 @@ createApp({
             spoSubject: '',
             spoTriples: [],
             spoApplying: false,
+            spoFocusedIdx: null,
         };
     },
     created() {
@@ -436,9 +444,12 @@ createApp({
         this.getAuthMe();
     },
     mounted() {
-// Wait for the DOM so modal refs are available
+        this.loadAttachmentFromStorage();
         this.$nextTick(() => {
             this.addTab();
+        });
+        window.addEventListener('beforeunload', () => {
+            this.saveAttachmentToStorage();
         });
     },
     computed: {
@@ -466,6 +477,40 @@ createApp({
                         window.location.href = response.data.redirect;
                     });
         },
+        // ── Browser Storage Persistence ──
+        saveAttachmentToStorage() {
+            localStorage.setItem(
+                "atic-blob-client-state",
+                JSON.stringify({
+                    spoSubject: this.spoSubject,
+                    spoTriples: this.spoTriples.map(t => ({
+                        property: t.property,
+                        object: t.object
+                    }))
+                })
+            );
+        },
+
+        loadAttachmentFromStorage() {
+            const raw = localStorage.getItem("atic-blob-client-state");
+            if (!raw) return;
+
+            try {
+                const state = JSON.parse(raw);
+
+                this.spoSubject = state.spoSubject || '';
+                if (state.spoTriples && state.spoTriples.length > 0) {
+                    this.spoTriples = state.spoTriples.map(t => ({
+                        property: t.property || '',
+                        object: t.object || null,
+                        _uploading: false
+                    }));
+                }
+            } catch (e) {
+                console.warn('Failed to load blob attachment state from localStorage:', e);
+            }
+        },
+
         // ── Tabs ──
         addTab() {
             const id = ++this.tabCounter;
@@ -833,7 +878,7 @@ createApp({
             this.onSpoInput();
         },
         onSpoInput() {
-            // Reactive update signal - nothing else needed
+            this.saveAttachmentToStorage();
         },
         isBlobUriImage(uri) {
             if (!uri) return false;

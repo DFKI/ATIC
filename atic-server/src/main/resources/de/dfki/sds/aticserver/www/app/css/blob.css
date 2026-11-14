@@ -74,17 +74,24 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
+    cursor: default;
     transition: border-color 0.2s, background-color 0.2s;
     position: relative;
 }
 .spo-drop-zone.drag-over {
     border-color: #0d6efd;
+    border-width: 3px;
     background-color: #e7f1ff;
 }
 .spo-drop-zone.has-value {
     border-style: solid;
     border-color: #198754;
+    cursor: default;
+}
+.spo-drop-zone.is-focused {
+    border-color: #0d6efd;
+    border-width: 3px;
+    background-color: #e7f1ff;
 }
 .spo-preview-img {
     max-width: 100px;
