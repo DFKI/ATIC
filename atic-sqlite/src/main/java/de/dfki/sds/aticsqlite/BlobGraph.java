@@ -617,6 +617,7 @@ public class BlobGraph implements AticGraph {
      * @param filepath logical filepath of the pointer to remove, or {@code null} for unconditional deletion
      */
     private void doDelete(String sha256, String filepath) {
+        boolean shouldDeleteBlobAndMeta;
         if (filepath != null) {
             // Count remaining pointers to this SHA-256 (excluding the one we're about to remove)
             int refCount;
@@ -629,23 +630,44 @@ public class BlobGraph implements AticGraph {
             } catch (SQLException e) {
                 throw new RuntimeException("Failed to count pointers for " + sha256, e);
             }
-            // Only delete underlying file/metadata when last pointer
-            if (refCount == 0) {
-                deleteBlobFile(sha256);
-                File metaFile = metadataFile(sha256);
-                if (metaFile.isFile()) {
-                    metaFile.delete();
-                }
-            }
-            deletePointer(filepath);
+            shouldDeleteBlobAndMeta = refCount == 0;
         } else {
             // Unconditional deletion (called via delete(uri, ctx))
+            shouldDeleteBlobAndMeta = true;
+        }
+
+        if (shouldDeleteBlobAndMeta) {
             deleteBlobFile(sha256);
             File metaFile = metadataFile(sha256);
             if (metaFile.isFile()) {
                 metaFile.delete();
             }
+            // Clean up empty folder hierarchy
+            deleteEmptyFolders(sha256);
         }
+
+        if (filepath != null) {
+            deletePointer(filepath);
+        }
+    }
+
+    /**
+     * Delete the three-level folder hierarchy under
+     * {@code {root}/{sha256[0:2]}/{sha256[2:4]}/{sha256[4:6]}}
+     * from deepest to shallowest, removing each only if it is empty.
+     */
+    private void deleteEmptyFolders(String sha256) {
+        File d1 = new File(rootFolder, sha256.substring(0, 2));
+        File d2 = new File(d1, sha256.substring(2, 4));
+        File d3 = new File(d2, sha256.substring(4, 6));
+
+        // Remove from deepest to shallowest
+        File[] f3 = d3.listFiles();
+        if (f3 != null && f3.length == 0) d3.delete();
+        File[] f2 = d2.listFiles();
+        if (f2 != null && f2.length == 0) d2.delete();
+        File[] f1 = d1.listFiles();
+        if (f1 != null && f1.length == 0) d1.delete();
     }
 
     /**
