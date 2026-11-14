@@ -74,7 +74,7 @@ public class BlobGraph implements AticGraph {
     public static final String NS_BLOB = "urn:atic:blob:";
 
     //TODO later better way
-    private static final String NS_ATIC = "urn:atic:ontology:";
+    private static final String NS_ATIC_ONTO = "urn:atic:ontology:";
     public static final String PREFIX_ATIC = "atic";
 
 
@@ -111,7 +111,7 @@ public class BlobGraph implements AticGraph {
     /**
      * Compute the SHA-256 hex digest of the given bytes.
      */
-    public static String sha256(byte[] data) {
+    /*package*/ static String sha256(byte[] data) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] hash = md.digest(data);
@@ -124,7 +124,7 @@ public class BlobGraph implements AticGraph {
     /**
      * Compute the SHA-256 hex digest by streaming through the input.
      */
-    public static String sha256(InputStream is) throws IOException {
+    /*package*/ static String sha256(InputStream is) throws IOException {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] buf = new byte[8192];
@@ -184,7 +184,7 @@ public class BlobGraph implements AticGraph {
      * @param sha256 the 64-character hex SHA-256 hash
      * @return URI string, e.g. {@code urn:atic:blob:abc123...}
      */
-    public String blobUri(String sha256) {
+    /*package*/ String blobUri(String sha256) {
         return NS_BLOB + sha256;
     }
 
@@ -194,7 +194,7 @@ public class BlobGraph implements AticGraph {
      *
      * @return an InputStream over the blob file, or {@code null} if the blob does not exist
      */
-    public InputStream readBlob(String sha256) {
+    private InputStream readBlob(String sha256) {
         File f = blobPath(sha256);
         if (!f.isFile()) {
             return null;
@@ -237,18 +237,6 @@ public class BlobGraph implements AticGraph {
     // =========================================================================
     //  Pointer-table operations (blobgraph)
     // =========================================================================
-
-    /**
-     * Insert or update the pointer: filepath → uri (+ sha256, mimeType).
-     *
-     * <p>Uses a single SQL statement with {@code ON CONFLICT ... DO UPDATE} so the
-     * upsert is atomic — no race condition between SELECT and INSERT/UPDATE.
-     * The {@code blobgraph} table has {@code UNIQUE(filepath)}, so SQLite
-     * triggers the conflict handler when the insert duplicates a row.
-     */
-    private void upsertPointer(String filepath, String uri, String sha256, InvocationContext ctx) {
-        upsertPointer(filepath, uri, sha256, null, ctx);
-    }
 
     /**
      * Insert or update the pointer with mimeType.
@@ -307,37 +295,40 @@ public class BlobGraph implements AticGraph {
     }
 
     /**
-     * Look up the filepath for a SHA-256 hash.
+     * Look up the filepaths for a SHA-256 hash.
+     * Multiple logical filepaths may point to the same content-addressed blob.
      *
-     * @return filepath string, or {@code null} if not found
+     * @return list of filepath strings, empty if not found
      */
-    private String lookupPathBySha256(String sha256) {
+    private List<String> lookupPathsBySha256(String sha256) {
         try {
             return db.read(
                 "SELECT filepath FROM blobgraph WHERE sha256 = ?",
-                rs -> rs.next() ? rs.getString("filepath") : null,
+                rs -> {
+                    List<String> paths = new ArrayList<>();
+                    while (rs.next()) {
+                        paths.add(rs.getString("filepath"));
+                    }
+                    return paths;
+                },
                 sha256
             );
         } catch (SQLException e) {
-            throw new RuntimeException("DB error looking up filepath for sha256 " + sha256, e);
+            throw new RuntimeException("DB error looking up filepaths for sha256 " + sha256, e);
         }
     }
 
     /**
-     * Look up the SHA-256 hash for a URI.
+     * Extract the SHA-256 hash from a blob URI.
+     * URIs are always in the form {@code urn:atic:blob:{sha256}}.
      *
-     * @return hash string, or {@code null} if not found
+     * @return hash string (64 hex chars), or {@code null} if the URI is invalid
      */
     private String lookupSha256ByUri(String uri) {
-        try {
-            return db.read(
-                "SELECT sha256 FROM blobgraph WHERE uri = ?",
-                rs -> rs.next() ? rs.getString("sha256") : null,
-                uri
-            );
-        } catch (SQLException e) {
-            throw new RuntimeException("DB error looking up sha256 for uri " + uri, e);
+        if (uri == null || !uri.startsWith(NS_BLOB) || uri.length() <= NS_BLOB.length()) {
+            return null;
         }
+        return uri.substring(NS_BLOB.length());
     }
 
     /**
@@ -383,12 +374,21 @@ public class BlobGraph implements AticGraph {
 
     /**
      * Load RDF metadata from the .ttl file alongside the blob.
+     *
+     * @param uri blob URI (e.g. {@code urn:atic:blob:{sha256}})
      */
-    public Model loadMetadata(String blobFilepath, InvocationContext ctx) {
-        String sha256 = lookupSha256ByPath(blobFilepath);
+    public Model loadMetadata(String uri, InvocationContext ctx) {
+        String sha256 = lookupSha256ByUri(uri);
         if (sha256 == null) {
-            throw new IllegalStateException("File not found: " + blobFilepath);
+            throw new IllegalStateException("Blob not found: " + uri);
         }
+        return loadMetadata(sha256);
+    }
+
+    /**
+     * Load RDF metadata by SHA-256 hash (internal).
+     */
+    private Model loadMetadata(String sha256) {
         File metaFile = metadataFile(sha256);
         if (!metaFile.isFile()) {
             throw new IllegalStateException("Metadata not found for sha256: " + sha256);
@@ -410,10 +410,21 @@ public class BlobGraph implements AticGraph {
     /**
      * Save RDF metadata to a .ttl file alongside the blob.
      *
-     * @param sha256    SHA-256 hash of the blob
-     * @param model     RDF model to persist
+     * @param uri   blob URI (e.g. {@code urn:atic:blob:{sha256}})
+     * @param model RDF model to persist
      */
-    public void saveMetadata(String sha256, Model model) {
+    public void saveMetadata(String uri, Model model) {
+        String sha256 = lookupSha256ByUri(uri);
+        if (sha256 == null) {
+            throw new IllegalArgumentException("Invalid blob URI: " + uri);
+        }
+        saveMetadataByHash(sha256, model);
+    }
+
+    /**
+     * Save RDF metadata by SHA-256 hash (internal).
+     */
+    private void saveMetadataByHash(String sha256, Model model) {
         File metaFile = metadataFile(sha256);
         // Ensure parent directory exists
         File parent = metaFile.getParentFile();
@@ -432,7 +443,7 @@ public class BlobGraph implements AticGraph {
      * Set common namespace prefixes on a model (ATIC, PROV, NFO, RDFS, RDF).
      */
     private void setupPrefixes(Model model) {
-        model.setNsPrefix(PREFIX_ATIC, NS_ATIC);
+        model.setNsPrefix(PREFIX_ATIC, NS_ATIC_ONTO);
         model.setNsPrefix("prov", PROV.uri);
         model.setNsPrefix("nfo", NFO.NS);
         model.setNsPrefix("rdfs", RDFS.uri);
@@ -442,41 +453,44 @@ public class BlobGraph implements AticGraph {
     /**
      * Build and save default RDF metadata for a newly uploaded blob.
      */
-    public void saveDefaultMetadata(String blobFilepath, String sha256, String mimeType) {
+    public void saveDefaultMetadata(String uri, String filename, String mimeType) {
+        String sha256 = lookupSha256ByUri(uri);
+        if (sha256 == null) {
+            throw new IllegalArgumentException("Invalid blob URI: " + uri);
+        }
+
         Model model = ModelFactory.createDefaultModel();
         setupPrefixes(model);
-        String uri = blobUri(sha256);
 
         // The blob resource
         Resource blobRes = model.getResource(uri);
 
         // Always declare as FileDataObject
         blobRes.addProperty(
-            model.createProperty(NFO.FileDataObject.getURI()),
+            RDF.type,
             NFO.FileDataObject
         );
         if (mimeType != null && mimeType.startsWith("image/")) {
             blobRes.addProperty(
-                model.createProperty(NFO.FileDataObject.getURI()),
+                RDF.type,
                 NFO.Image
             );
         }
-        // Use NFO vocab property for the filename
-        blobRes.addProperty(NFO.fileName, new File(blobFilepath).getName());
+        blobRes.addProperty(NFO.fileName, filename);
 
         // sha256 and mimeType stored as raw properties (not in NFO vocabulary)
         blobRes.addProperty(
-            model.createProperty(NS_ATIC + "sha256"),
+            model.createProperty(NS_ATIC_ONTO + "sha256"),
             sha256
         );
         if (mimeType != null) {
             blobRes.addProperty(
-                model.createProperty(NS_ATIC + "mimeType"),
+                model.createProperty(NS_ATIC_ONTO + "mimeType"),
                 mimeType
             );
         }
 
-        saveMetadata(sha256, model);
+        saveMetadataByHash(sha256, model);
     }
     // =========================================================================
 
@@ -497,7 +511,7 @@ public class BlobGraph implements AticGraph {
      * @param content          input stream of the binary data
      * @param ctx              invocation context
      */
-    public void save(String filepath, String originalFilename, String mimeType, InputStream content, InvocationContext ctx) {
+    public void saveByPath(String filepath, String originalFilename, String mimeType, InputStream content, InvocationContext ctx) {
         try {
             byte[] data = content.readAllBytes();
             String sha256 = sha256(data);
@@ -507,7 +521,7 @@ public class BlobGraph implements AticGraph {
             writeBlob(sha256, new java.io.ByteArrayInputStream(data));
 
             // Save default RDF metadata as .ttl beside the logical filepath
-            saveDefaultMetadata(filepath, sha256, mimeType);
+            saveDefaultMetadata(uri, originalFilename, mimeType);
 
             // Register in pointer table
             upsertPointer(filepath, uri, sha256, mimeType, ctx);
@@ -519,51 +533,160 @@ public class BlobGraph implements AticGraph {
     }
 
     /**
+     * Save a binary blob using its content-addressed URI.
+     * Skips pointer table registration since the blob is addressed by its URI.
+     *
+     * @param uri      blob URI (e.g. {@code urn:atic:blob:{sha256}})
+     * @param mimeType MIME type hint
+     * @param content  input stream of the binary data
+     * @param ctx      invocation context
+     */
+    public void save(String uri, String mimeType, InputStream content, InvocationContext ctx) {
+        String sha256 = lookupSha256ByUri(uri);
+        if (sha256 == null) {
+            throw new IllegalArgumentException("Invalid blob URI: " + uri);
+        }
+        try {
+            byte[] data = content.readAllBytes();
+            String computedHash = sha256(data);
+            if (!computedHash.equals(sha256)) {
+                throw new IllegalArgumentException(
+                    "Computed SHA-256 (" + computedHash + ") does not match URI (" + uri + ")"
+                );
+            }
+
+            // Store bytes on disk (stream via ByteArrayInputStream)
+            writeBlob(sha256, new java.io.ByteArrayInputStream(data));
+
+            log.debug("Saved blob {} ({})", sha256, data.length);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to save blob " + uri, e);
+        }
+    }
+
+    /**
+     * Delete a blob by its content-addressed URI.
+     *
+     * @param uri blob URI (e.g. {@code urn:atic:blob:{sha256}})
+     * @param ctx invocation context
+     */
+    public void delete(String uri, InvocationContext ctx) {
+        String sha256 = lookupSha256ByUri(uri);
+        if (sha256 == null) {
+            return; // nothing to delete
+        }
+        doDelete(sha256, null);
+        log.debug("Deleted blob {}", sha256);
+    }
+
+    /**
      * Delete a blob by its logical filepath.
      * Removes the pointer entry.  The underlying blob file and .ttl metadata
      * are only deleted when no other pointer references the same SHA-256.
      */
-    public void delete(String filepath, InvocationContext ctx) {
+    public void deleteByPath(String filepath, InvocationContext ctx) {
         String sha256 = lookupSha256ByPath(filepath);
         if (sha256 == null) {
             return; // nothing to delete
         }
-        // Count remaining pointers to this SHA-256 (excluding the one we're about to remove)
-        int refCount;
-        try {
-            refCount = db.read(
-                "SELECT COUNT(*) AS cnt FROM blobgraph WHERE sha256 = ? AND filepath != ?",
-                rs -> rs.next() ? rs.getInt("cnt") : 0,
-                sha256, filepath
-            );
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to count pointers for " + sha256, e);
+        delete(blobUri(sha256), filepath, ctx);
+        log.debug("Deleted blob {} -> {}", sha256, filepath);
+    }
+
+    /**
+     * Delete a blob by URI and optional filepath.
+     * If filepath is provided, only removes that specific pointer and the underlying
+     * blob file/metadata are deleted only when no other pointer references the same SHA-256.
+     *
+     * @param uri      blob URI (e.g. {@code urn:atic:blob:{sha256}})
+     * @param filepath logical filepath of the pointer to remove, or {@code null} for unconditional deletion
+     * @param ctx      invocation context
+     */
+    private void delete(String uri, String filepath, InvocationContext ctx) {
+        String sha256 = lookupSha256ByUri(uri);
+        if (sha256 == null) {
+            return;
         }
-        // Only delete underlying file/metadata when last pointer
-        if (refCount == 0) {
+        doDelete(sha256, filepath);
+    }
+
+    /**
+     * Core deletion logic for blob files and metadata.
+     *
+     * @param sha256   SHA-256 hash of the blob
+     * @param filepath logical filepath of the pointer to remove, or {@code null} for unconditional deletion
+     */
+    private void doDelete(String sha256, String filepath) {
+        if (filepath != null) {
+            // Count remaining pointers to this SHA-256 (excluding the one we're about to remove)
+            int refCount;
+            try {
+                refCount = db.read(
+                    "SELECT COUNT(*) AS cnt FROM blobgraph WHERE sha256 = ? AND filepath != ?",
+                    rs -> rs.next() ? rs.getInt("cnt") : 0,
+                    sha256, filepath
+                );
+            } catch (SQLException e) {
+                throw new RuntimeException("Failed to count pointers for " + sha256, e);
+            }
+            // Only delete underlying file/metadata when last pointer
+            if (refCount == 0) {
+                deleteBlobFile(sha256);
+                File metaFile = metadataFile(sha256);
+                if (metaFile.isFile()) {
+                    metaFile.delete();
+                }
+            }
+            deletePointer(filepath);
+        } else {
+            // Unconditional deletion (called via delete(uri, ctx))
             deleteBlobFile(sha256);
             File metaFile = metadataFile(sha256);
             if (metaFile.isFile()) {
                 metaFile.delete();
             }
         }
-        deletePointer(filepath);
-        log.debug("Deleted blob {} -> {}", sha256, filepath);
+    }
+
+    /**
+     * Load the binary bytes for a content-addressed blob URI.
+     *
+     * @throws IllegalStateException if the blob data is missing
+     */
+    public InputStream loadContent(String uri, InvocationContext ctx) {
+        String sha256 = lookupSha256ByUri(uri);
+        if (sha256 == null) {
+            throw new IllegalStateException("Blob not found: " + uri);
+        }
+        return loadBlob(sha256, "blob data");
     }
 
     /**
      * Load the binary bytes for a given filepath from content-addressed storage.
      *
-     * @throws IllegalArgumentException if the filepath is not registered
+     * @throws IllegalStateException if the filepath is not registered
      */
-    public InputStream loadContent(String filepath, InvocationContext ctx) {
+    public InputStream loadContentByPath(String filepath, InvocationContext ctx) {
         String sha256 = lookupSha256ByPath(filepath);
         if (sha256 == null) {
             throw new IllegalStateException("File not found: " + filepath);
         }
+        String uri = blobUri(sha256);
+        return loadContent(uri, ctx);
+    }
+
+    /**
+     * Read the blob bytes from disk, validating the file exists.
+     *
+     * @param sha256 SHA-256 hash of the blob
+     * @param context human-readable context for the error message ("blob data", etc.)
+     * @return InputStream over the blob file
+     * @throws IllegalStateException if the blob file is missing on disk
+     */
+    private InputStream loadBlob(String sha256, String context) {
         InputStream is = readBlob(sha256);
         if (is == null) {
-            throw new IllegalStateException("Blob data missing for sha256: " + sha256);
+            throw new IllegalStateException(context + " missing for sha256: " + sha256);
         }
         return is;
     }
@@ -595,16 +718,12 @@ public class BlobGraph implements AticGraph {
     }
 
     /**
-     * Get the filepath for a given SHA-256 hash.
+     * Get all filepaths for a given SHA-256 hash.
      *
-     * @throws IllegalStateException if sha256 is not registered
+     * @return list of filepaths (may be empty if the hash is not registered)
      */
-    public String getPath(String sha256, InvocationContext ctx) {
-        String path = lookupPathBySha256(sha256);
-        if (path == null) {
-            throw new IllegalStateException("Hash not found: " + sha256);
-        }
-        return path;
+    public List<String> getPaths(String sha256, InvocationContext ctx) {
+        return lookupPathsBySha256(sha256);
     }
 
     /**
@@ -837,11 +956,11 @@ public class BlobGraph implements AticGraph {
             NFO.Image
         );
         derivedRes.addProperty(
-            model.createProperty(NS_ATIC + "width"),
+            model.createProperty(NS_ATIC_ONTO + "width"),
             model.createLiteral(String.valueOf(width))
         );
         derivedRes.addProperty(
-            model.createProperty(NS_ATIC + "height"),
+            model.createProperty(NS_ATIC_ONTO + "height"),
             model.createLiteral(String.valueOf(height))
         );
         derivedRes.addProperty(NFO.fileName, new File(blobFilepath).getName());
@@ -851,7 +970,7 @@ public class BlobGraph implements AticGraph {
             model.getResource(sourceUri)
         );
 
-        saveMetadata(derivedSha256, model);
+        saveMetadata(derivedUri, model);
     }
 
     /**
@@ -1152,9 +1271,12 @@ public class BlobGraph implements AticGraph {
                 }
                 for (String uri : allUris) {
                     String hash = uri.substring(NS_BLOB.length());
-                    String filepath = lookupPathBySha256(hash);
-                    if (filepath != null && filepathMatchesGlob(filepath, globPattern)) {
-                        addMetadataForHash(graphs, hash);
+                    List<String> filepaths = lookupPathsBySha256(hash);
+                    for (String filepath : filepaths) {
+                        if (filepathMatchesGlob(filepath, globPattern)) {
+                            addMetadataForHash(graphs, hash);
+                            break; // match on any one filepath is enough
+                        }
                     }
                 }
             }

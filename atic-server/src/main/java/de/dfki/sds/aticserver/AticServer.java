@@ -1840,7 +1840,7 @@ public class AticServer {
 
                 // Write operations wrapped in transaction
                 datasetGraph.executeWrite(() -> {
-                    blobGraph.save(finalLogicalPath, originalFilename, finalMimeType, fileContent, ictx);
+                    blobGraph.saveByPath(finalLogicalPath, originalFilename, finalMimeType, fileContent, ictx);
                 });
 
                 // Read operations wrapped in transaction
@@ -1975,59 +1975,72 @@ public class AticServer {
 
     /**
      * GET /blob/serve/* — stream blob content with the correct MIME type.
+     *
+     * <p>Supports two addressing modes (detected automatically):
+     * <ul>
+     *   <li><b>Path-based</b>: {@code /blob/serve/photos/vacation.jpg} — resolves via the pointer table</li>
+     *   <li><b>URI-based</b>: {@code /blob/serve/urn:atic:blob:abc123...} — direct content-addressed lookup</li>
+     * </ul>
      */
     private void serveBlob(Context ctx) throws IOException {
         InvocationContext ictx = fromJavalinContext(ctx);
         BlobGraph blobGraph = datasetGraph.getBlobGraph();
 
-        String path = ctx.path();
-        String filepath = path.startsWith("/blob/serve")
-                ? path.substring("/blob/serve".length())
-                : path;
+        String rawPath = ctx.path();
+        String resource = rawPath.startsWith("/blob/serve")
+                ? rawPath.substring("/blob/serve".length())
+                : rawPath;
+        resource = "/" + resource.replaceFirst("^/+", "");
 
-        filepath = "/" + filepath.replaceFirst("^/+", "");
-
-        final String finalPath = filepath;
+        InputStream is;
+        String mimeType;
 
         try {
-            String[] info = datasetGraph.calculateRead(() -> new String[]{
-                blobGraph.getSHA256(finalPath, ictx),
-                blobGraph.getMimeType(finalPath, ictx)
-            });
+            // Detect addressing mode: URI or path
+            if (resource.startsWith(BlobGraph.NS_BLOB)) {
+                // URI-based: /blob/serve/urn:atic:blob:{sha256}
+                is = blobGraph.loadContent(resource, ictx);
+                mimeType = "application/octet-stream"; // URI-based has no stored MIME type
+            } else {
+                // Path-based: /blob/serve/photos/vacation.jpg
+                String pathForLookup = resource;
+                String[] info = datasetGraph.calculateRead(() -> new String[]{
+                    blobGraph.getSHA256(pathForLookup, ictx),
+                    blobGraph.getMimeType(pathForLookup, ictx)
+                });
+                String sha256 = info[0];
+                mimeType = info[1] != null ? info[1] : "application/octet-stream";
 
-            String sha256 = info[0];
-            String mimeType = info[1] != null
-                    ? info[1]
-                    : "application/octet-stream";
+                if (sha256 == null || sha256.isBlank()) {
+                    ctx.status(404).result("File not found: " + pathForLookup);
+                    return;
+                }
 
-            if (sha256 == null || sha256.isBlank()) {
-                ctx.status(404).result("File not found: " + finalPath);
-                return;
+                is = blobGraph.loadContentByPath(pathForLookup, ictx);
             }
-
-            InputStream is = blobGraph.readBlob(sha256);
-
-            if (is == null) {
-                ctx.status(404).result("Blob not found: " + finalPath);
-                return;
-            }
-
-            String filename = new File(finalPath).getName();
-
-            ctx.status(200);
-            ctx.contentType(mimeType);
-            ctx.header(
-                    "Content-Disposition",
-                    "inline; filename=\"" + filename + "\""
-            );
-
-            // Do NOT close the stream here.
-            // Javalin consumes and closes it while writing the response.
-            ctx.result(is);
-
         } catch (IllegalStateException e) {
-            ctx.status(404).result("File not found: " + finalPath);
+            ctx.status(404).result("Blob not found: " + resource);
+            return;
         }
+
+        String filename;
+        if (resource.startsWith(BlobGraph.NS_BLOB)) {
+            // Extract the hash (last segment) as a fallback name
+            filename = resource.substring(resource.lastIndexOf(':') + 1);
+        } else {
+            filename = new File(resource).getName();
+        }
+
+        ctx.status(200);
+        ctx.contentType(mimeType);
+        ctx.header(
+                "Content-Disposition",
+                "inline; filename=\"" + filename + "\""
+        );
+
+        // Do NOT close the stream here.
+        // Javalin consumes and closes it while writing the response.
+        ctx.result(is);
     }
 
     /**
@@ -2085,9 +2098,9 @@ public class AticServer {
                             } else {
                                 sha256 = blobUri;
                             }
-                            String filepath = blobGraph.getPath(sha256, ictx);
-                            if (filepath != null) {
-                                blobGraph.delete(filepath, ictx);
+                            List<String> filepaths = blobGraph.getPaths(sha256, ictx);
+                            for (String filepath : filepaths) {
+                                blobGraph.deleteByPath(filepath, ictx);
                                 deleted.add(filepath);
                             }
                         } catch (Exception e) {
@@ -2110,7 +2123,7 @@ public class AticServer {
                             continue;
                         }
                         try {
-                            blobGraph.delete(filepath, ictx);
+                            blobGraph.deleteByPath(filepath, ictx);
                             deleted.add(filepath);
                         } catch (Exception e) {
                             errors.add(Map.of("path", filepath, "error", e.getMessage()));
@@ -2137,9 +2150,6 @@ public class AticServer {
         ));
     }
 
-    // =========================================================================
-    //  Additional BlobGraph REST endpoints: rename, copy, paste, move
-    // =========================================================================
     /**
      * PUT /blob/rename — rename (move) a single file.
      *

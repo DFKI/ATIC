@@ -112,7 +112,7 @@ class BlobGraphUnitTest {
     @DisplayName("save + getURI returns correct URI")
     void saveAndGetUri() {
         dataset.executeWrite(() -> {
-            blobGraph.save("img/a.jpg", "a.jpg", "image/jpeg",
+            blobGraph.saveByPath("img/a.jpg", "a.jpg", "image/jpeg",
                 new ByteArrayInputStream("image data".getBytes()), adminCtx);
             String uri = blobGraph.getURI("img/a.jpg", adminCtx);
             assertNotNull(uri);
@@ -124,7 +124,7 @@ class BlobGraphUnitTest {
     @DisplayName("save + getSHA256 returns correct hash")
     void saveAndGetSha256() {
         dataset.executeWrite(() -> {
-            blobGraph.save("img/b.jpg", "b.jpg", "image/jpeg",
+            blobGraph.saveByPath("img/b.jpg", "b.jpg", "image/jpeg",
                 new ByteArrayInputStream("image data".getBytes()), adminCtx);
             String hash = blobGraph.getSHA256("img/b.jpg", adminCtx);
             assertEquals(BlobGraph.sha256("image data".getBytes()), hash);
@@ -136,9 +136,9 @@ class BlobGraphUnitTest {
     void saveAndLoad() {
         dataset.executeWrite(() -> {
             byte[] content = "original bytes".getBytes();
-            blobGraph.save("img/c.jpg", "c.jpg", "image/jpeg",
+            blobGraph.saveByPath("img/c.jpg", "c.jpg", "image/jpeg",
                 new ByteArrayInputStream(content), adminCtx);
-            InputStream is = blobGraph.loadContent("img/c.jpg", adminCtx);
+            InputStream is = blobGraph.loadContentByPath("img/c.jpg", adminCtx);
             assertNotNull(is);
             try {
                 assertArrayEquals(content, is.readAllBytes());
@@ -152,7 +152,7 @@ class BlobGraphUnitTest {
     @DisplayName("loadContent throws for unregistered file")
     void loadNonExistent() {
         assertThrows(IllegalStateException.class, () ->
-            dataset.calculateRead(() -> blobGraph.loadContent("/no/such/file.jpg", adminCtx)));
+            dataset.calculateRead(() -> blobGraph.loadContentByPath("/no/such/file.jpg", adminCtx)));
     }
 
     @Test
@@ -167,7 +167,7 @@ class BlobGraphUnitTest {
     void storageLayout() {
         dataset.executeWrite(() -> {
             byte[] content = "layout test".getBytes();
-            blobGraph.save("img/layout.jpg", "layout.jpg", "image/jpeg",
+            blobGraph.saveByPath("img/layout.jpg", "layout.jpg", "image/jpeg",
                 new ByteArrayInputStream(content), adminCtx);
             String hash = BlobGraph.sha256(content);
             File stored = blobGraph.blobPath(hash);
@@ -185,9 +185,9 @@ class BlobGraphUnitTest {
     void deduplication() {
         dataset.executeWrite(() -> {
             byte[] content = "dedup".getBytes();
-            blobGraph.save("a.txt", "a.txt", "text/plain",
+            blobGraph.saveByPath("a.txt", "a.txt", "text/plain",
                 new ByteArrayInputStream(content), adminCtx);
-            blobGraph.save("b.txt", "b.txt", "text/plain",
+            blobGraph.saveByPath("b.txt", "b.txt", "text/plain",
                 new ByteArrayInputStream(content), adminCtx);
             assertEquals(blobGraph.getSHA256("a.txt", adminCtx),
                          blobGraph.getSHA256("b.txt", adminCtx));
@@ -200,9 +200,9 @@ class BlobGraphUnitTest {
         dataset.executeWrite(() -> {
             byte[] content = "idem".getBytes();
             String expected = BlobGraph.sha256(content);
-            blobGraph.save("img/idem.jpg", "idem.jpg", "image/jpeg",
+            blobGraph.saveByPath("img/idem.jpg", "idem.jpg", "image/jpeg",
                 new ByteArrayInputStream(content), adminCtx);
-            blobGraph.save("img/idem.jpg", "idem.jpg", "image/jpeg",
+            blobGraph.saveByPath("img/idem.jpg", "idem.jpg", "image/jpeg",
                 new ByteArrayInputStream(content), adminCtx);
             assertEquals(expected, blobGraph.getSHA256("img/idem.jpg", adminCtx));
         });
@@ -212,11 +212,11 @@ class BlobGraphUnitTest {
     @DisplayName("re-save different content overwrites")
     void overwriteSave() {
         dataset.executeWrite(() -> {
-            blobGraph.save("img/ov.jpg", "ov.jpg", "image/jpeg",
+            blobGraph.saveByPath("img/ov.jpg", "ov.jpg", "image/jpeg",
                 new ByteArrayInputStream("old".getBytes()), adminCtx);
-            blobGraph.save("img/ov.jpg", "ov.jpg", "image/jpeg",
+            blobGraph.saveByPath("img/ov.jpg", "ov.jpg", "image/jpeg",
                 new ByteArrayInputStream("new".getBytes()), adminCtx);
-            InputStream is = blobGraph.loadContent("img/ov.jpg", adminCtx);
+            InputStream is = blobGraph.loadContentByPath("img/ov.jpg", adminCtx);
             try {
                 assertArrayEquals("new".getBytes(), is.readAllBytes());
             } catch (IOException e) {
@@ -230,23 +230,27 @@ class BlobGraphUnitTest {
     // =========================================================================
 
     @Test
-    @DisplayName("getPath resolves SHA-256 to filepath")
+    @DisplayName("getPaths resolves SHA-256 to filepaths")
     void lookupBySha256() {
         dataset.executeWrite(() -> {
             byte[] content = "lookup".getBytes();
-            blobGraph.save("ptr/file.txt", "file.txt", "text/plain",
+            blobGraph.saveByPath("ptr/file.txt", "file.txt", "text/plain",
                 new ByteArrayInputStream(content), adminCtx);
             String hash = BlobGraph.sha256(content);
-            assertEquals("ptr/file.txt", blobGraph.getPath(hash, adminCtx));
+            List<String> paths = blobGraph.getPaths(hash, adminCtx);
+            assertEquals(1, paths.size());
+            assertEquals("ptr/file.txt", paths.get(0));
         });
     }
 
     @Test
-    @DisplayName("getPath throws for unknown hash")
+    @DisplayName("getPaths returns empty list for unknown hash")
     void lookupUnknownSha256() {
-        assertThrows(IllegalStateException.class, () ->
-            dataset.calculateRead(() -> blobGraph.getPath(
-                "nonexistent123456789012345678901234567890123456789012345678901234567890", adminCtx)));
+        List<String> paths = dataset.calculateRead(() ->
+            blobGraph.getPaths(
+                "nonexistent123456789012345678901234567890123456789012345678901234567890",
+                adminCtx));
+        assertTrue(paths.isEmpty());
     }
 
     // =========================================================================
@@ -257,9 +261,10 @@ class BlobGraphUnitTest {
     @DisplayName("save writes .ttl metadata file")
     void savesMetadata() {
         dataset.executeWrite(() -> {
-            blobGraph.save("meta/m.jpg", "m.jpg", "image/jpeg",
+            blobGraph.saveByPath("meta/m.jpg", "m.jpg", "image/jpeg",
                 new ByteArrayInputStream("meta".getBytes()), adminCtx);
-            Model model = blobGraph.loadMetadata("meta/m.jpg", adminCtx);
+            String uri = blobGraph.getURI("meta/m.jpg", adminCtx);
+            Model model = blobGraph.loadMetadata(uri, adminCtx);
             assertNotNull(model);
             assertTrue(model.size() > 0);
         });
@@ -269,7 +274,7 @@ class BlobGraphUnitTest {
     @DisplayName("loadMetadata throws for unregistered file")
     void loadMetadataThrows() {
         assertThrows(IllegalStateException.class, () ->
-            dataset.calculateRead(() -> blobGraph.loadMetadata("/no/such/file.jpg", adminCtx)));
+            blobGraph.loadMetadata("urn:atic:blob:nonexistent", adminCtx));
     }
 
     // =========================================================================
@@ -281,7 +286,7 @@ class BlobGraphUnitTest {
     void moveFile() throws Exception {
         dataset.executeWrite(() -> {
             byte[] content = "move".getBytes();
-            blobGraph.save("src/a.txt", "a.txt", "text/plain",
+            blobGraph.saveByPath("src/a.txt", "a.txt", "text/plain",
                 new ByteArrayInputStream(content), adminCtx);
 
             blobGraph.move("src/a.txt", "dst/a.txt", adminCtx);
@@ -290,7 +295,7 @@ class BlobGraphUnitTest {
             assertThrows(IllegalStateException.class, () -> blobGraph.getURI("src/a.txt", adminCtx));
             // dst exists
             assertNotNull(blobGraph.getURI("dst/a.txt", adminCtx));
-            InputStream is = blobGraph.loadContent("dst/a.txt", adminCtx);
+            InputStream is = blobGraph.loadContentByPath("dst/a.txt", adminCtx);
             try {
                 assertArrayEquals(content, is.readAllBytes());
             } catch (IOException e) {
@@ -304,7 +309,7 @@ class BlobGraphUnitTest {
     void copyFile() {
         dataset.executeWrite(() -> {
             byte[] content = "copy".getBytes();
-            blobGraph.save("src/c.txt", "c.txt", "text/plain",
+            blobGraph.saveByPath("src/c.txt", "c.txt", "text/plain",
                 new ByteArrayInputStream(content), adminCtx);
 
             blobGraph.copy("src/c.txt", "dst/c.txt", adminCtx);
@@ -319,7 +324,7 @@ class BlobGraphUnitTest {
     void linkFile() {
         dataset.executeWrite(() -> {
             byte[] content = "link".getBytes();
-            blobGraph.save("src/l.txt", "l.txt", "text/plain",
+            blobGraph.saveByPath("src/l.txt", "l.txt", "text/plain",
                 new ByteArrayInputStream(content), adminCtx);
 
             blobGraph.link("src/l.txt", "dst/l.txt", adminCtx);
@@ -351,11 +356,11 @@ class BlobGraphUnitTest {
     @DisplayName("list returns files matching folder prefix")
     void listFiles() {
         dataset.executeWrite(() -> {
-            blobGraph.save("/photos/a.jpg", "a.jpg", "image/jpeg",
+            blobGraph.saveByPath("/photos/a.jpg", "a.jpg", "image/jpeg",
                 new ByteArrayInputStream("a".getBytes()), adminCtx);
-            blobGraph.save("/photos/b.png", "b.png", "image/png",
+            blobGraph.saveByPath("/photos/b.png", "b.png", "image/png",
                 new ByteArrayInputStream("b".getBytes()), adminCtx);
-            blobGraph.save("/docs/d.txt", "d.txt", "text/plain",
+            blobGraph.saveByPath("/docs/d.txt", "d.txt", "text/plain",
                 new ByteArrayInputStream("d".getBytes()), adminCtx);
 
             List<JSONObject> photos = blobGraph.list("/photos/", adminCtx);
@@ -385,13 +390,13 @@ class BlobGraphUnitTest {
     @DisplayName("list with '/' returns root-level files and subfolders")
     void listRoot() {
         dataset.executeWrite(() -> {
-            blobGraph.save("/photos/a.jpg", "a.jpg", "image/jpeg",
+            blobGraph.saveByPath("/photos/a.jpg", "a.jpg", "image/jpeg",
                 new ByteArrayInputStream("a".getBytes()), adminCtx);
-            blobGraph.save("/photos/b.png", "b.png", "image/png",
+            blobGraph.saveByPath("/photos/b.png", "b.png", "image/png",
                 new ByteArrayInputStream("b".getBytes()), adminCtx);
-            blobGraph.save("/docs/d.txt", "d.txt", "text/plain",
+            blobGraph.saveByPath("/docs/d.txt", "d.txt", "text/plain",
                 new ByteArrayInputStream("d".getBytes()), adminCtx);
-            blobGraph.save("/readme.md", "readme.md", "text/markdown",
+            blobGraph.saveByPath("/readme.md", "readme.md", "text/markdown",
                 new ByteArrayInputStream("x".getBytes()), adminCtx);
 
             List<JSONObject> root = blobGraph.list("/", adminCtx);
@@ -423,7 +428,7 @@ class BlobGraphUnitTest {
     @DisplayName("list with empty string '' also returns root")
     void listEmptyStringReturnsRoot() {
         dataset.executeWrite(() -> {
-            blobGraph.save("root-file.txt", "root-file.txt", "text/plain",
+            blobGraph.saveByPath("root-file.txt", "root-file.txt", "text/plain",
                 new ByteArrayInputStream("data".getBytes()), adminCtx);
 
             List<JSONObject> result1 = blobGraph.list("", adminCtx);
@@ -443,22 +448,22 @@ class BlobGraphUnitTest {
     void deleteFile() {
         dataset.executeWrite(() -> {
             byte[] content = "del".getBytes();
-            blobGraph.save("del/d.jpg", "d.jpg", "image/jpeg",
+            blobGraph.saveByPath("del/d.jpg", "d.jpg", "image/jpeg",
                 new ByteArrayInputStream(content), adminCtx);
 
             assertNotNull(blobGraph.getURI("del/d.jpg", adminCtx));
 
-            blobGraph.delete("del/d.jpg", adminCtx);
+            blobGraph.deleteByPath("del/d.jpg", adminCtx);
 
             assertThrows(IllegalStateException.class, () -> blobGraph.getURI("del/d.jpg", adminCtx));
-            assertThrows(IllegalStateException.class, () -> blobGraph.loadContent("del/d.jpg", adminCtx));
+            assertThrows(IllegalStateException.class, () -> blobGraph.loadContentByPath("del/d.jpg", adminCtx));
         });
     }
 
     @Test
     @DisplayName("delete non-existent is no-op")
     void deleteNonExistent() {
-        dataset.executeWrite(() -> blobGraph.delete("/no/such/file.jpg", adminCtx));
+        dataset.executeWrite(() -> blobGraph.deleteByPath("/no/such/file.jpg", adminCtx));
     }
 
     @Test
@@ -466,21 +471,21 @@ class BlobGraphUnitTest {
     void blobPersistedAfterDelete() {
         dataset.executeWrite(() -> {
             byte[] content = "shared".getBytes();
-            blobGraph.save("s1.txt", "s1.txt", "text/plain",
+            blobGraph.saveByPath("s1.txt", "s1.txt", "text/plain",
                 new ByteArrayInputStream(content), adminCtx);
-            blobGraph.save("s2.txt", "s2.txt", "text/plain",
+            blobGraph.saveByPath("s2.txt", "s2.txt", "text/plain",
                 new ByteArrayInputStream(content), adminCtx);
 
             // Same hash
             assertEquals(blobGraph.getSHA256("s1.txt", adminCtx),
                          blobGraph.getSHA256("s2.txt", adminCtx));
 
-            blobGraph.delete("s1.txt", adminCtx);
+            blobGraph.deleteByPath("s1.txt", adminCtx);
 
             // s2 still works
             assertNotNull(blobGraph.getURI("s2.txt", adminCtx));
 
-            blobGraph.delete("s2.txt", adminCtx);
+            blobGraph.deleteByPath("s2.txt", adminCtx);
             assertThrows(IllegalStateException.class, () -> blobGraph.getURI("s2.txt", adminCtx));
         });
     }
@@ -493,7 +498,7 @@ class BlobGraphUnitTest {
     @DisplayName("find with ANY returns triples after save")
     void findReturnsTriples() {
         dataset.executeWrite(() -> {
-            blobGraph.save("graph/g.jpg", "g.jpg", "image/jpeg",
+            blobGraph.saveByPath("graph/g.jpg", "g.jpg", "image/jpeg",
                 new ByteArrayInputStream("graph".getBytes()), adminCtx);
 
             ExtendedIterator<Triple> iter = blobGraph.find(Node.ANY, Node.ANY, Node.ANY, adminCtx);
@@ -509,7 +514,7 @@ class BlobGraphUnitTest {
     @DisplayName("find with subject filter narrows results")
     void findWithSubject() {
         dataset.executeWrite(() -> {
-            blobGraph.save("graph/f.jpg", "f.jpg", "image/jpeg",
+            blobGraph.saveByPath("graph/f.jpg", "f.jpg", "image/jpeg",
                 new ByteArrayInputStream("filter".getBytes()), adminCtx);
 
             String uri = blobGraph.getURI("graph/f.jpg", adminCtx);
@@ -537,7 +542,7 @@ class BlobGraphUnitTest {
     @DisplayName("find with path-based subject URI")
     void findWithSubjectPathUri() {
         dataset.executeWrite(() -> {
-            blobGraph.save("graph/g.jpg", "g.jpg", "image/jpeg",
+            blobGraph.saveByPath("graph/g.jpg", "g.jpg", "image/jpeg",
                 new ByteArrayInputStream("pathsubj".getBytes()), adminCtx);
 
             // Use the filepath as the subject URI directly (path version)
@@ -565,7 +570,7 @@ class BlobGraphUnitTest {
     @DisplayName("contains returns true for existing blob triples")
     void containsTrue() {
         dataset.executeWrite(() -> {
-            blobGraph.save("graph/c.jpg", "c.jpg", "image/jpeg",
+            blobGraph.saveByPath("graph/c.jpg", "c.jpg", "image/jpeg",
                 new ByteArrayInputStream("contains".getBytes()), adminCtx);
             assertFalse(blobGraph.size(adminCtx) == 0);
         });
@@ -584,11 +589,11 @@ class BlobGraphUnitTest {
     @DisplayName("size increases after save")
     void sizeIncreases() {
         dataset.executeWrite(() -> {
-            blobGraph.save("graph/s1.jpg", "s1.jpg", "image/jpeg",
+            blobGraph.saveByPath("graph/s1.jpg", "s1.jpg", "image/jpeg",
                 new ByteArrayInputStream("s1".getBytes()), adminCtx);
             int s1 = blobGraph.size(adminCtx);
             assertTrue(s1 > 0);
-            blobGraph.save("graph/s2.jpg", "s2.jpg", "image/jpeg",
+            blobGraph.saveByPath("graph/s2.jpg", "s2.jpg", "image/jpeg",
                 new ByteArrayInputStream("s2".getBytes()), adminCtx);
             assertTrue(blobGraph.size(adminCtx) >= s1);
         });
@@ -604,7 +609,7 @@ class BlobGraphUnitTest {
     @DisplayName("isEmpty is false after save")
     void isEmptyFalseAfterSave() {
         dataset.executeWrite(() -> {
-            blobGraph.save("graph/e.jpg", "e.jpg", "image/jpeg",
+            blobGraph.saveByPath("graph/e.jpg", "e.jpg", "image/jpeg",
                 new ByteArrayInputStream("data".getBytes()), adminCtx);
             assertFalse(blobGraph.isEmpty(adminCtx));
         });
