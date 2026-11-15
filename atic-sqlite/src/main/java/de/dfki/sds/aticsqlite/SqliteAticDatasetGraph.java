@@ -147,15 +147,15 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     private User adminUser;
 
     private SystemAticGraph systemGraph;
-    
+
     private BlobGraph blobGraph;
 
     private Capabilities capabilities;
 
     private InvexEmbedded invexEmbedded;
-    
+
     private FragmentStorage fragmentStorage;
-    
+
     private VueComponentStorage vueComponentStorage;
 
     public SqliteAticDatasetGraph(Database db) {
@@ -234,7 +234,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         bootstrapSparqlFunctions();
 
         bootstrapInvex();
-        
+
         this.executeWrite(() -> {
             try {
                 fragmentStorage.bootstrap();
@@ -242,7 +242,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 throw new RuntimeException("Failed to bootstrap fragment storage", ex);
             }
         });
-        
+
         this.executeWrite(() -> {
             try {
                 blobGraph.bootstrap();
@@ -250,7 +250,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 throw new RuntimeException("Failed to bootstrap fragment storage", ex);
             }
         });
-        
+
         this.executeWrite(() -> {
             try {
                 vueComponentStorage.bootstrap();
@@ -258,7 +258,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
                 throw new RuntimeException("Failed to bootstrap vue component storage", ex);
             }
         });
-        
+
         this.executeWrite(() -> {
             try {
                 bootstrapIndices();
@@ -855,7 +855,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             );
         }
     }
-    
+
     public Group getGroup(int groupId, InvocationContext ctx) {
 
         try {
@@ -3008,7 +3008,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         if (graphNode.equals(SystemAticGraph.node)) {
             return systemGraph;
         }
-        
+
         //special system graph name
         if (graphNode.equals(BlobGraph.node)) {
             return blobGraph;
@@ -3268,7 +3268,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         //TODO add blobgraph somewhere here
         List<AticGraph> aticGraphs = new ArrayList<>();
-        
+
         //in-memory union to allow to get a union of database-backed graphs and special system graph
         if (requested.contains(SystemAticGraph.node)) {
             aticGraphs.add(systemGraph);
@@ -3276,14 +3276,12 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         if (requested.contains(BlobGraph.node)) {
             aticGraphs.add(blobGraph);
         }
-        
+
         if (requested.contains(SystemAticGraph.node) || requested.contains(BlobGraph.node)) {
             aticGraphs.add(0, sqliteAticGraph);
             return new UnionAticGraph(aticGraphs.toArray(new AticGraph[0]));
         }
-        
-        
-        
+
         return sqliteAticGraph;
     }
 
@@ -3383,7 +3381,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         if (graphNode.equals(SystemAticGraph.node)) {
             return true;
         }
-        
+
         if (graphNode.equals(BlobGraph.node)) {
             return true;
         }
@@ -3457,7 +3455,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         if (graphName.equals(SystemAticGraph.node)) {
             throw new IllegalStateException("Graph already exists: " + graphName);
         }
-        
+
         if (graphName.equals(BlobGraph.node)) {
             throw new IllegalStateException("Graph already exists: " + graphName);
         }
@@ -3538,7 +3536,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         if (graphName.equals(SystemAticGraph.node)) {
             throw new IllegalStateException("Graph already exists: " + graphName);
         }
-        
+
         if (graphName.equals(BlobGraph.node)) {
             throw new IllegalStateException("Graph already exists: " + graphName);
         }
@@ -3689,7 +3687,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         if (graphName.equals(SystemAticGraph.node)) {
             throw new IllegalArgumentException("Cannot delete system graph");
         }
-        
+
         if (graphName.equals(BlobGraph.node)) {
             throw new IllegalArgumentException("Cannot delete blob graph");
         }
@@ -3808,6 +3806,31 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     //triple management ======================================================
+    
+    /**
+     * Resolves the given resources in bulk and populates the corresponding resource, predicate, and permission caches.
+     *
+     * <p>
+     * Access control is enabled for non-administrative invocations and disabled for administrators. Resource resolution is delegated to
+     * {@link AticGraphUtils#bulkResolveResources}, which performs the database operations.
+     *
+     * @param resources the set of resources to resolve
+     * @param ctx the invocation context used to determine permissions and access rights
+     * @throws RuntimeException if a database error occurs during resource resolution
+     */
+    @Override
+    public void addResources(Set<Node> resources, InvocationContext ctx) {
+        Map<Node, Long> resourceCache = new HashMap<>(resources.size());
+        Map<Node, Permission> permissionCache = new HashMap<>(resources.size());
+        Map<Node, Long> predicateCache = new HashMap<>(0);
+        boolean enableAC = !this.isAdmin(ctx);
+        try {
+            AticGraphUtils.bulkResolveResources(resources, ctx, db, true, enableAC, resourceCache, predicateCache, permissionCache, this);
+        } catch (SQLException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
     /**
      * Adds a single triple to the specified graph. If {@code g} is null, uses the default graph. Throws {@link org.apache.jena.shared.AddDeniedException} for
      * union graphs. Delegates to {@link SqliteAticGraph#add(org.apache.jena.graph.Triple, InvocationContext)} for edit access control.
@@ -4440,7 +4463,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     public VueComponentStorage getVueComponentStorage() {
         return vueComponentStorage;
     }
-    
+
     //==========================================================
     //extra
     /**
@@ -4677,7 +4700,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         DefinitionConstructor constructor = new DefinitionConstructor();
 
         List<JSONObject> templates = constructor.buildSuggestedTemplates(analyzer);
-        
+
         return templates;
     }
 

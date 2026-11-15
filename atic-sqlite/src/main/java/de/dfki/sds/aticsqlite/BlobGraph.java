@@ -1,5 +1,8 @@
 package de.dfki.sds.aticsqlite;
 
+import de.dfki.sds.atic.ac.Group;
+import de.dfki.sds.atic.ac.Permission;
+import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.jenatic.AticGraph;
 import de.dfki.sds.atic.jenatic.InvocationContext;
 import de.dfki.sds.atic.vocab.NFO;
@@ -19,6 +22,7 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import javax.imageio.ImageIO;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.GraphEventManager;
@@ -84,6 +88,8 @@ public class BlobGraph implements AticGraph {
     private final GraphEventManager graphEventManager;
     private final Database db;
     /*package*/ final File rootFolder;
+    
+    private Group everyoneGroup;
 
     public BlobGraph(SqliteAticDatasetGraph datasetGraph) {
         this.datasetGraph = datasetGraph;
@@ -102,8 +108,15 @@ public class BlobGraph implements AticGraph {
      */
     /*package*/ void bootstrap() throws SQLException {
         db.writeQuery("create_table_blobgraph.sql");
+        
+        everyoneGroup = datasetGraph.getGroup(UserGroupManagement.EVERYONE_GROUP, InvocationContext.EMPTY);
     }
 
+    private void share(String uri, InvocationContext ctx) {
+        datasetGraph.addResources(Set.of(NodeFactory.createURI(uri)), ctx);
+        datasetGraph.shareResources(Set.of(uri), Set.of(everyoneGroup.getShareUri()), Permission.REFER, ctx);
+    }
+    
     // =========================================================================
     //  Content-addressed identity helpers
     // =========================================================================
@@ -510,8 +523,9 @@ public class BlobGraph implements AticGraph {
      * @param mimeType         MIME type hint
      * @param content          input stream of the binary data
      * @param ctx              invocation context
+     * @return the content-addressed blob URI node (e.g. {@code urn:atic:blob:{sha256}})
      */
-    public void saveByPath(String filepath, String originalFilename, String mimeType, InputStream content, InvocationContext ctx) {
+    public Node saveByPath(String filepath, String originalFilename, String mimeType, InputStream content, InvocationContext ctx) {
         try {
             byte[] data = content.readAllBytes();
             String sha256 = sha256(data);
@@ -525,8 +539,11 @@ public class BlobGraph implements AticGraph {
 
             // Register in pointer table
             upsertPointer(filepath, uri, sha256, mimeType, ctx);
+            
+            share(uri, ctx);
 
             log.debug("Saved blob {} -> {} ({})", sha256, filepath, data.length);
+            return NodeFactory.createURI(uri);
         } catch (IOException e) {
             throw new RuntimeException("Failed to save blob for " + filepath, e);
         }
@@ -540,8 +557,9 @@ public class BlobGraph implements AticGraph {
      * @param mimeType MIME type hint
      * @param content  input stream of the binary data
      * @param ctx      invocation context
+     * @return the blob URI node
      */
-    public void save(String uri, String mimeType, InputStream content, InvocationContext ctx) {
+    public Node save(String uri, String mimeType, InputStream content, InvocationContext ctx) {
         String sha256 = lookupSha256ByUri(uri);
         if (sha256 == null) {
             throw new IllegalArgumentException("Invalid blob URI: " + uri);
@@ -557,8 +575,11 @@ public class BlobGraph implements AticGraph {
 
             // Store bytes on disk (stream via ByteArrayInputStream)
             writeBlob(sha256, new java.io.ByteArrayInputStream(data));
-
+            
+            share(uri, ctx);
+            
             log.debug("Saved blob {} ({})", sha256, data.length);
+            return NodeFactory.createURI(uri);
         } catch (IOException e) {
             throw new RuntimeException("Failed to save blob " + uri, e);
         }
@@ -1014,6 +1035,8 @@ public class BlobGraph implements AticGraph {
         );
 
         saveMetadata(derivedUri, model);
+        
+        //TODO share(derivedUri, InvocationContext.EMPTY);
     }
 
     /**

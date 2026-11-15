@@ -14,14 +14,14 @@ import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.rdf.model.Model;
+import org.apache.jena.system.Txn;
 import org.apache.jena.util.iterator.ExtendedIterator;
 import org.json.JSONObject;
+import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Simple unit tests for BlobGraph: save, load, move, copy, link, delete.
@@ -31,6 +31,8 @@ class BlobGraphUnitTest {
     private SqliteAticDatasetGraph dataset;
     private BlobGraph blobGraph;
     private InvocationContext adminCtx;
+    private InvocationContext aliceCtx;
+    private InvocationContext bobCtx;
     private Path tempDir;
 
     @BeforeEach
@@ -39,14 +41,26 @@ class BlobGraphUnitTest {
         dataset = TL.createDatasetGraph(tempDir);
         blobGraph = dataset.getBlobGraph();
 
-        dataset.executeWrite(() -> {
+        Txn.executeWrite(dataset, () -> {
             dataset.addUser("Alice", "Doe", "alice.doe@example.com", "alice", InvocationContext.EMPTY);
+            dataset.addUser("Bob", "Doe", "bob.doe@example.com", "bob", InvocationContext.EMPTY);
         });
 
-        User adminUser = dataset.calculateRead(() ->
-            dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY)
+        User adminUser = dataset.calculateRead(() -> {
+            return dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY);
+        });
+
+        User alice = dataset.calculateRead(()
+                -> dataset.getUser("alice", InvocationContext.EMPTY)
         );
+
+        User bob = dataset.calculateRead(()
+                -> dataset.getUser("bob", InvocationContext.EMPTY)
+        );
+
         adminCtx = new InvocationContext.Builder().fromUser(adminUser).build();
+        aliceCtx = new InvocationContext.Builder().fromUser(alice).build();
+        bobCtx = new InvocationContext.Builder().fromUser(bob).build();
     }
 
     // =========================================================================
@@ -625,5 +639,97 @@ class BlobGraphUnitTest {
         String sha = "aabbccddeeff0123456789aabbccddeeff0123456789aabbccddeeff0123456789";
         File meta = blobGraph.metadataFile(sha);
         assertEquals(sha + ".ttl", meta.getName());
+    }
+
+    @Test
+    @DisplayName("alice uploads a file, bob can find its metadata via graph find")
+    void aliceUploadsBobFindsMetadata() {
+        // Define predicate nodes we expect to find
+        Node rdfType = NodeFactory.createURI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type");
+        Node nfoFileName = NodeFactory.createURI("http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#fileName");
+        Node aticSha256 = NodeFactory.createURI("urn:atic:ontology:sha256");
+        Node aticMimeType = NodeFactory.createURI("urn:atic:ontology:mimeType");
+
+        dataset.executeWrite(() -> {
+            // 1. Alice uploads a file
+            byte[] content = "Alice's image content".getBytes();
+            blobGraph.saveByPath("/alice/photo.jpg", "photo.jpg", "image/jpeg",
+                new ByteArrayInputStream(content), aliceCtx);
+
+            String uri = blobGraph.getURI("/alice/photo.jpg", aliceCtx);
+            assertNotNull(uri);
+            assertTrue(uri.startsWith("urn:atic:blob:"));
+
+            String sha256 = BlobGraph.sha256(content);
+            String expectedUri = blobGraph.blobUri(sha256);
+            assertEquals(expectedUri, uri);
+            Node subject = NodeFactory.createURI(expectedUri);
+
+            // 2. Bob uses graph find to look up Alice's blob metadata
+            ExtendedIterator<Triple> iter = blobGraph.find(subject, Node.ANY, Node.ANY, bobCtx);
+            try {
+                assertTrue(iter.hasNext(), "Bob should find triples for Alice's blob");
+
+                // Collect all triples in a list
+                java.util.List<Triple> triples = new java.util.ArrayList<>();
+                while (iter.hasNext()) {
+                    triples.add(iter.next());
+                }
+                assertTrue(triples.size() > 0, "Metadata should contain triples");
+
+                // Collect all object nodes per predicate for this subject
+                java.util.Map<Node, java.util.List<Node>> byPredicate = new java.util.LinkedHashMap<>();
+                for (Triple t : triples) {
+                    byPredicate.computeIfAbsent(t.getPredicate(), k -> new java.util.ArrayList<>()).add(t.getObject());
+                }
+
+                // Check rdf:type contains nfo:FileDataObject
+                java.util.List<Node> types = byPredicate.getOrDefault(rdfType, java.util.Collections.emptyList());
+                assertTrue(types.stream().anyMatch(n -> n.getURI() != null && n.getURI().contains("FileDataObject")),
+                    "Should declare FileDataObject type");
+
+                // Check nfo:fileName = "photo.jpg"
+                java.util.List<Node> fileNameObjects = byPredicate.getOrDefault(nfoFileName, java.util.Collections.emptyList());
+                Node expectedFileName = NodeFactory.createLiteralString("photo.jpg");
+                assertTrue(fileNameObjects.stream().anyMatch(n -> n.equals(expectedFileName)),
+                    "Should have fileName = photo.jpg. LiteralLabel: " + fileNameObjects.stream().findFirst().get().getLiteral());
+
+                // Check sha256 property
+                java.util.List<Node> shaObjects = byPredicate.getOrDefault(aticSha256, java.util.Collections.emptyList());
+                Node expectedSha256 = NodeFactory.createLiteralString(sha256);
+                assertTrue(shaObjects.stream().anyMatch(n -> n.equals(expectedSha256)),
+                    "Should have sha256 property");
+
+                // Check mimeType property
+                java.util.List<Node> mimeObjects = byPredicate.getOrDefault(aticMimeType, java.util.Collections.emptyList());
+                Node expectedMimeType = NodeFactory.createLiteralString("image/jpeg");
+                assertTrue(mimeObjects.stream().anyMatch(n -> n.equals(expectedMimeType)),
+                    "Should have mimeType property");
+            } finally {
+                iter.close();
+            }
+        });
+    }
+
+    @Test
+    @DisplayName("bob can find all blobs from all users via find with ANY")
+    void bobFindsAllBlobsViaFindAny() {
+        dataset.executeWrite(() -> {
+            // Alice uploads a file
+            blobGraph.saveByPath("/alice/a.txt", "a.txt", "text/plain",
+                new ByteArrayInputStream("alice".getBytes()), aliceCtx);
+
+            // Bob uploads a file
+            blobGraph.saveByPath("/bob/b.txt", "b.txt", "text/plain",
+                new ByteArrayInputStream("bob".getBytes()), bobCtx);
+
+            // Bob uses find with ANY to discover all blobs
+            ExtendedIterator<Triple> iter = blobGraph.find(Node.ANY, Node.ANY, Node.ANY, bobCtx);
+            try {
+                assertTrue(iter.hasNext(), "Bob should see triples from all users");
+            } finally {
+                iter.close();
+            }
+        });
     }
 }

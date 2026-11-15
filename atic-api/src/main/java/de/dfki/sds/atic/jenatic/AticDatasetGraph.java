@@ -3,6 +3,7 @@ package de.dfki.sds.atic.jenatic;
 import de.dfki.sds.atic.ac.SharingManagement;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import java.util.Iterator;
+import java.util.Set;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
 import org.apache.jena.riot.system.PrefixMap;
@@ -66,6 +67,8 @@ public interface AticDatasetGraph extends DatasetGraph, UserGroupManagement, Sha
 
     public Iterator<Node> listGraphNodes(InvocationContext ctx);
 
+    public void addResources(Set<Node> resources, InvocationContext ctx);
+    
     @Override
     public default void add(Quad quad) {
         add(quad, InvocationContext.EMPTY);

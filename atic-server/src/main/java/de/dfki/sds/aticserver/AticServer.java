@@ -1844,26 +1844,19 @@ public class AticServer {
                 final InputStream fileContent = content;
                 final String finalMimeType = mimeType;
 
-                // Write operations wrapped in transaction
+                // Save and capture the returned blob URI
+                org.apache.jena.graph.Node[] blobNodeHolder = new org.apache.jena.graph.Node[1];
                 datasetGraph.executeWrite(() -> {
-                    blobGraph.saveByPath(finalLogicalPath, originalFilename, finalMimeType, fileContent, ictx);
+                    blobNodeHolder[0] = blobGraph.saveByPath(finalLogicalPath, originalFilename, finalMimeType, fileContent, ictx);
                 });
-
-                // Read operations wrapped in transaction
-                final String fp = finalLogicalPath;
-                String[] info = datasetGraph.calculateRead(() -> {
-                    return new String[]{
-                        blobGraph.getURI(fp, ictx),
-                        blobGraph.getSHA256(fp, ictx)
-                    };
-                });
+                String blobUri = blobNodeHolder[0].getURI();
 
                 Map<String, String> entry = new LinkedHashMap<>();
                 entry.put("filepath", logicalPath);
                 entry.put("filename", originalFilename);
                 entry.put("mimeType", mimeType);
-                entry.put("blobUri", info[0]);
-                entry.put("sha256", info[1]);
+                entry.put("blobUri", blobUri);
+                entry.put("sha256", blobUri.substring(BlobGraph.NS_BLOB.length()));
                 results.add(entry);
             } catch (Exception e) {
                 Map<String, String> entry = new LinkedHashMap<>();
