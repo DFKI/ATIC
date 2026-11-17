@@ -184,11 +184,17 @@ public class AticGraphUtils {
                     Long id = inserted.get(key);
 
                     resourceCache.put(n, id);
+                    
+                    int blankIndicator = 0;
+                    //if public static String createURN(String type) is used beforehand
+                    if(n.isBlank() || uri.startsWith("urn:atic:blanknode")) {
+                        blankIndicator = 1;
+                    }
 
                     uriBatch.add(new Object[]{
                         id,
                         uri,
-                        n.isBlank() ? 1 : 0
+                        blankIndicator
                     });
                 }
                 db.writeBatch("""

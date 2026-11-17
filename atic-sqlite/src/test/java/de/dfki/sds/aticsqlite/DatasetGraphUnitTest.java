@@ -1,5 +1,6 @@
 package de.dfki.sds.aticsqlite;
 
+import de.dfki.sds.atic.ac.Permission;
 import de.dfki.sds.atic.ac.User;
 import de.dfki.sds.atic.ac.UserGroupManagement;
 import de.dfki.sds.atic.jenatic.AticGraph;
@@ -9,6 +10,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.graph.Triple;
@@ -34,6 +37,74 @@ public class DatasetGraphUnitTest {
     @BeforeEach
     void setup(@org.junit.jupiter.api.io.TempDir Path tempDir) throws Exception {
         dataset = TL.createDatasetGraph(tempDir);
+    }
+
+    @Test
+    void testAddAndShare() throws Exception {
+
+        // Create users
+        dataset.executeWrite(() -> {
+            dataset.addUser("Alice", "Doe", "alice.doe@example.com", "alice", InvocationContext.EMPTY);
+            dataset.addUser("Bob", "Doe", "bob.doe@example.com", "bob", InvocationContext.EMPTY);
+        });
+
+        User adminUser = dataset.calculateRead(()
+                -> dataset.getUser(UserGroupManagement.ADMIN_USERNAME, InvocationContext.EMPTY));
+
+        User alice = dataset.calculateRead(()
+                -> dataset.getUser("alice", InvocationContext.EMPTY));
+
+        User bob = dataset.calculateRead(()
+                -> dataset.getUser("bob", InvocationContext.EMPTY));
+
+        InvocationContext adminCtx = new InvocationContext.Builder()
+                .fromUser(adminUser).build();
+
+        InvocationContext aliceCtx = new InvocationContext.Builder()
+                .fromUser(alice).build();
+
+        InvocationContext bobCtx = new InvocationContext.Builder()
+                .fromUser(bob).build();
+
+        // Create source graph
+        Graph inputGraph = GraphFactory.createDefaultGraph();
+
+        Node subject = NodeFactory.createURI("http://example.org/subject");
+        Node predicate = NodeFactory.createURI("http://example.org/relatedTo");
+        Node predicate2 = NodeFactory.createURI("http://example.org/hasName");
+        Node object = NodeFactory.createURI("http://example.org/object");
+
+        Node blankNode = NodeFactory.createBlankNode();
+        Node literal = NodeFactory.createLiteralString("Example");
+
+        inputGraph.add(Triple.create(subject, predicate, blankNode));
+        inputGraph.add(Triple.create(blankNode, predicate, object));
+        inputGraph.add(Triple.create(subject, predicate2, literal));
+
+        // Add and share with Alice
+        Node targetGraph = NodeFactory.createURI("http://example.org/targetGraph");
+
+        dataset.executeWrite(() -> {
+            
+            dataset.addGraph(targetGraph, Graph.emptyGraph, adminCtx);
+            
+            dataset.shareGraphs(Set.of(targetGraph.getURI()), Set.of(alice.getShareUri()), Permission.READ, adminCtx);
+            
+            dataset.addAndShare(
+                    inputGraph,
+                    targetGraph,
+                    100,
+                    Permission.READ,
+                    Set.of(alice.getShareUri()),
+                    adminCtx
+            );
+        });
+
+        // Verify Alice can see all shared triples
+        Assertions.assertEquals(3, dataset.calculateRead(() -> {
+            AticGraph aliceGraph = dataset.getGraph(targetGraph, aliceCtx);
+            return aliceGraph.size(aliceCtx);
+        }));
     }
 
     @Test
@@ -138,7 +209,7 @@ public class DatasetGraphUnitTest {
         } finally {
             dataset.end();
         }
-        
+
         //delete has to be concrete
         dataset.begin(TxnType.WRITE);
         try {
@@ -384,10 +455,10 @@ public class DatasetGraphUnitTest {
 
             assertTrue(graphs.size() == 2,
                     "No named graphs should remain after clear()");
-            
+
             assertTrue(graphs.contains(SystemAticGraph.node),
                     "No system graph");
-            
+
             assertTrue(graphs.contains(BlobGraph.node),
                     "No blob graph");
 
@@ -564,7 +635,7 @@ public class DatasetGraphUnitTest {
         try {
             dataset.deleteAny(Node.ANY, s, p, oA, ctx);
             dataset.commit();
-        } catch(Exception e) {
+        } catch (Exception e) {
             Assertions.fail(e);
         } finally {
             dataset.end();
@@ -705,7 +776,7 @@ public class DatasetGraphUnitTest {
             dataset.end();
         }
     }
-    
+
     @Test
     void testAticTripleConfidenceRetrievedViaVirtualRDFStar() throws Exception {
 
@@ -746,7 +817,7 @@ public class DatasetGraphUnitTest {
 
             Node quotedTriple = NodeFactory.createTripleTerm(s, p, o);
             Node confidencePredicate = SqliteAticGraph.ATIC_CONFIDENCE;
-            
+
             Iterator<Triple> it = dataset.getGraph(graph, ctx)
                     .find(quotedTriple, confidencePredicate, Node.ANY, ctx);
 
@@ -1013,13 +1084,13 @@ public class DatasetGraphUnitTest {
         assertEquals(1.0, t.getApplicability(), 1e-9);
 
         // Invalid values should throw
-        assertThrows(IllegalArgumentException.class, () ->
-            AticTriple.create(s, p, o, 1.0, 1.1));
-        assertThrows(IllegalArgumentException.class, () ->
-            AticTriple.create(s, p, o, 1.0, -1.1));
-        assertThrows(IllegalArgumentException.class, () ->
-            AticTriple.create(s, p, o, 1.0, 2.0));
-        assertThrows(IllegalArgumentException.class, () ->
-            AticTriple.create(s, p, o, 1.0, -2.0));
+        assertThrows(IllegalArgumentException.class, ()
+                -> AticTriple.create(s, p, o, 1.0, 1.1));
+        assertThrows(IllegalArgumentException.class, ()
+                -> AticTriple.create(s, p, o, 1.0, -1.1));
+        assertThrows(IllegalArgumentException.class, ()
+                -> AticTriple.create(s, p, o, 1.0, 2.0));
+        assertThrows(IllegalArgumentException.class, ()
+                -> AticTriple.create(s, p, o, 1.0, -2.0));
     }
 }

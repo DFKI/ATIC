@@ -3806,7 +3806,6 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     }
 
     //triple management ======================================================
-    
     /**
      * Resolves the given resources in bulk and populates the corresponding resource, predicate, and permission caches.
      *
@@ -4707,6 +4706,86 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
     public enum OntologyFormat {
         RDFS,
         OWL
+    }
+
+    /**
+     * Adds all triples from {@code inputGraph} to {@code targetGraph}, using the specified buffer size. Blank nodes are replaced with generated URIs to ensure
+     * that they can be referenced as resources. All URI resources occurring as subjects or objects, including the generated URIs for blank nodes, are shared
+     * with the given principals and permission.
+     *
+     * <p>
+     * Each distinct blank node is assigned a unique URN, which is consistently reused wherever that blank node occurs in the input graph.
+     * </p>
+     *
+     * @param inputGraph the graph containing the triples to add
+     * @param targetGraph the destination graph
+     * @param bufferSize the buffer size used when writing triples to the destination graph
+     * @param permission the permission granted to the specified principals; use {@code null} to not share
+     * @param principalUris the URIs of the principals with whom the resources are shared
+     * @param ctx the invocation context used to access the graph and perform sharing
+     */
+    public void addAndShare(
+            Graph inputGraph,
+            Node targetGraph,
+            int bufferSize,
+            Permission permission,
+            Set<String> principalUris,
+            InvocationContext ctx) {
+
+        SqliteAticGraph aticGraph = (SqliteAticGraph) getGraph(targetGraph, ctx);
+
+        Set<String> resources = new HashSet<>();
+        Map<Node, Node> blankNodeMapping = new HashMap<>();
+
+        StreamRDF streamRDF = aticGraph.asStreamRDF(ctx, bufferSize, bufferSize, -1);
+        streamRDF.start();
+
+        ExtendedIterator<Triple> iter = inputGraph.find();
+
+        try {
+            while (iter.hasNext()) {
+                Triple t = iter.next();
+
+                Node subject = t.getSubject();
+                Node predicate = t.getPredicate();
+                Node object = t.getObject();
+
+                // Replace blank subject with a consistently generated URI
+                if (subject.isBlank()) {
+                    subject = blankNodeMapping.computeIfAbsent(
+                            subject,
+                            bn -> NodeFactory.createURI(createURN("blanknode")));
+                }
+
+                // Replace blank object with a consistently generated URI
+                if (object.isBlank()) {
+                    object = blankNodeMapping.computeIfAbsent(
+                            object,
+                            bn -> NodeFactory.createURI(createURN("blanknode")));
+                }
+
+                // Collect subject URI
+                if (subject.isURI()) {
+                    resources.add(subject.getURI());
+                }
+
+                // Collect object URI
+                if (object.isURI()) {
+                    resources.add(object.getURI());
+                }
+
+                // Add triple with replaced blank nodes
+                streamRDF.triple(Triple.create(subject, predicate, object));
+            }
+        } finally {
+            iter.close();
+            streamRDF.finish();
+        }
+
+        if (permission != null) {
+            // Share collected resources with the specified principals
+            shareResources(resources, principalUris, permission, ctx);
+        }
     }
 
 }

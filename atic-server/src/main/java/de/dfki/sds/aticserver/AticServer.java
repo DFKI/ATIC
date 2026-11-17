@@ -33,14 +33,11 @@ import de.dfki.sds.aticsqlite.DatabaseLongLivedConnection;
 import de.dfki.sds.aticsqlite.DatabaseOptions;
 import de.dfki.sds.aticsqlite.FragmentStorage;
 import de.dfki.sds.aticsqlite.FragmentStorage.FragmentSettingsEntry;
-import de.dfki.sds.aticsqlite.RDFPatchEmitterTransactional;
-import de.dfki.sds.aticsqlite.RDFPatchListener;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph;
 import de.dfki.sds.aticsqlite.SqliteAticDatasetGraph.OntologyFormat;
 import de.dfki.sds.aticsqlite.SqliteAticGraph;
 import de.dfki.sds.aticsqlite.VueComponent;
 import de.dfki.sds.aticsqlite.bridge.RdfJsonBridge;
-import de.dfki.sds.rdfpatchsqlite.Converter;
 import io.javalin.Javalin;
 import io.javalin.config.JavalinConfig;
 import io.javalin.config.RoutesConfig;
@@ -109,13 +106,11 @@ import org.apache.jena.query.TxnType;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdfpatch.RDFPatch;
 import org.apache.jena.rdfpatch.RDFPatchOps;
-import org.apache.jena.rdfpatch.changes.RDFChangesBase;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.riot.RDFFormat;
 import org.apache.jena.riot.RDFLanguages;
 import org.apache.jena.riot.RDFParser;
-import org.apache.jena.riot.system.StreamRDF;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.graph.GraphFactory;
 import org.apache.jena.system.Txn;
@@ -1589,7 +1584,7 @@ public class AticServer {
 
         // read config parameters
         String graphUri = ctx.formParam("graph");
-        List<String> groups = ctx.formParams("group"); //it is the group URI (not group name)
+        Set<String> principalUris = new HashSet<>(ctx.formParams("group")); //it is the group URI (not group name)
 
         String permissionStr = ctx.formParam("permission");
         Permission permission = null;
@@ -1612,13 +1607,15 @@ public class AticServer {
         InvocationContext ictx = fromJavalinContext(ctx);
 
         // select graph
+        Node graphNode;
         SqliteAticGraph graph;
         datasetGraph.begin(ReadWrite.READ);
         try {
             if (graphUri != null) {
-                Node graphNode = NodeFactory.createURI(graphUri);
+                graphNode = NodeFactory.createURI(graphUri);
                 graph = (SqliteAticGraph) datasetGraph.getGraph(graphNode, ictx);
             } else {
+                graphNode = Quad.defaultGraphIRI;
                 graph = (SqliteAticGraph) datasetGraph.getDefaultGraph(ictx);
             }
         } catch (PermissionDeniedException e) {
@@ -1629,9 +1626,8 @@ public class AticServer {
             datasetGraph.end();
         }
 
-        // get uploaded files
         List<UploadedFile> files = ctx.uploadedFiles("file");
-
+        
         for (UploadedFile file : files) {
 
             // detect RDF language from filename
@@ -1639,136 +1635,25 @@ public class AticServer {
             if (lang == null) {
                 lang = Lang.TURTLE; // fallback
             }
-
-            boolean share = groups != null && !groups.isEmpty() && permission != null;
-
-            //TODO could be optimized later
-            Permission finalPermission = permission;
-            RDFPatchListener listener = null;
-            if (share) {
-                listener = new RDFPatchListener() {
-                    @Override
-                    public void handlePatch(RDFPatch patch) {
-                        Set<String> resourceUris = new HashSet<>();
-
-                        patch.apply(new RDFChangesBase() {
-                            @Override
-                            public void add(Node g, Node s, Node p, Node o) {
-
-                                //ignore special graphs for permission and group assignment
-                                g = Converter.unwrapNode(g);
-                                if (RDFPatchEmitterTransactional.isSpecialGraph(g)) {
-                                    return;
-                                }
-
-                                String suri = Converter.unwrapUri(s);
-                                String ouri = Converter.unwrapUri(o);
-                                resourceUris.add(suri);
-                                if (ouri != null) {
-                                    resourceUris.add(ouri);
-                                }
-                            }
-                        });
-
-                        Set<String> groupUris = new HashSet<>(groups);
-
-                        datasetGraph.executeWrite(() -> {
-                            datasetGraph.shareResources(
-                                    resourceUris,
-                                    groupUris,
-                                    finalPermission,
-                                    ictx
-                            );
-                        });
-                    }
-                };
-
-                datasetGraph.addListener(listener);
-            }
-
-            //write fast into graph
+            
             datasetGraph.begin(ReadWrite.WRITE);
             try (InputStream in = file.content()) {
-                // Create StreamRDF sink from your graph
-                StreamRDF streamRDF = graph.asStreamRDF(ictx, bufferSize, batchSize, -1);
+                Graph g = RDFParser.create()
+                    .source(in)
+                    .lang(lang)
+                    .toGraph();
 
-                // Start streaming
-                streamRDF.start();
-
-                // Use Jena RDFParser to send triples directly to StreamRDF
-                RDFParser.create()
-                        .source(in)
-                        .lang(lang)
-                        .parse(streamRDF);
-
-                // Finish streaming
-                streamRDF.finish();
-
+                datasetGraph.addAndShare(g, graphNode, bufferSize, permission, principalUris, ictx);
+                
                 datasetGraph.commit();
-
+                
             } catch (Exception e) {
                 datasetGraph.abort();
                 throw new RuntimeException("Failed to process file: " + file.filename(), e);
             } finally {
                 datasetGraph.end();
             }
-
-            if (share) {
-                datasetGraph.removeListener(listener);
-            }
-
-            /*
-            // share resources if requested
-            if (groups != null && !groups.isEmpty() && permission != null) {
-
-                Model model = ModelFactory.createDefaultModel();
-
-                datasetGraph.begin(ReadWrite.WRITE);
-                try (InputStream in = file.content()) {
-                    RDFDataMgr.read(model, in, lang);
-
-                    // collect resources
-                    Set<Resource> resources = new HashSet<>();
-
-                    model.listStatements().forEachRemaining(stmt -> {
-
-                        Resource s = stmt.getSubject();
-                        if (s.isURIResource()) {
-                            resources.add(s);
-                        }
-
-                        RDFNode o = stmt.getObject();
-                        if (o.isResource()) {
-                            Resource r = o.asResource();
-                            if (r.isURIResource()) {
-                                resources.add(r);
-                            }
-                        }
-                    });
-
-                    // convert to URI set
-                    Set<String> resourceUris = resources.stream()
-                            .map(Resource::getURI)
-                            .collect(Collectors.toSet());
-
-                    Set<String> groupUris = new HashSet<>(groups);
-
-                    datasetGraph.shareResources(
-                            resourceUris,
-                            groupUris,
-                            permission,
-                            ictx
-                    );
-
-                    datasetGraph.commit();
-
-                } catch (Exception e) {
-                    datasetGraph.abort();
-                    throw new RuntimeException("Failed to process file: " + file.filename(), e);
-                } finally {
-                    datasetGraph.end();
-                }
-            }*/
+            
         }
 
         ctx.status(200).result("Upload successful");
