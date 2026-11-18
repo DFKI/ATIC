@@ -134,6 +134,7 @@ public class AticServer {
     private static final Logger LOGGER = Logger.getLogger(AticServer.class.getName());
 
     public static final String ATIC_ADMIN_SECRET_ENV = "ATIC_ADMIN_SECRET";
+    public static final String JWT_SECRET_ENV = "JWT_SECRET";
 
     private Javalin app;
 

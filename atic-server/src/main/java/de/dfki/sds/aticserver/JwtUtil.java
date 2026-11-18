@@ -14,11 +14,11 @@ import org.json.JSONObject;
  */
 public class JwtUtil {
 
-    private static final String SECRET =
-        Objects.requireNonNull(
-            System.getenv("JWT_SECRET"),
-            "JWT_SECRET environment variable missing"
-        );
+    private static final String SECRET = Objects.requireNonNull(
+            System.getProperty(AticServer.JWT_SECRET_ENV,
+                    System.getenv(AticServer.JWT_SECRET_ENV)),
+            AticServer.JWT_SECRET_ENV + " configuration missing"
+    );
     private static final Algorithm alg = Algorithm.HMAC256(SECRET);
 
     @Deprecated
