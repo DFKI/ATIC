@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -4707,7 +4708,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
         RDFS,
         OWL
     }
-
+    
     /**
      * Adds all triples from {@code inputGraph} to {@code targetGraph}, using the specified buffer size. Blank nodes are replaced with generated URIs to ensure
      * that they can be referenced as resources. All URI resources occurring as subjects or objects, including the generated URIs for blank nodes, are shared
@@ -4731,10 +4732,38 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
             Permission permission,
             Set<String> principalUris,
             InvocationContext ctx) {
+        addAndShare(inputGraph, targetGraph, bufferSize, permission, principalUris, null, ctx);
+    }
+
+    /**
+     * Adds all triples from {@code inputGraph} to {@code targetGraph}, using the specified buffer size. Blank nodes are replaced with generated URIs to ensure
+     * that they can be referenced as resources. All URI resources occurring as subjects or objects, including the generated URIs for blank nodes, are shared
+     * with the given principals and permission.
+     *
+     * <p>
+     * Each distinct blank node is assigned a unique URN, which is consistently reused wherever that blank node occurs in the input graph.
+     * </p>
+     *
+     * @param inputGraph the graph containing the triples to add
+     * @param targetGraph the destination graph
+     * @param bufferSize the buffer size used when writing triples to the destination graph
+     * @param permission the permission granted to the specified principals; use {@code null} to not share
+     * @param principalUris the URIs of the principals with whom the resources are shared
+     * @param exclude return true to exclude nodes from sharing
+     * @param ctx the invocation context used to access the graph and perform sharing
+     */
+    public void addAndShare(
+            Graph inputGraph,
+            Node targetGraph,
+            int bufferSize,
+            Permission permission,
+            Set<String> principalUris,
+            Predicate<Node> exclude,
+            InvocationContext ctx) {
 
         SqliteAticGraph aticGraph = (SqliteAticGraph) getGraph(targetGraph, ctx);
 
-        Set<String> resources = new HashSet<>();
+        Set<String> shareResources = new HashSet<>();
         Map<Node, Node> blankNodeMapping = new HashMap<>();
 
         StreamRDF streamRDF = aticGraph.asStreamRDF(ctx, bufferSize, bufferSize, -1);
@@ -4766,12 +4795,16 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
                 // Collect subject URI
                 if (subject.isURI()) {
-                    resources.add(subject.getURI());
+                    if(exclude == null || !exclude.test(subject)) {
+                        shareResources.add(subject.getURI());
+                    }
                 }
 
                 // Collect object URI
                 if (object.isURI()) {
-                    resources.add(object.getURI());
+                    if(exclude == null || !exclude.test(object)) {
+                        shareResources.add(object.getURI());
+                    }
                 }
 
                 // Add triple with replaced blank nodes
@@ -4784,7 +4817,7 @@ public class SqliteAticDatasetGraph implements AticDatasetGraph, UserGroupManage
 
         if (permission != null) {
             // Share collected resources with the specified principals
-            shareResources(resources, principalUris, permission, ctx);
+            shareResources(shareResources, principalUris, permission, ctx);
         }
     }
 
